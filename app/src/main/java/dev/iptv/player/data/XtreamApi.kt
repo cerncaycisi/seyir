@@ -50,6 +50,7 @@ class XtreamApi(source: PlaylistSource.Xtream, private val http: OkHttpClient) {
             Stream(
                 id, o.str("name").orEmpty(), o.str("stream_icon").blankToNull(), "$base/live/$user/$pass/$id.ts",
                 o.str("category_id").orEmpty(), type, o.str("epg_channel_id").blankToNull(),
+                archiveDays = archiveDays(o),
             )
         }
         ContentType.MOVIE -> call("&action=get_vod_streams").objects().mapNotNull { o ->
@@ -162,4 +163,10 @@ private fun JsonObject.firstStr(key: String): String? = when (val e = this[key])
 private fun String?.cleanRating(): String? {
     val value = this?.trim()?.toDoubleOrNull() ?: return null
     return if (value > 0) String.format(java.util.Locale.US, "%.1f", value) else null
+}
+
+// tv_archive is "1"/1 when the channel records; tv_archive_duration is the number of days kept.
+private fun archiveDays(o: JsonObject): Int {
+    if (o.str("tv_archive")?.trim() != "1") return 0
+    return o.str("tv_archive_duration")?.trim()?.toIntOrNull()?.takeIf { it > 0 } ?: 1
 }

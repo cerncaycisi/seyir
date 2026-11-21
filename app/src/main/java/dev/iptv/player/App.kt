@@ -6,6 +6,11 @@ import dev.iptv.player.data.Repository
 import dev.iptv.player.data.Stream
 
 class App : Application() {
+    override fun onCreate() {
+        super.onCreate()
+        dev.iptv.player.epg.EpgScheduler.schedule(this)
+    }
+
     val repository by lazy { Repository(this) }
 }
 

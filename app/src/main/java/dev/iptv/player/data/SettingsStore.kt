@@ -50,6 +50,9 @@ sealed class Setting<T>(val key: Preferences.Key<T>, val default: T) {
 
     // Metadata
     data object TmdbEnabled : Setting<Boolean>(booleanPreferencesKey("tmdb_enabled"), true)
+
+    // EPG channel matching: entries "playlistId|streamId<TAB>xmltvChannelId" (epg package)
+    data object EpgChannelOverrides : Setting<Set<String>>(stringSetPreferencesKey("epg_channel_overrides"), emptySet())
 }
 
 class SettingsStore(context: Context) {

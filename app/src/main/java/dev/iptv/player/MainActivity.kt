@@ -30,7 +30,18 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val repository = (application as App).repository
-        setContent { IptvTheme { AppNav(repository) } }
+        dev.iptv.player.epg.ReminderBus.handleIntent(intent)
+        setContent {
+            IptvTheme {
+                AppNav(repository)
+                dev.iptv.player.ui.ReminderHost()
+            }
+        }
+    }
+
+    override fun onNewIntent(intent: android.content.Intent) {
+        super.onNewIntent(intent)
+        dev.iptv.player.epg.ReminderBus.handleIntent(intent)
     }
 }
 
@@ -48,6 +59,19 @@ private fun AppNav(repo: Repository) {
         PlayerQueue.items = items
         PlayerQueue.index = index
         nav.navigate("player")
+    }
+
+    // EPG reminder "İzle" / notification deep link: start the live channel.
+    val tune by dev.iptv.player.epg.ReminderBus.tune.collectAsState()
+    LaunchedEffect(tune, all) {
+        val req = tune ?: return@LaunchedEffect
+        dev.iptv.player.epg.ReminderBus.tune.value = null
+        val playlist = all.firstOrNull { it.id == req.playlistId } ?: return@LaunchedEffect
+        val items = runCatching { repo.content(playlist, dev.iptv.player.data.ContentType.LIVE).items }.getOrNull() ?: return@LaunchedEffect
+        val idx = items.indexOfFirst { it.id == req.streamId }
+        if (idx < 0) return@LaunchedEffect
+        if (nav.currentDestination?.route == "player") nav.popBackStack()
+        play(playlist, items, idx)
     }
 
     NavHost(nav, startDestination = if (active == null) "playlists" else "home") {

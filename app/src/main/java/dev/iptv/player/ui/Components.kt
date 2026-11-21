@@ -240,6 +240,8 @@ fun ChannelRow(
     onLongClick: () -> Unit,
     onFocused: () -> Unit,
     modifier: Modifier = Modifier,
+    nowTitle: String? = null,
+    progress: Float? = null,
 ) {
     Surface(
         onClick = onClick,
@@ -266,13 +268,27 @@ fun ChannelRow(
             Spacer(Modifier.width(8.dp))
             LogoTile(stream.name, stream.logo, Modifier.size(width = 60.dp, height = 36.dp), MaterialTheme.typography.labelMedium)
             Spacer(Modifier.width(12.dp))
-            Text(
-                stream.name,
-                modifier = Modifier.weight(1f),
-                style = MaterialTheme.typography.titleSmall,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
+            Column(Modifier.weight(1f)) {
+                Text(
+                    stream.name,
+                    style = MaterialTheme.typography.titleSmall,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                if (nowTitle != null) {
+                    Text(
+                        nowTitle,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Palette.TextMuted,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    if (progress != null) {
+                        Spacer(Modifier.height(2.dp))
+                        ProgressBar(progress, Modifier.height(3.dp))
+                    }
+                }
+            }
             if (favorite) Icon(Icons.Rounded.Star, contentDescription = null, tint = Palette.Gold, modifier = Modifier.size(20.dp))
         }
     }
