@@ -15,4 +15,17 @@
     <string name="ux_info">Stream info</string>
     <string name="ux_info_unknown">Information is not available yet</string>
     <string name="ux_close_controls">Back: hide controls</string>
+    <string name="ux_search_live">Search channels</string>
+    <string name="ux_search_movies">Search movies</string>
+    <string name="ux_search_series">Search series</string>
+    <string name="ux_read_more">Read more</string>
+    <string name="ux_reader_hint">↑ ↓ Scroll · Back: close</string>
+    <string name="ux_seek">Playback position</string>
+    <string name="ux_seek_hint">← → Choose position · OK: seek</string>
+    <string name="ux_title_info">About this title</string>
+    <string name="ux_info_loading">Loading information…</string>
+    <string name="ux_tmdb_rating">TMDB rating</string>
+    <string name="ux_metadata_progress">TMDB details: %1$d / %2$d · Updating results</string>
+    <string name="ux_tmdb_disabled">Enable online metadata in Settings for TMDB ratings.</string>
+    <string name="ux_plot_english">Turkish description unavailable · English synopsis</string>
 </resources>

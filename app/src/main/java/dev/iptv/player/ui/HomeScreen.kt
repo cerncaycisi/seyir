@@ -82,12 +82,8 @@ import kotlinx.coroutines.launch
 enum class Section(val labelRes: Int, val icon: ImageVector) {
     HOME(R.string.play_section_home, Icons.Rounded.Home),
     LIVE(R.string.play_section_live, Icons.Rounded.LiveTv),
-    GUIDE(R.string.play_section_guide, Icons.Rounded.CalendarViewWeek),
     MOVIES(R.string.play_section_movies, Icons.Rounded.Movie),
-    SERIES(R.string.play_section_series, Icons.Rounded.VideoLibrary),
-    FAVORITES(R.string.play_section_favorites, Icons.Rounded.Favorite),
-    RECORDINGS(R.string.play_section_recordings, Icons.Rounded.FiberManualRecord),
-    SEARCH(R.string.play_section_search, Icons.Rounded.Search);
+    SERIES(R.string.play_section_series, Icons.Rounded.VideoLibrary);
 
     val label: String
         @Composable get() = stringResource(labelRes)
@@ -141,10 +137,12 @@ fun HomeScreen(
 ) {
     var section by rememberSaveable(initialSearchQuery) {
         mutableStateOf(
-            if (initialSearchQuery != null) Section.SEARCH
+            if (initialSearchQuery != null) Section.MOVIES
             else Section.entries.firstOrNull { it.name == initialSection } ?: Section.HOME,
         )
     }
+    var searchType by rememberSaveable(initialSearchQuery) { mutableStateOf<ContentType?>(if (initialSearchQuery != null) ContentType.MOVIE else null) }
+    var recordings by rememberSaveable { mutableStateOf(false) }
     var restoreId by rememberSaveable { mutableStateOf<String?>(null) }
     var initialFocus by rememberSaveable { mutableStateOf(true) }
     val navFocus = remember { Section.entries.map { FocusRequester() } }
@@ -203,6 +201,8 @@ fun HomeScreen(
     val focusManager = LocalFocusManager.current
     var stepIntoContent by remember { mutableIntStateOf(0) }
     fun selectSection(s: Section) {
+        searchType = null
+        recordings = false
         if (s == section) {
             stepIntoContent++
         } else {
@@ -220,6 +220,8 @@ fun HomeScreen(
     var confirmExit by remember { mutableStateOf(false) }
     BackHandler {
         when {
+            searchType != null -> { searchType = null; initialFocus = true }
+            recordings -> { recordings = false; initialFocus = true }
             !drawerFocused -> runCatching { navFocus[section.ordinal].requestFocus() }
             section != Section.HOME -> {
                 section = Section.HOME
@@ -304,15 +306,15 @@ fun HomeScreen(
     ) {
         Box(Modifier.fillMaxSize().padding(start = 84.dp, top = 20.dp, end = 28.dp)) {
             key(section, playlist.id) {
-                when (section) {
-                    Section.HOME -> HomeSection(repo, playlist, actions)
-                    Section.LIVE -> LiveSection(repo, playlist, actions)
-                    Section.GUIDE -> GuideSection(repo, playlist, actions)
-                    Section.MOVIES -> VodSection(repo, playlist, ContentType.MOVIE, actions)
-                    Section.SERIES -> VodSection(repo, playlist, ContentType.SERIES, actions)
-                    Section.FAVORITES -> FavoritesSection(repo, playlist, actions)
-                    Section.RECORDINGS -> RecordingsSection(repo, playlist, onPlay)
-                    Section.SEARCH -> SearchSection(repo, playlist, actions, initialQuery = initialSearchQuery)
+                when {
+                    recordings -> RecordingsSection(repo, playlist, onPlay)
+                    searchType != null -> SearchSection(repo, playlist, actions, initialQuery = initialSearchQuery, type = searchType!!)
+                    else -> when (section) {
+                        Section.HOME -> HomeSection(repo, playlist, actions)
+                        Section.LIVE -> LiveSection(repo, playlist, actions, onSearch = { searchType = ContentType.LIVE; initialFocus = true }, onRecordings = { recordings = true })
+                        Section.MOVIES -> VodSection(repo, playlist, ContentType.MOVIE, actions, onSearch = { searchType = ContentType.MOVIE; initialFocus = true })
+                        Section.SERIES -> VodSection(repo, playlist, ContentType.SERIES, actions, onSearch = { searchType = ContentType.SERIES; initialFocus = true })
+                    }
                 }
             }
         }

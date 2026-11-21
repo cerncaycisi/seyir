@@ -65,6 +65,9 @@ data class SeriesInfo(
     val genre: String? = null,
     val rating: String? = null,
     val year: String? = null,
+    val cast: String? = null,
+    val director: String? = null,
+    val plotLanguage: String? = null,
 )
 
 data class VodInfo(
@@ -82,6 +85,7 @@ data class VodInfo(
     val durationSecs: Int? = null,
     /** True when some fields were filled in from TMDB. */
     val fromTmdb: Boolean = false,
+    val plotLanguage: String? = null,
 )
 
 /** Xtream `user_info` subset. [expiresAt] is epoch seconds, null for unlimited accounts. */

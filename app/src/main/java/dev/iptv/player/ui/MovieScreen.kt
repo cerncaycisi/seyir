@@ -97,7 +97,7 @@ fun MovieScreen(
     when (val s = state) {
         Load.Loading -> LoadingState()
         is Load.Err -> ErrorState(s.message)
-        is Load.Ok -> MovieDetail(repo, playlist, s.value, onPlay, onMovie)
+        is Load.Ok -> DetailViewport { MovieDetail(repo, playlist, s.value, onPlay, onMovie) }
     }
 }
 
@@ -164,14 +164,8 @@ private fun MovieDetail(
                 ).forEach { Pill(it) }
             }
             (info?.plot ?: stream.plot)?.let {
-                Text(
-                    it,
-                    modifier = Modifier.padding(top = 12.dp).widthIn(max = 560.dp),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = Palette.TextMuted,
-                    maxLines = 3,
-                    overflow = TextOverflow.Ellipsis,
-                )
+                if (info?.plotLanguage == "en") Text(uiContext.getString(R.string.ux_plot_english), color = Palette.TextFaint, style = MaterialTheme.typography.labelSmall)
+                ExpandablePlot(stream.name, it, Modifier.padding(top = 12.dp).widthIn(max = 560.dp))
             }
             info?.director?.let { CreditLine(uiContext.getString(R.string.ui_director), it) }
             info?.cast?.let { CreditLine(uiContext.getString(R.string.ui_cast), it) }

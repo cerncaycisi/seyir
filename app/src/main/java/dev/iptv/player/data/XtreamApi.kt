@@ -83,6 +83,7 @@ class XtreamApi(
                 type = type,
                 rating = o.str("rating").cleanRating(),
                 year = o.str("year").blankToNull(),
+                genre = o.str("genre").blankToNull(),
                 added = o.str("added")?.toLongOrNull(),
             )
         }
@@ -155,6 +156,8 @@ class XtreamApi(
             genre = info?.str("genre").blankToNull(),
             rating = info?.str("rating").cleanRating(),
             year = (info?.str("releaseDate") ?: info?.str("release_date"))?.take(4).blankToNull(),
+            cast = info?.str("cast").blankToNull(),
+            director = info?.str("director").blankToNull(),
         )
     }
 

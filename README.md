@@ -25,7 +25,7 @@ Gereksinimler: JDK 17, Android SDK 35.
 ./gradlew bundleRelease       # App Bundle (.aab) gerekirse
 ```
 
-Sürüm kodu Git geçmişinden bağımsızdır (şu an `20`). Yeni dağıtımlarda `app/build.gradle.kts` içindeki varsayılanı artırın veya `-PappVersionCode=22` kullanın; kurulu sürümden daha düşük bir kod seçmeyin.
+Sürüm kodu Git geçmişinden bağımsızdır (şu an `22`). Yeni dağıtımlarda `app/build.gradle.kts` içindeki varsayılanı artırın veya `-PappVersionCode=23` kullanın; kurulu sürümden daha düşük bir kod seçmeyin.
 
 `local.properties` (git'e girmez) isteğe bağlı anahtarlar:
 ```
@@ -69,7 +69,7 @@ Requires JDK 17 and Android SDK 35.
 ./gradlew bundleRelease       # Android App Bundle (.aab) if needed
 ```
 
-The version code is independent of Git history (currently `21`). For each new distribution, increase the default in `app/build.gradle.kts` or pass `-PappVersionCode=22`; use a code no lower than the installed version.
+The version code is independent of Git history (currently `22`). For each new distribution, increase the default in `app/build.gradle.kts` or pass `-PappVersionCode=23`; use a code no lower than the installed version.
 
 Optional keys in `local.properties` (gitignored): `tmdb.apiKey`, `opensubtitles.apiKey`.
 For signed releases copy `keystore.properties.example` to `keystore.properties`.

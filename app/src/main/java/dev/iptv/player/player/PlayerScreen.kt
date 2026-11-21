@@ -85,6 +85,9 @@ import dev.iptv.player.data.Repository
 import dev.iptv.player.data.Setting
 import dev.iptv.player.data.Stream
 import dev.iptv.player.data.favoriteKey
+import dev.iptv.player.data.movieDetails
+import dev.iptv.player.data.seriesDetails
+import dev.iptv.player.ui.DescriptionDialog
 import dev.iptv.player.epg.Catchup
 import dev.iptv.player.record.RecStatus
 import dev.iptv.player.record.RecordingDb
@@ -195,6 +198,29 @@ private fun PlayerContent(repo: Repository, cfg: PlayerConfig, onBack: () -> Uni
     var epg by remember { mutableStateOf<List<EpgEntry>>(emptyList()) }
     var position by remember { mutableLongStateOf(0L) }
     var duration by remember { mutableLongStateOf(0L) }
+    var showInfo by remember { mutableStateOf(false) }
+    var titleInfo by remember(current.id) { mutableStateOf<String?>(null) }
+    var pauseCast by remember(current.id) { mutableStateOf<String?>(null) }
+    var titleInfoLoading by remember(current.id) { mutableStateOf(false) }
+    LaunchedEffect(current.id, playRequested, showInfo) {
+        if (live || (playRequested && !showInfo) || titleInfo != null) return@LaunchedEffect
+        titleInfoLoading = true
+        try {
+            titleInfo = try {
+                if (current.type == ContentType.SERIES && current.seriesId != null) {
+                    val info = repo.seriesDetails(playlist, current.seriesId)
+                    pauseCast = info.cast
+                    listOfNotNull(if (info.plotLanguage == "en") context.getString(R.string.ux_plot_english) else null, info.plot, info.genre, info.cast?.let { context.getString(R.string.ui_cast) + ": " + it },
+                        info.director?.let { context.getString(R.string.ui_director) + ": " + it }).joinToString("\n\n")
+                } else {
+                    val info = repo.movieDetails(playlist, current)
+                    pauseCast = info.cast
+                    listOfNotNull(if (info.plotLanguage == "en") context.getString(R.string.ux_plot_english) else null, info.plot, info.genre, info.cast?.let { context.getString(R.string.ui_cast) + ": " + it },
+                        info.director?.let { context.getString(R.string.ui_director) + ": " + it }).joinToString("\n\n")
+                }
+            } catch (e: kotlinx.coroutines.CancellationException) { throw e } catch (_: Exception) { "" }
+        } finally { titleInfoLoading = false }
+    }
 
     var panel by remember { mutableStateOf(Panel.None) }
     var tracks by remember { mutableStateOf(Tracks.EMPTY) }
@@ -543,6 +569,11 @@ private fun PlayerContent(repo: Repository, cfg: PlayerConfig, onBack: () -> Uni
             .focusRequester(focus)
             .focusable()
             .onPreviewKeyEvent { event ->
+                // Handle both halves of Back before TV focus groups/native views can consume it.
+                if (panel == Panel.Settings && event.key == Key.Back) {
+                    if (event.type == KeyEventType.KeyUp) { panel = Panel.None; controlsActive = true; showOverlay() }
+                    return@onPreviewKeyEvent true
+                }
                 if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
                 val code = event.nativeKeyEvent.keyCode
                 if (blocking) {
@@ -715,20 +746,28 @@ private fun PlayerContent(repo: Repository, cfg: PlayerConfig, onBack: () -> Uni
                         }
                     }
                 }
-                if (live) LiveOverlay(index + 1, current, epg) else VodOverlay(current.name, position, duration, playing)
+                if (live) LiveOverlay(index + 1, current, epg) else VodOverlay(current.name, position, duration,
+                    onSeek = { player.seekTo(it); showOverlay() }, onInteraction = { controlsActive = true; showOverlay() })
                 Spacer(Modifier.height(12.dp))
                 PlayerControlsBar(
                     live = live, playing = playRequested, active = controlsActive,
                     onToggle = { if (player.playWhenReady) player.pause() else player.play(); showOverlay() },
-                    onSeekBack = { player.seekBack(); showOverlay() },
-                    onSeekForward = { player.seekForward(); showOverlay() },
                     onChannels = { panel = Panel.Channels },
                     onSettings = ::openSettings,
                     onRecord = ::toggleRecording,
                     recording = activeRecording != null,
                     canReturnToLive = canReturnToLive,
                     onReturnToLive = { returnToLive(); showOverlay() },
+                    onInfo = { showInfo = true },
                 )
+                if (!live && !playRequested) {
+                    pauseCast?.let { Text(context.getString(R.string.ui_cast) + ": " + it,
+                        modifier = Modifier.padding(top = 12.dp), style = MaterialTheme.typography.titleSmall,
+                        color = Color.White, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis) }
+                    Text(titleInfo?.takeIf { it.isNotBlank() } ?: stringResource(if (titleInfoLoading) R.string.ux_info_loading else R.string.ux_info_unknown),
+                        modifier = Modifier.padding(top = 12.dp), style = MaterialTheme.typography.bodyMedium,
+                        color = Palette.TextMuted, maxLines = 2, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                }
                 Text(stringResource(if (controlsActive) R.string.ux_close_controls else if (live) R.string.ux_player_hint else R.string.ux_vod_hint),
                     style = MaterialTheme.typography.labelSmall, color = Palette.TextMuted, modifier = Modifier.padding(top = 8.dp))
             }
@@ -794,6 +833,8 @@ private fun PlayerContent(repo: Repository, cfg: PlayerConfig, onBack: () -> Uni
             Panel.None -> Unit
         }
     }
+    if (showInfo) DescriptionDialog(current.name,
+        titleInfo?.takeIf { it.isNotBlank() } ?: context.getString(if (titleInfoLoading) R.string.ux_info_loading else R.string.ux_info_unknown)) { showInfo = false }
     recordingTarget?.let { target ->
         RecordingDurationDialog(
             channelName = target.stream.name,

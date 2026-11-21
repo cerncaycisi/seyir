@@ -92,6 +92,14 @@ import dev.iptv.player.data.Stream
 import dev.iptv.player.data.VodInfo
 import dev.iptv.player.data.favoriteKey
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import dev.iptv.player.data.withCatalogMetadata
+import dev.iptv.player.data.tmdb.TmdbInfo
+import dev.iptv.player.data.Setting
 
 /** [direct] rows resume on click (continue watching) instead of opening the detail page. */
 data class MediaRow(val title: String, val items: List<Stream>, val direct: Boolean = false, val categoryName: String? = null)
@@ -113,7 +121,7 @@ private suspend fun allContent(repo: Repository, playlist: Playlist): Map<Conten
     ContentType.entries.associateWith { t -> runCatching { repo.content(playlist, t) }.getOrDefault(Content(emptyList(), emptyList())) }
 
 @Composable
-fun VodSection(repo: Repository, playlist: Playlist, type: ContentType, actions: HomeActions) {
+fun VodSection(repo: Repository, playlist: Playlist, type: ContentType, actions: HomeActions, onSearch: () -> Unit = {}) {
     val uiContext = LocalContext.current
     // Lint misses the direct ProduceStateScope.value assignment in this producer.
     @SuppressLint("ProduceStateDoesNotAssignValue")
@@ -126,7 +134,7 @@ fun VodSection(repo: Repository, playlist: Playlist, type: ContentType, actions:
         is Load.Ok -> if (s.value.items.isEmpty()) {
             EmptyState(Icons.Rounded.Movie, if (type == ContentType.MOVIE) uiContext.getString(R.string.ui_no_movie) else uiContext.getString(R.string.ui_no_series))
         } else {
-            VodBrowser(repo, playlist, type, s.value, actions)
+            VodBrowser(repo, playlist, type, s.value, actions, onSearch)
         }
     }
 }
@@ -156,6 +164,7 @@ private fun VodBrowser(
     type: ContentType,
     content: Content,
     actions: HomeActions,
+    onSearch: () -> Unit,
     categoryWidth: Dp = 200.dp,
     columns: Int = 5,
 ) {
@@ -167,11 +176,40 @@ private fun VodBrowser(
     var selectedKey by rememberSaveable { mutableStateOf(SpecialCategory.ALL.name) }
     var confirmClear by remember { mutableStateOf(false) }
     val history by repo.history.entries.collectAsState(initial = null)
+    val metadataEnabled by repo.settings.flow(Setting.TmdbEnabled).collectAsState(initial = true)
+    var metadata by remember(content) { mutableStateOf<Map<String, TmdbInfo?>>(emptyMap()) }
+    var metadataProgress by remember { mutableStateOf<Pair<Int, Int>?>(null) }
+    var availableGenres by remember { mutableStateOf<List<String>>(emptyList()) }
+    LaunchedEffect(type, metadataEnabled) { availableGenres = if (metadataEnabled) repo.tmdb.genres(type) else emptyList() }
+    // Fetch only a small opening batch normally. A genre/rating query completes its selected
+    // category progressively, with disk caching and four requests at a time; leaving cancels it.
+    LaunchedEffect(content, selectedKey, sort, genre, metadataEnabled, history == null, actions.favorites, actions.watchLater, rules) {
+        metadataProgress = null
+        if (history == null || !metadataEnabled || !repo.tmdb.available()) return@LaunchedEffect
+        val candidates = withContext(Dispatchers.Default) {
+            buildVodView(uiContext, playlist, type, content, rules, actions.favorites, actions.watchLater, history.orEmpty(), selectedKey, VodSort.DEFAULT, null).raw
+        }
+        val requested = if (sort == VodSort.RATING || genre != null) candidates else candidates.take(60)
+        val pending = requested.filter { !metadata.containsKey(it.id) }
+        var completed = requested.size - pending.size
+        try {
+            for (batch in pending.chunked(12)) {
+                metadataProgress = completed to requested.size
+                val results = batch.chunked(4).flatMap { chunk ->
+                    coroutineScope { chunk.map { stream -> async { stream.id to repo.tmdb.lookup(stream.name, type, stream.year) } }.awaitAll() }
+                        .also { delay(100) }
+                }
+                metadata = metadata + results
+                completed += batch.size
+            }
+        } finally { metadataProgress = null }
+    }
     // Filtering/sorting ~20k titles takes far longer than a frame: do it off the main thread and keep
     // showing the previous result meanwhile (this was the 1-2 s freeze when opening Movies/Series).
-    val view = rememberBackground(content, rules, playlist.id, type, actions.favorites, actions.watchLater, history, selectedKey, sort, genre) {
+    val view = rememberBackground(content, rules, playlist.id, type, actions.favorites, actions.watchLater, history, selectedKey, sort, genre, metadata, metadataEnabled) {
         val h = history ?: return@rememberBackground null
-        buildVodView(uiContext, playlist, type, content, rules, actions.favorites, actions.watchLater, h, selectedKey, sort, genre)
+        val enriched = content.copy(items = content.items.map { withCatalogMetadata(it, if (metadataEnabled) metadata[it.id] else null, sort == VodSort.RATING) })
+        buildVodView(uiContext, playlist, type, enriched, rules, actions.favorites, actions.watchLater, h, selectedKey, sort, genre)
     }
     if (view == null) {
         LoadingState()
@@ -182,7 +220,7 @@ private fun VodBrowser(
     val selPid = selected.providerId
     if (selPid != null && selPid != OTHER_CATEGORY && rules.isCategoryLocked(playlist, type, selPid)) selectedKey = SpecialCategory.ALL.name
     val raw = view.raw
-    val genres = view.genres
+    val genres = (availableGenres + view.genres).distinct().sorted()
     val genreSel = view.genre
     val shown = view.shown
 
@@ -223,6 +261,8 @@ private fun VodBrowser(
     Row(Modifier.fillMaxSize()) {
         Column(Modifier.width(categoryWidth).fillMaxHeight()) {
             ScreenTitle(uiContext.getString(if (type == ContentType.MOVIE) R.string.ui_movies else R.string.ui_series))
+            HeaderButton(uiContext.getString(R.string.ui_search), Icons.Rounded.Search, onSearch)
+            Spacer(Modifier.height(8.dp))
             LazyColumn(
                 Modifier.focusProperties {
                     // Entering the list from the grid lands on the selected category, not the nearest row.
@@ -260,12 +300,16 @@ private fun VodBrowser(
                     HeaderButton(uiContext.getString(R.string.ui_clear_history), Icons.Rounded.DeleteSweep) { confirmClear = true }
                 }
                 DropdownButton(uiContext.getString(R.string.ui_sort), VodSort.entries.map { it to sortLabel(uiContext, it) }, sort, { sort = it })
-                if (genres.isNotEmpty()) {
+                run {
                     val options = listOf<String?>(null) + genres
                     DropdownButton(uiContext.getString(R.string.ui_genre), options.map { it to (it ?: uiContext.getString(R.string.ui_all)) }, genreSel, { genre = it })
                 }
             }
             Spacer(Modifier.height(8.dp))
+            metadataProgress?.let { (done, total) -> Text(uiContext.getString(R.string.ux_metadata_progress, done, total), color = Palette.TextMuted, style = MaterialTheme.typography.labelSmall) }
+            if (sort == VodSort.RATING && (!metadataEnabled || !repo.tmdb.configured)) {
+                Text(uiContext.getString(R.string.ux_tmdb_disabled), color = Palette.TextMuted, style = MaterialTheme.typography.labelSmall)
+            }
             if (shown.isEmpty()) {
                 val (title, hint) = when (selected.special) {
                     SpecialCategory.FAVORITES -> uiContext.getString(R.string.ui_no_favorites) to uiContext.getString(R.string.ui_favorites_hint)
@@ -491,12 +535,14 @@ fun FavoritesSection(repo: Repository, playlist: Playlist, actions: HomeActions)
 }
 
 @Composable
-fun SearchSection(repo: Repository, playlist: Playlist, actions: HomeActions, initialQuery: String? = null) {
+fun SearchSection(repo: Repository, playlist: Playlist, actions: HomeActions, initialQuery: String? = null, type: ContentType) {
     val uiContext = LocalContext.current
     var query by rememberSaveable(initialQuery) { mutableStateOf(initialQuery.orEmpty()) }
     // Lint misses the direct ProduceStateScope.value assignment in this producer.
     @SuppressLint("ProduceStateDoesNotAssignValue")
-    val all by produceState<Map<ContentType, Content>?>(null, playlist.id) { value = allContent(repo, playlist) }
+    val all by produceState<Map<ContentType, Content>?>(null, playlist.id, type) {
+        value = mapOf(type to runCatching { repo.content(playlist, type) }.getOrDefault(Content(emptyList(), emptyList())))
+    }
     val q = query.trim()
     val rules = actions.rules
     // Scans every channel, movie and series per keystroke: run it off the main thread so typing stays smooth.
@@ -524,7 +570,7 @@ fun SearchSection(repo: Repository, playlist: Playlist, actions: HomeActions, in
         }
     }
     Column(Modifier.fillMaxSize()) {
-        ScreenTitle(uiContext.getString(R.string.ui_search), uiContext.getString(R.string.ui_search_hint))
+        ScreenTitle(uiContext.getString(when (type) { ContentType.LIVE -> R.string.ux_search_live; ContentType.MOVIE -> R.string.ux_search_movies; ContentType.SERIES -> R.string.ux_search_series }))
         val context = LocalContext.current
         val voiceIntent = remember(uiContext) {
             Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
@@ -578,7 +624,7 @@ private fun MicButton(onClick: () -> Unit) {
 private fun sortLabel(context: android.content.Context, sort: VodSort): String = context.getString(when (sort) {
     VodSort.DEFAULT -> R.string.ui_sort_default
     VodSort.RECENT -> R.string.ui_recent
-    VodSort.RATING -> R.string.ui_sort_rating
+    VodSort.RATING -> R.string.ux_tmdb_rating
     VodSort.AZ -> R.string.ui_sort_az
     VodSort.ZA -> R.string.ui_sort_za
     VodSort.YEAR -> R.string.ui_sort_year
@@ -625,6 +671,6 @@ private fun buildVodView(
         else -> base.items.filter { it.categoryId == selPid }
     }
     val genres = genresOf(raw).take(24)
-    val genreSel = genre?.takeIf { it in genres }
+    val genreSel = genre
     return VodView(categories, selected, raw, genres, genreSel, sortStreams(filterByGenre(raw, genreSel), sort))
 }

@@ -319,14 +319,18 @@ suspend fun Repository.movieDetails(playlist: Playlist, stream: Stream): VodInfo
         poster = panel?.poster ?: stream.logo,
         durationSecs = panel?.durationSecs,
     )
-    if (info.plot == null || info.backdrop == null || info.poster == null) {
-        tmdb.lookup(stream.name, ContentType.MOVIE, info.year)?.let { t ->
+    if (tmdb.available()) {
+        tmdb.details(stream.name, ContentType.MOVIE, info.year)?.let { t ->
             info = info.copy(
-                plot = info.plot ?: t.plot,
+                plot = t.plot ?: info.plot,
+                plotLanguage = if (t.plot != null) t.plotLanguage else info.plotLanguage,
                 backdrop = info.backdrop ?: t.backdrop,
                 poster = info.poster ?: t.poster,
                 year = info.year ?: t.year,
-                rating = info.rating ?: t.rating,
+                rating = t.rating ?: info.rating,
+                genre = t.genre ?: info.genre,
+                cast = t.cast ?: info.cast,
+                director = t.director ?: info.director,
                 fromTmdb = true,
             )
         }
@@ -337,13 +341,16 @@ suspend fun Repository.movieDetails(playlist: Playlist, stream: Stream): VodInfo
 /** Series info with missing plot / cover / backdrop filled from TMDB. */
 suspend fun Repository.seriesDetails(playlist: Playlist, seriesId: String): SeriesInfo {
     val info = seriesInfo(playlist, seriesId)
-    if (info.plot != null && info.backdrop != null && info.cover != null) return info
-    val t = tmdb.lookup(info.name, ContentType.SERIES, info.year) ?: return info
+    val t = tmdb.details(info.name, ContentType.SERIES, info.year) ?: return info
     return info.copy(
-        plot = info.plot ?: t.plot,
+        plot = t.plot ?: info.plot,
+        plotLanguage = if (t.plot != null) t.plotLanguage else info.plotLanguage,
         backdrop = info.backdrop ?: t.backdrop,
         cover = info.cover ?: t.poster,
         year = info.year ?: t.year,
-        rating = info.rating ?: t.rating,
+        rating = t.rating ?: info.rating,
+        genre = t.genre ?: info.genre,
+        cast = t.cast ?: info.cast,
+        director = t.director ?: info.director,
     )
 }

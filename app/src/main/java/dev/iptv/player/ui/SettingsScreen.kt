@@ -46,6 +46,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
@@ -89,10 +90,12 @@ fun <T> rememberPref(repo: Repository, setting: Setting<T>): Pref<T> {
 }
 
 @Composable
+@OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
 fun SettingsScreen(repo: Repository, onProfileSwitched: () -> Unit) {
     val uiContext = LocalContext.current
     var page by rememberSaveable { mutableStateOf(Page.GENERAL) }
-    val first = remember { FocusRequester() }
+    val menuFocus = remember { Page.entries.map { FocusRequester() } }
+    val first = menuFocus.first()
     LaunchedEffect(Unit) {
         withFrameNanos { }
         runCatching { first.requestFocus() }
@@ -100,7 +103,7 @@ fun SettingsScreen(repo: Repository, onProfileSwitched: () -> Unit) {
     Row(Modifier.fillMaxSize().padding(start = 40.dp, top = 24.dp, end = 40.dp)) {
         Column(Modifier.width(220.dp).fillMaxHeight()) {
             ScreenTitle(uiContext.getString(R.string.ui_settings))
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Page.entries.forEach { p ->
                     CategoryItem(
                         name = uiContext.getString(p.labelRes),
@@ -109,7 +112,11 @@ fun SettingsScreen(repo: Repository, onProfileSwitched: () -> Unit) {
                         onClick = { page = p },
                         modifier = Modifier
                             .onFocusChanged { if (it.isFocused || it.hasFocus) page = p }
-                            .then(if (p == Page.GENERAL) Modifier.focusRequester(first) else Modifier),
+                            .focusRequester(menuFocus[p.ordinal])
+                            .focusProperties {
+                                up = menuFocus.getOrNull(p.ordinal - 1) ?: FocusRequester.Cancel
+                                down = menuFocus.getOrNull(p.ordinal + 1) ?: FocusRequester.Cancel
+                            },
                     )
                 }
             }
@@ -388,9 +395,12 @@ private fun ProfilesPage(repo: Repository, onSwitched: () -> Unit) {
     val active by ProfileStore.activeIdFlow.collectAsState()
     var editing by remember { mutableStateOf<Profile?>(null) }
     val firstRow = remember { FocusRequester() }
+    var returningFromEditor by remember { mutableStateOf(false) }
     BackHandler(enabled = editing != null) { editing = null }
-    LaunchedEffect(editing == null) {
-        if (editing == null) {
+    LaunchedEffect(editing) {
+        if (editing != null) returningFromEditor = true
+        else if (returningFromEditor) {
+            returningFromEditor = false
             withFrameNanos { }
             // Returning from the editor: put focus back on the list.
             runCatching { firstRow.requestFocus() }

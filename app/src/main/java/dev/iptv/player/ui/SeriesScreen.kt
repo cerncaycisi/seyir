@@ -91,7 +91,7 @@ fun SeriesScreen(repo: Repository, playlist: Playlist, seriesId: String, onPlay:
     when (val s = state) {
         Load.Loading -> LoadingState()
         is Load.Err -> ErrorState(s.message)
-        is Load.Ok -> SeriesDetail(repo, playlist, seriesId, s.value, onPlay)
+        is Load.Ok -> DetailViewport { SeriesDetail(repo, playlist, seriesId, s.value, onPlay) }
     }
 }
 
@@ -175,7 +175,8 @@ private fun SeriesDetail(repo: Repository, playlist: Playlist, seriesId: String,
                 }
                 info.genre?.let { Text(it, Modifier.padding(top = 6.dp), style = MaterialTheme.typography.labelLarge, color = Palette.TextFaint, maxLines = 1, overflow = TextOverflow.Ellipsis) }
                 info.plot?.let {
-                    Text(it, Modifier.padding(top = 8.dp), style = MaterialTheme.typography.bodySmall, color = Palette.TextMuted, maxLines = 4, overflow = TextOverflow.Ellipsis)
+                    if (info.plotLanguage == "en") Text(uiContext.getString(R.string.ux_plot_english), color = Palette.TextFaint, style = MaterialTheme.typography.labelSmall)
+                    ExpandablePlot(info.name, it, Modifier.padding(top = 8.dp))
                 }
                 Spacer(Modifier.height(14.dp))
                 if (seasons.isNotEmpty()) {
@@ -265,7 +266,8 @@ private fun SeasonChip(label: String, selected: Boolean, modifier: Modifier = Mo
     ) {
         Text(
             label,
-            modifier = Modifier.padding(horizontal = 18.dp, vertical = 13.dp),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 13.dp),
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
             style = MaterialTheme.typography.titleSmall,
             fontWeight = FontWeight.SemiBold,
         )

@@ -85,16 +85,10 @@ internal fun LiveOverlay(number: Int, stream: Stream, epg: List<EpgEntry>) {
 }
 
 @Composable
-internal fun VodOverlay(title: String, position: Long, duration: Long, playing: Boolean) {
+internal fun VodOverlay(title: String, position: Long, duration: Long, onSeek: (Long) -> Unit, onInteraction: () -> Unit) {
     Text(title, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = Color.White, maxLines = 1)
     Spacer(Modifier.height(20.dp))
-    ProgressBar(if (duration > 0) position.toFloat() / duration else 0f)
-    Spacer(Modifier.height(14.dp))
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Text("${time(position)} / ${time(duration)}", style = MaterialTheme.typography.titleMedium, color = Color.White)
-        Spacer(Modifier.weight(1f))
-        if (duration > 0) Text(stringResource(R.string.ux_remaining, time((duration - position).coerceAtLeast(0))), style = MaterialTheme.typography.labelMedium, color = Palette.TextMuted)
-    }
+    SeekBar(position, duration, onSeek, onInteraction)
 }
 
 /** Countdown card shown near the end of a series episode; stringResource(R.string.play_now) is focused, BACK cancels. */

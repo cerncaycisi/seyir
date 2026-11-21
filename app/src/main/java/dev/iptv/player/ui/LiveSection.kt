@@ -38,6 +38,8 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.LiveTv
+import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material.icons.rounded.FiberManualRecord
 import androidx.compose.material.icons.rounded.Tv
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -79,7 +81,7 @@ private const val FAVS = "~favorites"
 private const val PREVIEW_DEBOUNCE_MS = 400L
 
 @Composable
-fun LiveSection(repo: Repository, playlist: Playlist, actions: HomeActions) {
+fun LiveSection(repo: Repository, playlist: Playlist, actions: HomeActions, onSearch: () -> Unit = {}, onRecordings: () -> Unit = {}) {
     // Lint misses the direct ProduceStateScope.value assignment in this producer.
     @SuppressLint("ProduceStateDoesNotAssignValue")
     val state by produceState<Load<Content>>(Load.Loading, playlist.id) {
@@ -88,7 +90,7 @@ fun LiveSection(repo: Repository, playlist: Playlist, actions: HomeActions) {
     when (val s = state) {
         Load.Loading -> LoadingState()
         is Load.Err -> ErrorState(s.message)
-        is Load.Ok -> LiveBrowser(repo, playlist, s.value, actions)
+        is Load.Ok -> LiveBrowser(repo, playlist, s.value, actions, onSearch, onRecordings)
     }
 }
 
@@ -99,6 +101,8 @@ private fun LiveBrowser(
     playlist: Playlist,
     content: Content,
     actions: HomeActions,
+    onSearch: () -> Unit,
+    onRecordings: () -> Unit,
     categoryWidth: Dp = 190.dp,
 ) {
     val uiContext = LocalContext.current
@@ -206,6 +210,11 @@ private fun LiveBrowser(
     Row(Modifier.fillMaxSize()) {
         Column(Modifier.width(categoryWidth).fillMaxHeight()) {
             ScreenTitle(uiContext.getString(R.string.ui_live_tv))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                HeaderButton(uiContext.getString(R.string.ui_search), Icons.Rounded.Search, onSearch)
+                HeaderButton(uiContext.getString(R.string.play_section_recordings), Icons.Rounded.FiberManualRecord, onRecordings)
+            }
+            Spacer(Modifier.height(8.dp))
             LazyColumn(
                 Modifier.focusProperties {
                     enter = { if (catState.layoutInfo.visibleItemsInfo.any { it.key == selected }) selectedFocus(categoryFocus) else FocusRequester.Default }

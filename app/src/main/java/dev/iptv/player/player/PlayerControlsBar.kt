@@ -33,25 +33,22 @@ internal fun PlayerControlsBar(
     playing: Boolean,
     active: Boolean,
     onToggle: () -> Unit,
-    onSeekBack: () -> Unit,
-    onSeekForward: () -> Unit,
     onChannels: () -> Unit,
     onSettings: (PlayerPage) -> Unit,
     onRecord: () -> Unit,
     recording: Boolean,
     canReturnToLive: Boolean,
     onReturnToLive: () -> Unit,
+    onInfo: () -> Unit,
 ) {
     val first = remember { FocusRequester() }
     val buttons = buildList {
-        if (!live) add(QuickControl(stringResource(R.string.ux_back_ten), Icons.Rounded.Replay10, onSeekBack))
         add(QuickControl(stringResource(if (playing) R.string.ux_pause else R.string.ux_play),
             if (playing) Icons.Rounded.Pause else Icons.Rounded.PlayArrow, onToggle))
-        if (!live) add(QuickControl(stringResource(R.string.ux_forward_ten), Icons.Rounded.Forward10, onSeekForward))
         if (live) add(QuickControl(stringResource(R.string.play_channel_list), Icons.AutoMirrored.Rounded.List, onChannels))
         add(QuickControl(stringResource(R.string.play_audio), Icons.AutoMirrored.Rounded.VolumeUp) { onSettings(PlayerPage.Audio) })
         add(QuickControl(stringResource(R.string.play_subtitles), Icons.Rounded.Subtitles) { onSettings(PlayerPage.Subtitle) })
-        add(QuickControl(stringResource(R.string.play_aspect), Icons.Rounded.AspectRatio) { onSettings(PlayerPage.Aspect) })
+        if (!live) add(QuickControl(stringResource(R.string.ux_title_info), Icons.Rounded.Info, onInfo))
         if (live) add(QuickControl(stringResource(if (recording) R.string.play_stop_recording else R.string.play_record),
             if (recording) Icons.Rounded.Stop else Icons.Rounded.FiberManualRecord, onRecord))
         if (canReturnToLive) add(QuickControl(stringResource(R.string.play_back_live), Icons.Rounded.LiveTv, onReturnToLive))
@@ -65,7 +62,7 @@ internal fun PlayerControlsBar(
     }
     LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(4.dp)) {
         itemsIndexed(buttons) { i, button ->
-            val primary = i == if (live) 0 else 1
+            val primary = i == 0
             Surface(
                 onClick = button.action,
                 modifier = Modifier.height(44.dp).then(if (primary) Modifier.focusRequester(first) else Modifier)

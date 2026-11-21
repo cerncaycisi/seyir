@@ -15,4 +15,17 @@
     <string name="ux_info">Yayın bilgisi</string>
     <string name="ux_info_unknown">Bilgi henüz hazır değil</string>
     <string name="ux_close_controls">Geri: kontrolleri gizle</string>
+    <string name="ux_search_live">Kanallarda ara</string>
+    <string name="ux_search_movies">Filmlerde ara</string>
+    <string name="ux_search_series">Dizilerde ara</string>
+    <string name="ux_read_more">Devamını oku</string>
+    <string name="ux_reader_hint">↑ ↓ Kaydır · Geri: kapat</string>
+    <string name="ux_seek">Oynatma konumu</string>
+    <string name="ux_seek_hint">← → Konum seç · OK: uygula</string>
+    <string name="ux_title_info">Bilgiler</string>
+    <string name="ux_info_loading">Bilgiler yükleniyor…</string>
+    <string name="ux_tmdb_rating">TMDB puanı</string>
+    <string name="ux_metadata_progress">TMDB bilgileri: %1$d / %2$d · Sonuçlar güncelleniyor</string>
+    <string name="ux_tmdb_disabled">TMDB puanları için Ayarlar’dan çevrimiçi bilgileri açın.</string>
+    <string name="ux_plot_english">Türkçe açıklama bulunamadı · İngilizce özet</string>
 </resources>

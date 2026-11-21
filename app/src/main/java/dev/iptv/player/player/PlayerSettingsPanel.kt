@@ -126,7 +126,7 @@ fun PlayerSettingsPanel(
     var page by remember(initialPage) { mutableStateOf(initialPage) }
     var mainFocus by remember { mutableIntStateOf(0) }
     fun back() { if (initialPage == PlayerPage.Main) page = PlayerPage.Main else onClose() }
-    BackHandler { if (page == PlayerPage.Main) onClose() else back() }
+    BackHandler { onClose() }
 
     val offOrAuto = { o: List<TrackOption> -> o.firstOrNull { it.selected }?.label ?: "—" }
 
