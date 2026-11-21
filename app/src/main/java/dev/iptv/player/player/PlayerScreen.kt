@@ -1,25 +1,39 @@
 package dev.iptv.player.player
 
+import android.app.Activity
+import android.content.ActivityNotFoundException
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
+import android.view.KeyEvent
 import androidx.activity.compose.BackHandler
 import androidx.annotation.OptIn
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.ErrorOutline
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -35,53 +49,52 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.media3.common.C
 import androidx.media3.common.MediaItem
+import androidx.media3.common.MediaItem.SubtitleConfiguration
+import androidx.media3.common.MediaMetadata
+import androidx.media3.common.MimeTypes
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
+import androidx.media3.common.TrackSelectionParameters
+import androidx.media3.common.Tracks
 import androidx.media3.common.util.UnstableApi
-import androidx.media3.datasource.DefaultDataSource
-import androidx.media3.datasource.DefaultHttpDataSource
-import androidx.media3.exoplayer.DefaultRenderersFactory
-import androidx.media3.exoplayer.ExoPlayer
-import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import androidx.media3.session.MediaSession
 import androidx.media3.ui.PlayerView
+import androidx.media3.ui.SubtitleView
+import androidx.tv.material3.Icon
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import dev.iptv.player.PlayerQueue
-import dev.iptv.player.data.Stream
-import dev.iptv.player.ui.LogoTile
-import dev.iptv.player.ui.Palette
-import dev.iptv.player.ui.Pill
-import dev.iptv.player.ui.ProgressBar
-import dev.iptv.player.ui.formatClock
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.ErrorOutline
-import androidx.compose.material.icons.rounded.Pause
-import androidx.compose.material.icons.rounded.PlayArrow
-import androidx.compose.ui.text.font.FontWeight
-import androidx.tv.material3.Icon
 import dev.iptv.player.data.ContentType
 import dev.iptv.player.data.EpgEntry
 import dev.iptv.player.data.Repository
+import dev.iptv.player.data.Setting
+import dev.iptv.player.data.Stream
 import dev.iptv.player.data.favoriteKey
+import dev.iptv.player.ui.Palette
+import dev.iptv.player.ui.Pill
+import dev.iptv.player.ui.formatClock
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 
-@OptIn(UnstableApi::class)
+private enum class Panel { None, Settings, Channels }
+
+private const val MAX_RECONNECTS = 10
+private const val NEXT_EPISODE_WINDOW_MS = 10_000L
+
+// wired to Stream.headers after merge
+private fun requestHeadersFor(stream: Stream): Map<String, String> = emptyMap()
+
+private class ViewHolder { var view: PlayerView? = null }
+
 @Composable
 fun PlayerScreen(repo: Repository, onBack: () -> Unit) {
     val items = PlayerQueue.items
@@ -91,23 +104,63 @@ fun PlayerScreen(repo: Repository, onBack: () -> Unit) {
         return
     }
     val context = LocalContext.current
+    val cfg by produceState<PlayerConfig?>(null) { value = PlayerConfig.load(repo.settings) }
+    // 0 = deciding, 1 = handed to an external player, 2 = play internally
+    var mode by rememberSaveable { mutableIntStateOf(0) }
+    val c = cfg
+    if (c == null || mode != 2) {
+        Box(Modifier.fillMaxSize().background(Color.Black))
+        if (c != null && mode == 0) {
+            LaunchedEffect(Unit) {
+                val stream = items[PlayerQueue.index.coerceIn(0, items.lastIndex)]
+                if (launchExternalPlayer(context, c.externalPlayer, stream)) {
+                    mode = 1
+                    onBack()
+                } else {
+                    mode = 2
+                }
+            }
+        }
+        return
+    }
+    PlayerContent(repo, c, onBack)
+}
+
+/** Opens [stream] in the app named by the ExternalPlayer setting; false when unset or not installed. */
+private fun launchExternalPlayer(context: Context, setting: String, stream: Stream): Boolean {
+    val pkg = setting.trim()
+    if (pkg.isEmpty() || !pkg.contains('.')) return false
+    val intent = Intent(Intent.ACTION_VIEW).apply {
+        setDataAndType(Uri.parse(stream.url), "video/*")
+        setPackage(pkg)
+        putExtra("title", stream.name)
+        if (context !is Activity) addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    }
+    return try {
+        context.startActivity(intent)
+        true
+    } catch (_: ActivityNotFoundException) {
+        false
+    } catch (_: SecurityException) {
+        false
+    }
+}
+
+@OptIn(UnstableApi::class)
+@Composable
+private fun PlayerContent(repo: Repository, cfg: PlayerConfig, onBack: () -> Unit) {
+    val items = PlayerQueue.items
+    val playlist = PlayerQueue.playlist!!
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     var index by rememberSaveable { mutableIntStateOf(PlayerQueue.index.coerceIn(0, items.lastIndex)) }
+    var previousIndex by rememberSaveable { mutableIntStateOf(-1) }
     val current = items[index]
     val live = current.type == ContentType.LIVE
 
-    val player = remember {
-        val http = DefaultHttpDataSource.Factory()
-            .setUserAgent("IPTVPlayer/0.1")
-            .setAllowCrossProtocolRedirects(true)
-            .setConnectTimeoutMs(15_000)
-            .setReadTimeoutMs(30_000)
-        ExoPlayer.Builder(context, DefaultRenderersFactory(context).setEnableDecoderFallback(true))
-            .setMediaSourceFactory(DefaultMediaSourceFactory(DefaultDataSource.Factory(context, http)))
-            .setSeekBackIncrementMs(10_000)
-            .setSeekForwardIncrementMs(10_000)
-            .build()
-            .apply { playWhenReady = true }
-    }
+    val headers = remember { RequestHeaders() }
+    val player = remember { buildPlayer(context, cfg, headers) }
+    val viewHolder = remember { ViewHolder() }
 
     var error by remember { mutableStateOf<String?>(null) }
     var playing by remember { mutableStateOf(true) }
@@ -117,7 +170,29 @@ fun PlayerScreen(repo: Repository, onBack: () -> Unit) {
     var position by remember { mutableLongStateOf(0L) }
     var duration by remember { mutableLongStateOf(0L) }
 
+    var panel by remember { mutableStateOf(Panel.None) }
+    var tracks by remember { mutableStateOf(Tracks.EMPTY) }
+    var trackParams by remember { mutableStateOf<TrackSelectionParameters>(player.trackSelectionParameters) }
+    var aspect by rememberSaveable { mutableStateOf(cfg.aspectMode) }
+    var subtitleScale by rememberSaveable { mutableIntStateOf(cfg.subtitleScale) }
+    var speed by remember { mutableStateOf(1f) }
+    var sleepMinutes by remember { mutableIntStateOf(0) }
+    var digits by remember { mutableStateOf("") }
+    var reconnectAttempt by remember { mutableIntStateOf(0) }
+    var reconnectJob by remember { mutableStateOf<Job?>(null) }
+    val externalSubs = remember { mutableStateListOf<SubtitleConfiguration>() }
+    var nextSeconds by remember { mutableIntStateOf(0) }
+    var nextCancelledFor by rememberSaveable { mutableIntStateOf(-1) }
+    val nextVisible = nextSeconds > 0
+
+    val aspectMode = AspectMode.fromKey(aspect)
+
     fun showOverlay() { overlayTick++ }
+    fun zapTo(target: Int) {
+        if (target == index) return
+        previousIndex = index
+        index = target
+    }
     // Reads `index` (state-backed) instead of `current` so callbacks registered once never save a stale item.
     fun saveProgress() {
         val item = items[index]
@@ -130,27 +205,69 @@ fun PlayerScreen(repo: Repository, onBack: () -> Unit) {
         repo.scope.launch { repo.store.savePosition(key, if (ended) 0 else pos) }
     }
 
+    fun buildItem(s: Stream): MediaItem = MediaItem.Builder()
+        .setUri(s.url)
+        .setMediaMetadata(MediaMetadata.Builder().setTitle(s.name).build())
+        .setSubtitleConfigurations(externalSubs.toList())
+        .build()
+
+    fun scheduleReconnect(cause: PlaybackException) {
+        val attempt = reconnectAttempt
+        if (attempt >= MAX_RECONNECTS) {
+            reconnectAttempt = 0
+            error = describe(cause)
+            return
+        }
+        reconnectAttempt = attempt + 1
+        reconnectJob?.cancel()
+        reconnectJob = scope.launch {
+            delay(minOf(30_000L, 1_000L shl attempt))
+            player.seekToDefaultPosition()
+            player.prepare()
+            player.play()
+        }
+    }
+
     DisposableEffect(player) {
         val listener = object : Player.Listener {
             override fun onPlayerError(e: PlaybackException) {
+                val liveNow = items[index].type == ContentType.LIVE
                 if (e.errorCode == PlaybackException.ERROR_CODE_BEHIND_LIVE_WINDOW) {
                     player.seekToDefaultPosition()
                     player.prepare()
+                } else if (liveNow && cfg.autoReconnect && e.isRetriable()) {
+                    scheduleReconnect(e)
                 } else {
                     error = describe(e)
                 }
             }
 
             override fun onPlaybackStateChanged(state: Int) {
-                if (state == Player.STATE_READY) error = null
+                if (state == Player.STATE_READY) {
+                    error = null
+                    reconnectAttempt = 0
+                }
                 if (state == Player.STATE_ENDED && items[index].type != ContentType.LIVE) {
                     saveProgress()
-                    if (index < items.lastIndex) index++
+                    // Series: the countdown card owns the transition; a cancelled card stays on the last frame.
+                    if (index < items.lastIndex && nextCancelledFor != index) index++
                 }
             }
 
             override fun onIsPlayingChanged(isPlaying: Boolean) {
                 playing = isPlaying
+            }
+
+            override fun onTracksChanged(t: Tracks) {
+                tracks = t
+            }
+
+            override fun onTrackSelectionParametersChanged(p: TrackSelectionParameters) {
+                trackParams = p
+            }
+
+            override fun onRenderedFirstFrame() {
+                if (cfg.matchFrameRate) applyFrameRate(viewHolder.view, player)
             }
         }
         player.addListener(listener)
@@ -158,6 +275,12 @@ fun PlayerScreen(repo: Repository, onBack: () -> Unit) {
             player.removeListener(listener)
             player.release()
         }
+    }
+
+    // Media3 session: remote media keys and Google Assistant. Declared after the player effect so it is released first.
+    DisposableEffect(player) {
+        val session = MediaSession.Builder(context, player).setId("iptv-player").build()
+        onDispose { session.release() }
     }
 
     val lifecycle = LocalLifecycleOwner.current.lifecycle
@@ -174,10 +297,19 @@ fun PlayerScreen(repo: Repository, onBack: () -> Unit) {
     }
 
     LaunchedEffect(index) {
+        // Hook point: persist PlayerQueue.index here (data layer).
         error = null
         epg = emptyList()
+        reconnectJob?.cancel()
+        reconnectAttempt = 0
+        nextSeconds = 0
+        externalSubs.clear()
+        speed = 1f
+        player.setPlaybackSpeed(1f)
+        headers.value = requestHeadersFor(current)
+        player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().clearOverrides().build()
         val start = if (live) 0L else repo.store.position(favoriteKey(playlist, current))
-        player.setMediaItem(MediaItem.fromUri(current.url), start)
+        player.setMediaItem(buildItem(current), start)
         player.prepare()
         player.play()
         showOverlay()
@@ -198,13 +330,79 @@ fun PlayerScreen(repo: Repository, onBack: () -> Unit) {
         }
     }
 
+    // Next-episode countdown for series: derived from the remaining playback time so pausing pauses it.
+    LaunchedEffect(index) {
+        if (items[index].type != ContentType.SERIES || index >= items.lastIndex) return@LaunchedEffect
+        while (true) {
+            delay(500)
+            val d = player.duration
+            val remaining = d - player.currentPosition
+            nextSeconds = if (d > 0 && remaining in 0..NEXT_EPISODE_WINDOW_MS && nextCancelledFor != index &&
+                player.playbackState != Player.STATE_IDLE
+            ) ((remaining + 999) / 1000).toInt().coerceIn(1, 10) else 0
+        }
+    }
+
+    LaunchedEffect(sleepMinutes) {
+        if (sleepMinutes > 0) {
+            delay(sleepMinutes * 60_000L)
+            saveProgress()
+            player.pause()
+            onBack()
+        }
+    }
+
+    fun commitDigits() {
+        val n = digits.toIntOrNull()
+        digits = ""
+        if (n != null && n in 1..items.size) zapTo(n - 1)
+    }
+    LaunchedEffect(digits) {
+        if (digits.isNotEmpty()) {
+            delay(2_000)
+            commitDigits()
+        }
+    }
+
     BackHandler {
         saveProgress()
         onBack()
     }
 
     val focus = remember { FocusRequester() }
-    LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
+    LaunchedEffect(panel, nextVisible) {
+        if (panel == Panel.None && !nextVisible) runCatching { focus.requestFocus() }
+    }
+
+    val blocking = panel != Panel.None || nextVisible
+
+    val subtitleSearch = remember(index) {
+        if (!OpenSubtitles.enabled || live) null else object : SubtitleSearch {
+            override suspend fun search(): List<SubtitleHit> {
+                val langs = listOf(cfg.subtitleLanguage.lowercase(), "en").filter { it.length in 2..3 && it != "off" }.distinct()
+                return OpenSubtitles.search(current.name, current.year, langs.ifEmpty { listOf("en") })
+            }
+
+            override suspend fun download(hit: SubtitleHit): Boolean {
+                val file = OpenSubtitles.download(context.cacheDir, hit)
+                externalSubs.add(
+                    SubtitleConfiguration.Builder(Uri.fromFile(file))
+                        .setMimeType(MimeTypes.APPLICATION_SUBRIP)
+                        .setLanguage(hit.language)
+                        .setLabel("OpenSubtitles · ${hit.language.uppercase()}")
+                        .setSelectionFlags(C.SELECTION_FLAG_DEFAULT)
+                        .build(),
+                )
+                val pos = player.currentPosition
+                player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
+                    .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false).build()
+                player.setMediaItem(buildItem(current), pos)
+                player.prepare()
+                player.play()
+                return true
+            }
+        }
+    }
 
     Box(
         Modifier
@@ -214,11 +412,47 @@ fun PlayerScreen(repo: Repository, onBack: () -> Unit) {
             .focusable()
             .onPreviewKeyEvent { event ->
                 if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
-                val handled = if (live) {
+                val code = event.nativeKeyEvent.keyCode
+                if (blocking) {
+                    // Panels own the D-pad; MENU toggles the settings panel closed again.
+                    if (code == KeyEvent.KEYCODE_MENU && panel == Panel.Settings) { panel = Panel.None; return@onPreviewKeyEvent true }
+                    return@onPreviewKeyEvent false
+                }
+                if (code == KeyEvent.KEYCODE_MENU || code == KeyEvent.KEYCODE_SETTINGS || code == KeyEvent.KEYCODE_CAPTIONS) {
+                    panel = Panel.Settings
+                    return@onPreviewKeyEvent true
+                }
+                if (live) {
+                    val digit = when (code) {
+                        in KeyEvent.KEYCODE_0..KeyEvent.KEYCODE_9 -> code - KeyEvent.KEYCODE_0
+                        in KeyEvent.KEYCODE_NUMPAD_0..KeyEvent.KEYCODE_NUMPAD_9 -> code - KeyEvent.KEYCODE_NUMPAD_0
+                        else -> -1
+                    }
+                    if (digit >= 0) {
+                        // "0" on its own is the classic "previous channel" shortcut.
+                        if (digit == 0 && digits.isEmpty()) {
+                            if (previousIndex in items.indices) zapTo(previousIndex)
+                        } else if (digits.length < 4) {
+                            digits += digit
+                        }
+                        return@onPreviewKeyEvent true
+                    }
+                    if (code == KeyEvent.KEYCODE_LAST_CHANNEL) {
+                        if (previousIndex in items.indices) zapTo(previousIndex)
+                        return@onPreviewKeyEvent true
+                    }
+                    if (code == KeyEvent.KEYCODE_GUIDE) { panel = Panel.Channels; return@onPreviewKeyEvent true }
+                    if (code == KeyEvent.KEYCODE_INFO) { showOverlay(); return@onPreviewKeyEvent true }
                     when (event.key) {
-                        Key.DirectionUp, Key.ChannelUp -> { index = (index + 1) % items.size; true }
-                        Key.DirectionDown, Key.ChannelDown -> { index = (index - 1 + items.size) % items.size; true }
-                        Key.DirectionCenter, Key.Enter, Key.NumPadEnter -> { if (overlay) overlay = false else showOverlay(); true }
+                        Key.DirectionUp, Key.ChannelUp -> { zapTo((index + 1) % items.size); true }
+                        Key.DirectionDown, Key.ChannelDown -> { zapTo((index - 1 + items.size) % items.size); true }
+                        Key.DirectionLeft -> { panel = Panel.Channels; true }
+                        Key.DirectionRight -> { panel = Panel.Settings; true }
+                        Key.DirectionCenter, Key.Enter, Key.NumPadEnter -> {
+                            if (digits.isNotEmpty()) commitDigits() else if (overlay) overlay = false else showOverlay()
+                            true
+                        }
+                        Key.MediaPlayPause -> { if (player.isPlaying) player.pause() else player.play(); true }
                         else -> false
                     }
                 } else {
@@ -229,11 +463,11 @@ fun PlayerScreen(repo: Repository, onBack: () -> Unit) {
                         }
                         Key.DirectionLeft, Key.MediaRewind -> { player.seekBack(); showOverlay(); true }
                         Key.DirectionRight, Key.MediaFastForward -> { player.seekForward(); showOverlay(); true }
-                        Key.DirectionUp, Key.DirectionDown -> { showOverlay(); true }
+                        Key.DirectionUp -> { panel = Panel.Settings; true }
+                        Key.DirectionDown -> { showOverlay(); true }
                         else -> false
                     }
                 }
-                handled
             },
     ) {
         AndroidView(
@@ -243,10 +477,27 @@ fun PlayerScreen(repo: Repository, onBack: () -> Unit) {
                     useController = false
                     keepScreenOn = true
                     setShowBuffering(PlayerView.SHOW_BUFFERING_ALWAYS)
+                    viewHolder.view = this
                 }
             },
-            modifier = Modifier.fillMaxSize(),
+            update = { v ->
+                v.resizeMode = when (aspectMode) {
+                    AspectMode.Fit -> androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FIT
+                    AspectMode.Zoom -> androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+                    else -> androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FILL
+                }
+                v.subtitleView?.setFractionalTextSize(SubtitleView.DEFAULT_TEXT_SIZE_FRACTION * subtitleScale / 100f)
+            },
+            modifier = aspectMode.ratio?.let { Modifier.align(Alignment.Center).aspectRatio(it) } ?: Modifier.fillMaxSize(),
         )
+
+        if (error == null && reconnectAttempt > 0) {
+            Row(
+                Modifier.align(Alignment.Center).clip(RoundedCornerShape(16.dp)).background(Color(0xE6111620)).padding(horizontal = 28.dp, vertical = 18.dp),
+            ) {
+                Text("Yeniden bağlanıyor…  ($reconnectAttempt/$MAX_RECONNECTS)", style = MaterialTheme.typography.titleMedium, color = Color.White)
+            }
+        }
 
         error?.let {
             Column(
@@ -267,13 +518,31 @@ fun PlayerScreen(repo: Repository, onBack: () -> Unit) {
             }
         }
 
-        if (overlay) {
+        if (digits.isNotEmpty()) {
+            Text(
+                digits,
+                modifier = Modifier.align(Alignment.TopStart).padding(40.dp).clip(RoundedCornerShape(12.dp)).background(Color(0xCC000000)).padding(horizontal = 24.dp, vertical = 8.dp),
+                style = MaterialTheme.typography.displaySmall,
+                fontWeight = FontWeight.Bold,
+                color = Color.White,
+            )
+        }
+
+        if (overlay && panel == Panel.None && !nextVisible) {
             Text(
                 formatClock(System.currentTimeMillis() / 1000),
                 modifier = Modifier.align(Alignment.TopEnd).padding(horizontal = 40.dp, vertical = 24.dp),
                 style = MaterialTheme.typography.headlineSmall,
                 color = Color.White,
             )
+            if (sleepMinutes > 0) {
+                Pill(
+                    "Uyku: $sleepMinutes dk",
+                    modifier = Modifier.align(Alignment.TopStart).padding(horizontal = 40.dp, vertical = 28.dp),
+                    color = Color(0x33FFFFFF),
+                    contentColor = Color.White,
+                )
+            }
             Column(
                 Modifier
                     .align(Alignment.BottomCenter)
@@ -284,83 +553,64 @@ fun PlayerScreen(repo: Repository, onBack: () -> Unit) {
                 if (live) LiveOverlay(index + 1, current, epg) else VodOverlay(current.name, position, duration, playing)
             }
         }
-    }
-}
 
-@Composable
-private fun LiveOverlay(number: Int, stream: Stream, epg: List<EpgEntry>) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        LogoTile(stream.name, stream.logo, Modifier.size(width = 112.dp, height = 64.dp), MaterialTheme.typography.titleLarge)
-        Spacer(Modifier.width(20.dp))
-        Column(Modifier.weight(1f)) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                Pill("$number", color = Color(0x33FFFFFF), contentColor = Color.White)
-                Text(stream.name, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = Color.White, maxLines = 1)
-                Pill("CANLI", color = Palette.Live, contentColor = Color.White)
-            }
-            val now = epg.firstOrNull()
-            if (now != null) {
-                Spacer(Modifier.height(10.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(now.title, style = MaterialTheme.typography.titleLarge, color = Color.White, maxLines = 1, modifier = Modifier.weight(1f, fill = false))
-                    Spacer(Modifier.width(12.dp))
-                    Text("${formatClock(now.start)} – ${formatClock(now.end)}", style = MaterialTheme.typography.bodyMedium, color = Palette.TextMuted)
-                }
-                if (now.end > now.start) {
-                    Spacer(Modifier.height(10.dp))
-                    val nowSec = System.currentTimeMillis() / 1000
-                    ProgressBar((nowSec - now.start).toFloat() / (now.end - now.start), Modifier.widthIn(max = 480.dp))
-                }
-                epg.getOrNull(1)?.let { next ->
-                    Spacer(Modifier.height(10.dp))
-                    Text("Sonra  ${formatClock(next.start)}  ${next.title}", style = MaterialTheme.typography.bodyMedium, color = Palette.TextMuted, maxLines = 1)
-                }
-            }
+        if (nextVisible && panel == Panel.None) {
+            NextEpisodeCard(
+                nextTitle = items[(index + 1).coerceAtMost(items.lastIndex)].name,
+                seconds = nextSeconds,
+                onPlayNow = { saveProgress(); nextSeconds = 0; if (index < items.lastIndex) index++ },
+                onCancel = { nextCancelledFor = index; nextSeconds = 0 },
+                modifier = Modifier.align(Alignment.BottomEnd).padding(40.dp),
+            )
+        }
+
+        when (panel) {
+            Panel.Channels -> ChannelListPanel(
+                items = items,
+                currentIndex = index,
+                onPick = { zapTo(it); panel = Panel.None },
+                onClose = { panel = Panel.None },
+                modifier = Modifier.align(Alignment.CenterStart),
+            )
+            Panel.Settings -> PlayerSettingsPanel(
+                live = live,
+                aspect = aspectMode,
+                onAspect = { m ->
+                    aspect = m.key
+                    repo.scope.launch { repo.settings.set(Setting.AspectMode, m.key) }
+                },
+                speed = speed,
+                onSpeed = { speed = it; player.setPlaybackSpeed(it) },
+                audio = trackOptions(tracks, trackParams, C.TRACK_TYPE_AUDIO, null),
+                onAudio = { player.selectTrack(C.TRACK_TYPE_AUDIO, it) },
+                subtitles = trackOptions(tracks, trackParams, C.TRACK_TYPE_TEXT, "Kapalı"),
+                onSubtitle = { player.selectTrack(C.TRACK_TYPE_TEXT, it) },
+                quality = trackOptions(tracks, trackParams, C.TRACK_TYPE_VIDEO, null),
+                onQuality = { player.selectTrack(C.TRACK_TYPE_VIDEO, it) },
+                subtitleScale = subtitleScale,
+                onSubtitleScale = { s ->
+                    subtitleScale = s
+                    repo.scope.launch { repo.settings.set(Setting.SubtitleScale, s) }
+                },
+                sleepMinutes = sleepMinutes,
+                onSleep = { sleepMinutes = it },
+                subtitleSearch = subtitleSearch,
+                onPreviousChannel = if (live && previousIndex in items.indices) ({ zapTo(previousIndex); panel = Panel.None }) else null,
+                onChannelList = if (live) ({ panel = Panel.Channels }) else null,
+                onClose = { panel = Panel.None },
+                modifier = Modifier.align(Alignment.CenterEnd),
+            )
+            Panel.None -> Unit
         }
     }
-    Spacer(Modifier.height(20.dp))
-    Text("▲ ▼  kanal değiştir    ·    OK  bilgi    ·    Geri  çıkış", style = MaterialTheme.typography.labelMedium, color = Palette.TextFaint)
 }
 
-@Composable
-private fun VodOverlay(title: String, position: Long, duration: Long, playing: Boolean) {
-    Text(title, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = Color.White, maxLines = 1)
-    Spacer(Modifier.height(20.dp))
-    ProgressBar(if (duration > 0) position.toFloat() / duration else 0f)
-    Spacer(Modifier.height(14.dp))
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.size(44.dp).clip(CircleShape).background(Color.White), contentAlignment = Alignment.Center) {
-            Icon(if (playing) Icons.Rounded.Pause else Icons.Rounded.PlayArrow, contentDescription = null, tint = Color.Black)
-        }
-        Spacer(Modifier.width(16.dp))
-        Text("${time(position)} / ${time(duration)}", style = MaterialTheme.typography.titleMedium, color = Color.White)
-        Spacer(Modifier.weight(1f))
-        Text("◀ ▶  10 sn    ·    OK  oynat / duraklat", style = MaterialTheme.typography.labelMedium, color = Palette.TextFaint)
-    }
-}
-
-private fun describe(e: PlaybackException): String {
-    val reason = when (e.errorCode) {
-        PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS -> "Sunucu yayını vermedi"
-        PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED,
-        PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT -> "Sunucuya bağlanılamadı"
-        PlaybackException.ERROR_CODE_IO_FILE_NOT_FOUND -> "Yayın bulunamadı"
-        PlaybackException.ERROR_CODE_PARSING_CONTAINER_MALFORMED,
-        PlaybackException.ERROR_CODE_PARSING_MANIFEST_MALFORMED,
-        PlaybackException.ERROR_CODE_PARSING_CONTAINER_UNSUPPORTED -> "Yayın verisi okunamadı"
-        PlaybackException.ERROR_CODE_DECODER_INIT_FAILED,
-        PlaybackException.ERROR_CODE_DECODING_FORMAT_UNSUPPORTED,
-        PlaybackException.ERROR_CODE_DECODING_FORMAT_EXCEEDS_CAPABILITIES -> "Bu yayın biçimi cihazda desteklenmiyor"
-        else -> "Beklenmeyen bir hata oluştu"
-    }
-    return "$reason\n${e.errorCodeName}"
-}
-
-
-private fun time(ms: Long): String {
-    val total = ms / 1000
-    val h = total / 3600
-    val m = (total % 3600) / 60
-    val s = total % 60
-    return if (h > 0) "%d:%02d:%02d".format(h, m, s) else "%02d:%02d".format(m, s)
+/** Network-ish failures worth retrying on a live stream. */
+private fun PlaybackException.isRetriable() = when (errorCode) {
+    PlaybackException.ERROR_CODE_IO_UNSPECIFIED,
+    PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED,
+    PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT,
+    PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS,
+    PlaybackException.ERROR_CODE_TIMEOUT -> true
+    else -> false
 }
