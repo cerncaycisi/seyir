@@ -78,7 +78,7 @@ object OpenSubtitles {
             ?.jsonPrimitive?.longOrNull ?: return@mapNotNull null
         val lang = attrs["language"]?.jsonPrimitive?.contentOrNull ?: "?"
         val release = attrs["release"]?.jsonPrimitive?.contentOrNull
-            ?: (attrs["feature_details"] as? JsonObject)?.get("title")?.jsonPrimitive?.contentOrNull ?: "Altyazı"
+            ?: (attrs["feature_details"] as? JsonObject)?.get("title")?.jsonPrimitive?.contentOrNull.orEmpty()
         SubtitleHit(fileId, release, lang, attrs["download_count"]?.jsonPrimitive?.intOrNull ?: 0)
     }.sortedByDescending { it.downloads }.take(30)
 

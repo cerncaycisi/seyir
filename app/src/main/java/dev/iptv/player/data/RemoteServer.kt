@@ -1,7 +1,10 @@
 package dev.iptv.player.data
 
+import android.content.Context
+import dev.iptv.player.R
 import fi.iki.elonen.NanoHTTPD
 import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -45,51 +48,63 @@ class RemoteServer private constructor(
     private val json = Json { ignoreUnknownKeys = true }
 
     override fun serve(session: IHTTPSession): Response {
-        if (!isLocalClient(session.remoteIpAddress)) return plain(Response.Status.FORBIDDEN, "Forbidden")
-        if (failures >= MAX_FAILURES) return plain(Response.Status.FORBIDDEN, "Locked")
+        val context = runBlocking { repo.settings.localizedContext(repo.appContext) }
+        if (!isLocalClient(session.remoteIpAddress)) return plain(Response.Status.FORBIDDEN, context.getString(R.string.data_remote_forbidden))
+        if (failures >= MAX_FAILURES) return plain(Response.Status.FORBIDDEN, context.getString(R.string.data_remote_locked))
         val given = session.parameters["t"]?.firstOrNull().orEmpty()
         if (!MessageDigest.isEqual(given.toByteArray(), token.toByteArray())) {
             failures++
-            return plain(Response.Status.FORBIDDEN, "Forbidden")
+            return plain(Response.Status.FORBIDDEN, context.getString(R.string.data_remote_forbidden))
         }
         return try {
             when {
-                session.method == Method.GET && session.uri == "/" -> html(if (mode == PhoneMode.ADD) ADD_PAGE else BACKUP_PAGE)
-                mode == PhoneMode.ADD && session.method == Method.POST && session.uri == "/api/add" -> handleAdd(session)
+                session.method == Method.GET && session.uri == "/" -> html(if (mode == PhoneMode.ADD) addPage(context) else backupPage(context))
+                mode == PhoneMode.ADD && session.method == Method.POST && session.uri == "/api/add" -> handleAdd(session, context)
                 mode == PhoneMode.BACKUP && session.method == Method.GET && session.uri == "/api/backup" -> handleExport()
-                mode == PhoneMode.BACKUP && session.method == Method.POST && session.uri == "/api/restore" -> handleRestore(session)
-                else -> plain(Response.Status.NOT_FOUND, "Not found")
+                mode == PhoneMode.BACKUP && session.method == Method.POST && session.uri == "/api/restore" -> handleRestore(session, context)
+                else -> plain(Response.Status.NOT_FOUND, context.getString(R.string.data_remote_not_found))
             }
-        } catch (e: Exception) {
-            jsonResponse(Response.Status.INTERNAL_ERROR, false, e.message ?: "Hata")
+        } catch (e: InvalidBackupException) {
+            val message = e.unsupportedVersion?.let { context.getString(R.string.data_backup_version, it) }
+                ?: context.getString(R.string.data_backup_invalid)
+            jsonResponse(Response.Status.BAD_REQUEST, false, message)
+        } catch (_: SerializationException) {
+            jsonResponse(Response.Status.BAD_REQUEST, false, context.getString(R.string.data_request_invalid))
+        } catch (_: IllegalArgumentException) {
+            jsonResponse(Response.Status.BAD_REQUEST, false, context.getString(R.string.data_request_invalid))
+        } catch (_: UnsupportedOperationException) {
+            jsonResponse(Response.Status.INTERNAL_ERROR, false, context.getString(R.string.data_backup_unavailable))
+        } catch (_: Exception) {
+            // Parser and network exception messages can contain submitted passwords or full URLs.
+            jsonResponse(Response.Status.INTERNAL_ERROR, false, context.getString(R.string.data_operation_failed))
         }
     }
 
     private fun readBody(session: IHTTPSession, limit: Long): String? {
         val length = session.headers["content-length"]?.toLongOrNull() ?: return null
-        if (length > limit) return null
+        if (length < 0 || length > limit) return null
         val files = HashMap<String, String>()
         session.parseBody(files)
         return files["postData"]
     }
 
-    private fun handleAdd(session: IHTTPSession): Response {
-        val body = readBody(session, ADD_LIMIT) ?: return jsonResponse(Response.Status.BAD_REQUEST, false, "Geçersiz veya çok büyük istek")
+    private fun handleAdd(session: IHTTPSession, context: Context): Response {
+        val body = readBody(session, ADD_LIMIT) ?: return jsonResponse(Response.Status.BAD_REQUEST, false, context.getString(R.string.data_request_invalid))
         val o = json.parseToJsonElement(body).jsonObject
         fun field(name: String) = (o[name] as? JsonPrimitive)?.contentOrNull?.trim().orEmpty().take(FIELD_LIMIT)
         val name = field("name")
         val source: PlaylistSource
         if (field("type") == "xtream") {
             val server = field("server")
-            if (!server.startsWith("http://") && !server.startsWith("https://")) return jsonResponse(Response.Status.BAD_REQUEST, false, "Sunucu adresi http:// ile başlamalı")
-            if (field("username").isEmpty() || field("password").isEmpty()) return jsonResponse(Response.Status.BAD_REQUEST, false, "Kullanıcı adı ve şifre gerekli")
+            if (!server.startsWith("http://") && !server.startsWith("https://")) return jsonResponse(Response.Status.BAD_REQUEST, false, context.getString(R.string.data_url_scheme))
+            if (field("username").isEmpty() || field("password").isEmpty()) return jsonResponse(Response.Status.BAD_REQUEST, false, context.getString(R.string.data_credentials_required))
             source = PlaylistSource.Xtream(server, field("username"), field("password"))
         } else {
             val url = field("url")
-            if (!url.startsWith("http://") && !url.startsWith("https://")) return jsonResponse(Response.Status.BAD_REQUEST, false, "Adres http:// veya https:// ile başlamalı")
+            if (!url.startsWith("http://") && !url.startsWith("https://")) return jsonResponse(Response.Status.BAD_REQUEST, false, context.getString(R.string.data_url_scheme))
             source = PlaylistSource.M3u(url)
         }
-        val label = name.ifBlank { if (source is PlaylistSource.Xtream) source.server else "M3U listesi" }
+        val label = name.ifBlank { if (source is PlaylistSource.Xtream) source.server else context.getString(R.string.data_m3u_playlist) }
         val playlist = Playlist(UUID.randomUUID().toString(), label, source)
         try {
             runBlocking {
@@ -97,10 +112,10 @@ class RemoteServer private constructor(
                 repo.store.add(playlist)
             }
         } catch (e: Exception) {
-            return jsonResponse(Response.Status.OK, false, e.message ?: "Doğrulama başarısız")
+            return jsonResponse(Response.Status.OK, false, (e as? ProviderMessage)?.message ?: context.getString(R.string.data_verification_failed))
         }
         listener.onPlaylistAdded(label)
-        return jsonResponse(Response.Status.OK, true, "\"$label\" TV'ye eklendi")
+        return jsonResponse(Response.Status.OK, true, context.getString(R.string.data_playlist_added, label))
     }
 
     private fun handleExport(): Response {
@@ -112,11 +127,11 @@ class RemoteServer private constructor(
         }
     }
 
-    private fun handleRestore(session: IHTTPSession): Response {
-        val body = readBody(session, RESTORE_LIMIT) ?: return jsonResponse(Response.Status.BAD_REQUEST, false, "Geçersiz veya çok büyük dosya")
+    private fun handleRestore(session: IHTTPSession, context: Context): Response {
+        val body = readBody(session, RESTORE_LIMIT) ?: return jsonResponse(Response.Status.BAD_REQUEST, false, context.getString(R.string.data_file_invalid))
         BackupSource.current.importJson(body)
         listener.onBackupRestored()
-        return jsonResponse(Response.Status.OK, true, "Yedek geri yüklendi")
+        return jsonResponse(Response.Status.OK, true, context.getString(R.string.data_backup_restored))
     }
 
     private fun jsonResponse(status: Response.IStatus, ok: Boolean, message: String): Response {
@@ -198,37 +213,51 @@ a.btn{display:block;text-align:center;text-decoration:none;background:#5B8CFF;co
 </style>
 """
 
-private const val ADD_PAGE = """<!doctype html><html lang="tr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Playlist ekle</title>$STYLE</head><body><div class="card">
-<h1>Playlist ekle</h1><p>Bilgiler TV'ye gönderilir, doğrulanır ve kaydedilir.</p>
-<div class="tabs"><button id="tx" class="on" type="button">Xtream</button><button id="tm" type="button">M3U bağlantısı</button></div>
-<label>Ad (isteğe bağlı)</label><input id="nm" autocomplete="off">
-<div id="fx"><label>Sunucu adresi</label><input id="server" placeholder="http://sunucu.com:8080" inputmode="url" autocapitalize="none" autocomplete="off">
-<label>Kullanıcı adı</label><input id="user" autocapitalize="none" autocomplete="off"><label>Şifre</label><input id="pass" type="password" autocomplete="off"></div>
-<div id="fm" style="display:none"><label>M3U adresi</label><input id="url" placeholder="http://..." inputmode="url" autocapitalize="none" autocomplete="off"></div>
-<button id="go" type="button">TV'ye gönder</button><div id="msg"></div></div>
+private fun htmlEscape(value: String): String = value.replace("&", "&amp;").replace("<", "&lt;")
+    .replace(">", "&gt;").replace("\"", "&quot;").replace("'", "&#39;")
+
+private fun Context.htmlText(resource: Int): String = htmlEscape(getString(resource))
+
+/** JSON quoting handles JavaScript syntax; escaping '<' also prevents an embedded closing script tag. */
+private fun Context.scriptText(resource: Int): String = JsonPrimitive(getString(resource)).toString()
+    .replace("<", "\\u003c").replace(">", "\\u003e").replace("&", "\\u0026")
+    .replace("\u2028", "\\u2028").replace("\u2029", "\\u2029")
+
+private fun addPage(context: Context): String = with(context) {
+    """<!doctype html><html lang="${htmlEscape(resources.configuration.locales[0].language)}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>${htmlText(R.string.data_add_title)}</title>$STYLE</head><body><div class="card">
+<h1>${htmlText(R.string.data_add_title)}</h1><p>${htmlText(R.string.data_add_hint)}</p>
+<div class="tabs"><button id="tx" class="on" type="button">Xtream</button><button id="tm" type="button">${htmlText(R.string.data_m3u_link)}</button></div>
+<label for="nm">${htmlText(R.string.data_optional_name)}</label><input id="nm" autocomplete="off">
+<div id="fx"><label for="server">${htmlText(R.string.data_server_url)}</label><input id="server" placeholder="http://example.com:8080" inputmode="url" autocapitalize="none" autocomplete="off">
+<label for="user">${htmlText(R.string.data_username)}</label><input id="user" autocapitalize="none" autocomplete="off"><label for="pass">${htmlText(R.string.data_password)}</label><input id="pass" type="password" autocomplete="off"></div>
+<div id="fm" style="display:none"><label for="url">${htmlText(R.string.data_m3u_url)}</label><input id="url" placeholder="http://..." inputmode="url" autocapitalize="none" autocomplete="off"></div>
+<button id="go" type="button">${htmlText(R.string.data_send_tv)}</button><div id="msg" role="status" aria-live="polite"></div></div>
 <script>
 var x=true,q=new URLSearchParams(location.search).get('t');
 function mode(v){x=v;fx.style.display=v?'':'none';fm.style.display=v?'none':'';tx.className=v?'on':'';tm.className=v?'':'on'}
 tx.onclick=function(){mode(true)};tm.onclick=function(){mode(false)};
-go.onclick=function(){go.disabled=true;msg.style.display='block';msg.className='';msg.textContent='Doğrulanıyor…';
+go.onclick=function(){go.disabled=true;msg.style.display='block';msg.className='';msg.textContent=${scriptText(R.string.data_verifying)};
 var b=x?{type:'xtream',name:nm.value,server:server.value,username:user.value,password:pass.value}:{type:'m3u',name:nm.value,url:url.value};
 fetch('/api/add?t='+encodeURIComponent(q),{method:'POST',headers:{'Content-Type':'text/plain;charset=UTF-8'},body:JSON.stringify(b)})
 .then(function(r){return r.json()}).then(function(j){msg.className=j.ok?'ok':'err';msg.textContent=j.message;go.disabled=false})
-.catch(function(){msg.className='err';msg.textContent='TV\'ye ulaşılamadı';go.disabled=false})};
+.catch(function(){msg.className='err';msg.textContent=${scriptText(R.string.data_tv_unreachable)};go.disabled=false})};
 </script></body></html>"""
+}
 
-private const val BACKUP_PAGE = """<!doctype html><html lang="tr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Yedekle / Geri yükle</title>$STYLE</head><body><div class="card">
-<h1>Yedekle / Geri yükle</h1><p>Ayarlarınızı ve playlistlerinizi telefonunuza kaydedin veya geri yükleyin.</p>
-<a class="btn" id="dl" href="#">Yedeği indir</a>
-<label style="margin-top:22px">Yedek dosyasından geri yükle</label><input id="f" type="file" accept=".json,application/json">
-<button id="go" type="button">Geri yükle</button><div id="msg"></div></div>
+private fun backupPage(context: Context): String = with(context) {
+    """<!doctype html><html lang="${htmlEscape(resources.configuration.locales[0].language)}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>${htmlText(R.string.data_backup_title)}</title>$STYLE</head><body><div class="card">
+<h1>${htmlText(R.string.data_backup_title)}</h1><p>${htmlText(R.string.data_backup_hint)}</p>
+<a class="btn" id="dl" href="#">${htmlText(R.string.data_backup_download)}</a>
+<label for="f" style="margin-top:22px">${htmlText(R.string.data_backup_file)}</label><input id="f" type="file" accept=".json,application/json">
+<button id="go" type="button">${htmlText(R.string.data_restore)}</button><div id="msg" role="status" aria-live="polite"></div></div>
 <script>
 var q=new URLSearchParams(location.search).get('t');dl.href='/api/backup?t='+encodeURIComponent(q);
-go.onclick=function(){var file=f.files[0];msg.style.display='block';if(!file){msg.className='err';msg.textContent='Önce bir dosya seçin';return}
-go.disabled=true;msg.className='';msg.textContent='Yükleniyor…';
+go.onclick=function(){var file=f.files[0];msg.style.display='block';if(!file){msg.className='err';msg.textContent=${scriptText(R.string.data_choose_file)};return}
+go.disabled=true;msg.className='';msg.textContent=${scriptText(R.string.data_uploading)};
 file.text().then(function(t){return fetch('/api/restore?t='+encodeURIComponent(q),{method:'POST',headers:{'Content-Type':'text/plain;charset=UTF-8'},body:t})})
 .then(function(r){return r.json()}).then(function(j){msg.className=j.ok?'ok':'err';msg.textContent=j.message;go.disabled=false})
-.catch(function(){msg.className='err';msg.textContent='Hata oluştu';go.disabled=false})};
+.catch(function(){msg.className='err';msg.textContent=${scriptText(R.string.data_operation_failed)};go.disabled=false})};
 </script></body></html>"""
+}

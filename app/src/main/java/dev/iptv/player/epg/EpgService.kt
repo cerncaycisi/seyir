@@ -9,6 +9,8 @@ import dev.iptv.player.data.PlaylistSource
 import dev.iptv.player.data.Setting
 import dev.iptv.player.data.SettingsStore
 import dev.iptv.player.data.Stream
+import dev.iptv.player.data.localizedContext
+import dev.iptv.player.R
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -121,7 +123,7 @@ class EpgService private constructor(context: Context) {
         try {
             val url = EpgSources.url(playlist, settings.get(Setting.EpgUrlOverride), (appContext as? dev.iptv.player.App)?.repository)
             if (url == null) {
-                status.value = EpgStatus.Error("Bu playlist için EPG adresi yok. Ayarlardan bir XMLTV adresi girin.")
+                status.value = EpgStatus.Error(settings.localizedContext(appContext).getString(R.string.epg_no_url))
                 return false
             }
             status.value = EpgStatus.Refreshing(0)
@@ -144,11 +146,12 @@ class EpgService private constructor(context: Context) {
     }
 
     private suspend fun ingest(url: String) {
+        val strings = settings.localizedContext(appContext)
         val job: Job? = currentCoroutineContext()[Job]
         val request = Request.Builder().url(url).header("User-Agent", "IPTVPlayer/0.1").build()
         http.newCall(request).execute().use { response ->
-            if (!response.isSuccessful) throw IOException("EPG indirilemedi: HTTP ${response.code}")
-            val body = response.body ?: throw IOException("EPG yanıtı boş")
+            if (!response.isSuccessful) throw IOException(strings.getString(R.string.epg_download_failed, response.code))
+            val body = response.body ?: throw IOException(strings.getString(R.string.epg_empty_response))
             val input = maybeGunzip(body.byteStream())
             val now = nowSec()
             val lo = now - WINDOW_PAST_DAYS * 86400
@@ -179,7 +182,7 @@ class EpgService private constructor(context: Context) {
                 )
                 if (batch.isNotEmpty()) dao.insertProgrammes(batch)
                 channels.chunked(500).forEach { dao.insertChannels(it) }
-                if (count == 0 && channels.isEmpty()) throw IOException("EPG dosyası okunamadı veya boş")
+                if (count == 0 && channels.isEmpty()) throw IOException(strings.getString(R.string.epg_empty_file))
                 dao.putMeta(EpgMeta("source", url))
                 dao.putMeta(EpgMeta("updated", now.toString()))
             }

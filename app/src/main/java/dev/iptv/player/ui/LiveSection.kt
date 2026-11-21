@@ -1,5 +1,10 @@
 package dev.iptv.player.ui
 
+import android.annotation.SuppressLint
+
+import dev.iptv.player.R
+import androidx.compose.ui.platform.LocalContext
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -56,6 +61,8 @@ private const val ALL = "*"
 
 @Composable
 fun LiveSection(repo: Repository, playlist: Playlist, actions: HomeActions) {
+    // Lint misses the direct ProduceStateScope.value assignment in this producer.
+    @SuppressLint("ProduceStateDoesNotAssignValue")
     val state by produceState<Load<Content>>(Load.Loading, playlist.id) {
         value = loadCatching { repo.content(playlist, ContentType.LIVE) }
     }
@@ -68,6 +75,7 @@ fun LiveSection(repo: Repository, playlist: Playlist, actions: HomeActions) {
 
 @Composable
 private fun LiveBrowser(repo: Repository, playlist: Playlist, content: Content, actions: HomeActions) {
+    val uiContext = LocalContext.current
     var selected by rememberSaveable { mutableStateOf(ALL) }
     val rules = actions.rules
     // Hidden channels/categories and adult names are removed; locked categories stay listed (with a lock).
@@ -75,8 +83,8 @@ private fun LiveBrowser(repo: Repository, playlist: Playlist, content: Content, 
         rules.filterBase(playlist, ContentType.LIVE, content)
     }
     val counts = remember(base) { base.items.groupingBy { it.categoryId }.eachCount() }
-    val categories = remember(base) {
-        listOf(Category(ALL, "Tümü")) + base.categories.filter { (counts[it.id] ?: 0) > 0 }
+    val categories = remember(uiContext, base) {
+        listOf(Category(ALL, uiContext.getString(R.string.ui_all))) + base.categories.filter { (counts[it.id] ?: 0) > 0 }
     }
     if (selected != ALL && categories.none { it.id == selected }) selected = ALL
     val lockedSelected = selected != ALL && rules.isCategoryLocked(playlist, ContentType.LIVE, selected)
@@ -84,7 +92,7 @@ private fun LiveBrowser(repo: Repository, playlist: Playlist, content: Content, 
     val items = remember(base, selected, rules.lockedCategories, rules.unlocked) {
         if (selected == ALL) rules.unlockedItems(playlist, ContentType.LIVE, base.items) else base.items.filter { it.categoryId == selected }
     }
-    val categoryName = categories.firstOrNull { it.id == selected }?.name ?: "Tümü"
+    val categoryName = categories.firstOrNull { it.id == selected }?.name ?: uiContext.getString(R.string.ui_all)
     val listState = rememberLazyListState()
     val itemFocus = remember { FocusRequester() }
     val categoryFocus = remember { FocusRequester() }
@@ -120,7 +128,7 @@ private fun LiveBrowser(repo: Repository, playlist: Playlist, content: Content, 
 
     Row(Modifier.fillMaxSize()) {
         Column(Modifier.width(190.dp).fillMaxHeight()) {
-            ScreenTitle("Canlı TV")
+            ScreenTitle(uiContext.getString(R.string.ui_live_tv))
             LazyColumn(verticalArrangement = Arrangement.spacedBy(4.dp), contentPadding = PaddingValues(bottom = 32.dp)) {
                 itemsIndexed(categories) { i, c ->
                     CategoryItem(
@@ -144,10 +152,10 @@ private fun LiveBrowser(repo: Repository, playlist: Playlist, content: Content, 
         Spacer(Modifier.width(20.dp))
         Column(Modifier.weight(1f).fillMaxHeight()) {
             Spacer(Modifier.height(4.dp))
-            SectionTitle(categoryName, "${items.size} kanal")
+            SectionTitle(categoryName, uiContext.getString(R.string.ui_channel_count, items.size))
             Spacer(Modifier.height(16.dp))
             if (items.isEmpty()) {
-                EmptyState(Icons.Rounded.Tv, "Bu kategoride kanal yok")
+                EmptyState(Icons.Rounded.Tv, uiContext.getString(R.string.ui_channels_empty))
             } else {
                 LazyColumn(
                     state = listState,
@@ -155,6 +163,8 @@ private fun LiveBrowser(repo: Repository, playlist: Playlist, content: Content, 
                     contentPadding = PaddingValues(top = 4.dp, bottom = 48.dp, start = 4.dp, end = 4.dp),
                 ) {
                     itemsIndexed(items) { i, s ->
+                        // Lint misses the direct ProduceStateScope.value assignment in this producer.
+                        @SuppressLint("ProduceStateDoesNotAssignValue")
                         val nowProg by produceState<Programme?>(null, s.id, gen, nowSec / 60) { value = epgSvc.nowPlaying(playlist.id, s, nowSec) }
                         ChannelRow(
                             number = i + 1,
@@ -184,13 +194,14 @@ private fun LiveBrowser(repo: Repository, playlist: Playlist, content: Content, 
 
 @Composable
 private fun ChannelPreview(stream: Stream?, epg: List<EpgEntry>, archive: Boolean, onMatch: () -> Unit, onPast: () -> Unit, modifier: Modifier = Modifier) {
+    val uiContext = LocalContext.current
     Column(modifier.clip(RoundedCornerShape(16.dp)).background(Palette.Surface).padding(16.dp)) {
         if (stream == null) {
-            EmptyState(Icons.Rounded.LiveTv, "Bir kanal seçin", "Program bilgisi burada görünür")
+            EmptyState(Icons.Rounded.LiveTv, uiContext.getString(R.string.ui_choose_channel), uiContext.getString(R.string.ui_programme_hint))
         } else {
             LogoTile(stream.name, stream.logo, Modifier.fillMaxWidth().aspectRatio(16f / 9f), MaterialTheme.typography.headlineMedium)
             Spacer(Modifier.height(14.dp))
-            Pill("CANLI", color = Palette.Live, contentColor = Color.White)
+            Pill(uiContext.getString(R.string.ui_live), color = Palette.Live, contentColor = Color.White)
             Spacer(Modifier.height(10.dp))
             Text(
                 stream.name,
@@ -203,22 +214,22 @@ private fun ChannelPreview(stream: Stream?, epg: List<EpgEntry>, archive: Boolea
             Spacer(Modifier.height(14.dp))
             val now = epg.firstOrNull()
             if (now == null) {
-                Text("Program bilgisi yok", style = MaterialTheme.typography.bodyMedium, color = Palette.TextFaint)
+                Text(uiContext.getString(R.string.ui_no_programme), style = MaterialTheme.typography.bodyMedium, color = Palette.TextFaint)
             } else {
-                ProgramBlock("ŞİMDİ", now, showProgress = true)
+                ProgramBlock(uiContext.getString(R.string.ui_now), now, showProgress = true)
                 epg.getOrNull(1)?.let {
                     Spacer(Modifier.height(16.dp))
-                    ProgramBlock("SONRA", it, showProgress = false)
+                    ProgramBlock(uiContext.getString(R.string.ui_next), it, showProgress = false)
                 }
             }
             Spacer(Modifier.weight(1f))
             if (archive) {
-                EpgButton("Geçmiş yayınlar", onPast)
+                EpgButton(uiContext.getString(R.string.ui_past), onPast)
                 Spacer(Modifier.height(6.dp))
             }
-            EpgButton("EPG eşleştir", onMatch)
+            EpgButton(uiContext.getString(R.string.ui_epg_match), onMatch)
             Spacer(Modifier.height(8.dp))
-            Text("OK  izle   ·   Basılı tut  seçenekler", style = MaterialTheme.typography.labelMedium, color = Palette.TextFaint)
+            Text(uiContext.getString(R.string.ui_remote_hint), style = MaterialTheme.typography.labelMedium, color = Palette.TextFaint)
         }
     }
 }

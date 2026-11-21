@@ -1,11 +1,15 @@
 package dev.iptv.player.player
 
+import android.content.Context
+import androidx.annotation.OptIn
+import dev.iptv.player.R
 import androidx.media3.common.C
 import androidx.media3.common.Format
 import androidx.media3.common.MimeTypes
 import androidx.media3.common.TrackSelectionOverride
 import androidx.media3.common.TrackSelectionParameters
 import androidx.media3.common.Tracks
+import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import java.util.Locale
 
@@ -18,6 +22,7 @@ data class TrackOption(
 )
 
 internal fun trackOptions(
+    context: Context,
     tracks: Tracks,
     params: TrackSelectionParameters,
     type: Int,
@@ -32,8 +37,8 @@ internal fun trackOptions(
         ordinal++
         val f = g.getTrackFormat(i)
         val label = when (type) {
-            C.TRACK_TYPE_AUDIO -> audioLabel(f, ordinal)
-            C.TRACK_TYPE_TEXT -> textLabel(f, ordinal)
+            C.TRACK_TYPE_AUDIO -> audioLabel(context, f, ordinal)
+            C.TRACK_TYPE_TEXT -> textLabel(context, f, ordinal)
             else -> videoLabel(f)
         }
         out += TrackOption(label, g.isTrackSelected(i) && !disabled, g, i)
@@ -42,7 +47,7 @@ internal fun trackOptions(
         if (out.size < 2) return emptyList()
         val sorted = out.sortedByDescending { it.group!!.getTrackFormat(it.index).height }
         val auto = params.overrides.values.none { it.type == C.TRACK_TYPE_VIDEO }
-        return listOf(TrackOption("Otomatik", auto)) + sorted.map { it.copy(selected = it.selected && !auto) }
+        return listOf(TrackOption(context.getString(R.string.play_auto), auto)) + sorted.map { it.copy(selected = it.selected && !auto) }
     }
     if (noneLabel != null) {
         val anySelected = out.any { it.selected }
@@ -64,11 +69,12 @@ internal fun ExoPlayer.selectTrack(type: Int, option: TrackOption) {
     trackSelectionParameters = b.build()
 }
 
-private fun languageName(code: String?): String? {
+private fun languageName(context: Context, code: String?): String? {
     if (code.isNullOrBlank() || code == C.LANGUAGE_UNDETERMINED) return null
-    val name = Locale.forLanguageTag(code).getDisplayLanguage(Locale("tr"))
+    val locale = context.resources.configuration.locales[0]
+    val name = Locale.forLanguageTag(code).getDisplayLanguage(locale)
     return (if (name.isBlank() || name.equals(code, true)) code.uppercase() else name)
-        .replaceFirstChar { it.titlecase(Locale("tr")) }
+        .replaceFirstChar { it.titlecase(locale) }
 }
 
 private fun channelsLabel(n: Int) = when (n) {
@@ -92,20 +98,21 @@ private fun codecLabel(mime: String?) = when {
     else -> null
 }
 
-private fun audioLabel(f: Format, ordinal: Int): String {
-    val parts = listOfNotNull(languageName(f.language), f.label?.takeIf { it.isNotBlank() && !it.equals(f.language, true) }, channelsLabel(f.channelCount), codecLabel(f.sampleMimeType))
+private fun audioLabel(context: Context, f: Format, ordinal: Int): String {
+    val parts = listOfNotNull(languageName(context, f.language), f.label?.takeIf { it.isNotBlank() && !it.equals(f.language, true) }, channelsLabel(f.channelCount), codecLabel(f.sampleMimeType))
         .distinct()
-    return if (parts.isEmpty()) "Ses $ordinal" else parts.joinToString(" · ")
+    return if (parts.isEmpty()) context.getString(R.string.play_audio_number, ordinal) else parts.joinToString(" · ")
 }
 
-private fun textLabel(f: Format, ordinal: Int): String {
-    val forced = if (f.selectionFlags and C.SELECTION_FLAG_FORCED != 0) "Zorunlu" else null
-    val parts = listOfNotNull(languageName(f.language), f.label?.takeIf { it.isNotBlank() && !it.equals(f.language, true) }, forced).distinct()
-    return if (parts.isEmpty()) "Altyazı $ordinal" else parts.joinToString(" · ")
+private fun textLabel(context: Context, f: Format, ordinal: Int): String {
+    val forced = if (f.selectionFlags and C.SELECTION_FLAG_FORCED != 0) context.getString(R.string.play_sub_forced) else null
+    val parts = listOfNotNull(languageName(context, f.language), f.label?.takeIf { it.isNotBlank() && !it.equals(f.language, true) }, forced).distinct()
+    return if (parts.isEmpty()) context.getString(R.string.play_sub_number, ordinal) else parts.joinToString(" · ")
 }
 
+@OptIn(UnstableApi::class)
 private fun videoLabel(f: Format): String {
     val res = if (f.height > 0) "${f.height}p" else "Video"
-    val rate = if (f.bitrate > 0) " · %.1f Mb/sn".format(Locale.US, f.bitrate / 1_000_000.0) else ""
+    val rate = if (f.bitrate > 0) " · %.1f Mbps".format(Locale.US, f.bitrate / 1_000_000.0) else ""
     return res + rate
 }

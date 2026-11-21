@@ -18,6 +18,8 @@ data class QueueItem(
     val catchup: String? = null,
     val catchupDays: Int = 0,
     val catchupSource: String? = null,
+    val archiveDays: Int = 0,
+    val seriesId: String? = null,
 )
 
 @Serializable
@@ -51,7 +53,7 @@ object QueueCodec {
 
     private fun toItem(s: Stream) = QueueItem(
         s.id, s.name, s.logo, s.url, s.categoryId, s.type.name, s.epgId, s.rating, s.year, s.headers,
-        s.catchup, s.catchupDays, s.catchupSource,
+        s.catchup, s.catchupDays, s.catchupSource, s.archiveDays, s.seriesId,
     )
 
     private fun fromItem(i: QueueItem) = Stream(
@@ -68,5 +70,7 @@ object QueueCodec {
         catchup = i.catchup,
         catchupDays = i.catchupDays,
         catchupSource = i.catchupSource,
+        archiveDays = i.archiveDays,
+        seriesId = i.seriesId,
     )
 }

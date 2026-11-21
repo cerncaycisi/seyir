@@ -1,5 +1,8 @@
 package dev.iptv.player.ui
 
+import dev.iptv.player.R
+import androidx.compose.ui.platform.LocalContext
+
 import android.graphics.Bitmap
 import android.graphics.Color as AColor
 import androidx.compose.foundation.Image
@@ -65,6 +68,7 @@ fun qrImage(text: String): ImageBitmap {
  */
 @Composable
 fun PhoneConnectDialog(repo: Repository, mode: PhoneMode, onDismiss: () -> Unit, onAdded: () -> Unit = {}) {
+    val uiContext = LocalContext.current
     val scope = rememberCoroutineScope()
     var status by remember { mutableStateOf<String?>(null) }
     var url by remember { mutableStateOf<String?>(null) }
@@ -76,13 +80,13 @@ fun PhoneConnectDialog(repo: Repository, mode: PhoneMode, onDismiss: () -> Unit,
         val server = RemoteServer.start(repo, mode, object : RemoteListener {
             override fun onPlaylistAdded(name: String) {
                 scope.launch {
-                    status = "Eklendi: $name"
+                    status = uiContext.getString(R.string.ui_phone_added, name)
                     delay(1200)
                     added()
                 }
             }
-            override fun onBackupExported() { scope.launch { status = "Yedek telefona indirildi" } }
-            override fun onBackupRestored() { scope.launch { status = "Yedek geri yüklendi" } }
+            override fun onBackupExported() { scope.launch { status = uiContext.getString(R.string.ui_backup_exported) } }
+            override fun onBackupRestored() { scope.launch { status = uiContext.getString(R.string.ui_backup_restored) } }
         })
         if (server == null) failed = true else url = server.url
         onDispose { server?.stop() }
@@ -103,7 +107,7 @@ fun PhoneConnectDialog(repo: Repository, mode: PhoneMode, onDismiss: () -> Unit,
                 val qr = remember(current) { qrImage(current) }
                 Image(
                     bitmap = qr,
-                    contentDescription = "Telefondan okutulacak QR kod",
+                    contentDescription = uiContext.getString(R.string.ui_qr_description),
                     filterQuality = FilterQuality.None,
                     modifier = Modifier.size(230.dp).clip(RoundedCornerShape(12.dp)).background(androidx.compose.ui.graphics.Color.White),
                 )
@@ -112,31 +116,31 @@ fun PhoneConnectDialog(repo: Repository, mode: PhoneMode, onDismiss: () -> Unit,
             }
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(
-                    if (mode == PhoneMode.ADD) "Telefondan playlist ekle" else "Telefonla yedekle / geri yükle",
+                    if (mode == PhoneMode.ADD) uiContext.getString(R.string.ui_phone_playlist) else uiContext.getString(R.string.ui_phone_backup),
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold,
                     color = Palette.Text,
                 )
-                Text("1. Telefonunuzu TV ile aynı Wi-Fi ağına bağlayın.", style = MaterialTheme.typography.bodyMedium, color = Palette.TextMuted)
-                Text("2. QR kodu okutun veya adresi tarayıcıya yazın:", style = MaterialTheme.typography.bodyMedium, color = Palette.TextMuted)
+                Text(uiContext.getString(R.string.ui_phone_step_one), style = MaterialTheme.typography.bodyMedium, color = Palette.TextMuted)
+                Text(uiContext.getString(R.string.ui_phone_step_two), style = MaterialTheme.typography.bodyMedium, color = Palette.TextMuted)
                 Text(
                     when {
-                        failed -> "Yerel ağ adresi bulunamadı. Ağ bağlantısını kontrol edin."
-                        else -> url ?: "Hazırlanıyor…"
+                        failed -> uiContext.getString(R.string.ui_network_missing)
+                        else -> url ?: uiContext.getString(R.string.ui_preparing)
                     },
                     style = MaterialTheme.typography.titleSmall,
                     color = if (failed) Palette.Live else Palette.Primary,
-                    modifier = Modifier.semantics { contentDescription = "Adres" },
+                    modifier = Modifier.semantics { contentDescription = uiContext.getString(R.string.ui_address) },
                 )
                 Text(
-                    "Bu adres yalnızca bu pencere açıkken ve yerel ağda çalışır.",
+                    uiContext.getString(R.string.ui_phone_scope),
                     style = MaterialTheme.typography.labelMedium,
                     color = Palette.TextFaint,
                 )
                 Spacer(Modifier.height(4.dp))
-                Text(status ?: "Telefondan bekleniyor…", style = MaterialTheme.typography.titleSmall, color = if (status != null) Palette.Accent else Palette.TextMuted)
+                Text(status ?: uiContext.getString(R.string.ui_phone_waiting), style = MaterialTheme.typography.titleSmall, color = if (status != null) Palette.Accent else Palette.TextMuted)
                 Spacer(Modifier.height(8.dp))
-                TvButton("Kapat", onDismiss, Modifier.fillMaxWidth().focusRequester(closeFocus))
+                TvButton(uiContext.getString(R.string.ui_close), onDismiss, Modifier.fillMaxWidth().focusRequester(closeFocus))
             }
         }
     }

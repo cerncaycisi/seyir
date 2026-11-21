@@ -1,5 +1,9 @@
 package dev.iptv.player.ui
 
+import android.annotation.SuppressLint
+
+import dev.iptv.player.R
+
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -74,15 +78,19 @@ fun rememberNowSec(intervalMs: Long = 30_000): State<Long> {
     return now
 }
 
-private val dayTimeFormat get() = SimpleDateFormat("d MMM HH:mm", Locale("tr"))
-fun formatDayTime(epochSeconds: Long): String = dayTimeFormat.format(Date(epochSeconds * 1000))
+@Composable
+fun formatDayTime(epochSeconds: Long): String {
+    val locale = LocalContext.current.resources.configuration.locales[0]
+    val pattern = if (LocalClock24h.current) "d MMM HH:mm" else "d MMM h:mm a"
+    return SimpleDateFormat(pattern, locale).format(Date(epochSeconds * 1000))
+}
 
 @Composable
 fun EpgButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifier, primary: Boolean = false) {
     val shape = RoundedCornerShape(10.dp)
     Surface(
         onClick = onClick,
-        modifier = modifier.fillMaxWidth().height(38.dp),
+        modifier = modifier.fillMaxWidth().height(38.dp).pointerClick(onClick),
         shape = ClickableSurfaceDefaults.shape(shape),
         colors = ClickableSurfaceDefaults.colors(
             containerColor = if (primary) Palette.Primary.copy(alpha = 0.35f) else Palette.SurfaceHigh,
@@ -129,9 +137,14 @@ fun OptionsDialog(title: String, subtitle: String?, options: List<DialogOption>,
 /** Searchable picker that pins a playlist channel to an XMLTV channel. */
 @Composable
 fun EpgMatchDialog(playlist: Playlist, stream: Stream, onDismiss: () -> Unit, onChanged: () -> Unit = {}) {
+    val uiContext = LocalContext.current
     val epg = rememberEpg()
     var query by remember { mutableStateOf("") }
+    // Lint misses the direct ProduceStateScope.value assignment in this producer.
+    @SuppressLint("ProduceStateDoesNotAssignValue")
     val current by produceState<EpgChannel?>(null, stream.id) { value = epg.currentMatch(playlist.id, stream) }
+    // Lint misses the direct ProduceStateScope.value assignment in this producer.
+    @SuppressLint("ProduceStateDoesNotAssignValue")
     val results by produceState(emptyList<EpgChannel>(), query) {
         delay(150)
         value = epg.searchChannels(query)
@@ -140,17 +153,17 @@ fun EpgMatchDialog(playlist: Playlist, stream: Stream, onDismiss: () -> Unit, on
     LaunchedEffect(Unit) { delay(100); runCatching { first.requestFocus() } }
 
     DialogPanel(520.dp, onDismiss) {
-        Text("EPG eşleştir", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Palette.Text)
+        Text(uiContext.getString(R.string.ui_epg_match), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Palette.Text)
         Text(
-            "${stream.name}  →  ${current?.name ?: "eşleşme yok"}",
+            "${stream.name}  →  ${current?.name ?: uiContext.getString(R.string.ui_no_match)}",
             style = MaterialTheme.typography.bodySmall, color = Palette.TextMuted, maxLines = 1, overflow = TextOverflow.Ellipsis,
         )
         Spacer(Modifier.height(12.dp))
-        TvTextField(query, { query = it }, "EPG kanalı ara…", leadingIcon = Icons.Rounded.Search)
+        TvTextField(query, { query = it }, uiContext.getString(R.string.ui_epg_search), leadingIcon = Icons.Rounded.Search)
         Spacer(Modifier.height(10.dp))
         LazyColumn(Modifier.heightIn(max = 280.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             item(key = "auto") {
-                EpgButton("Otomatik eşleştirmeye dön", {
+                EpgButton(uiContext.getString(R.string.ui_epg_auto), {
                     epgLaunch(epg) { epg.setOverride(playlist.id, stream.id, null) }
                     onChanged(); onDismiss()
                 }, Modifier.focusRequester(first))
@@ -164,7 +177,7 @@ fun EpgMatchDialog(playlist: Playlist, stream: Stream, onDismiss: () -> Unit, on
         }
         if (results.isEmpty()) {
             Spacer(Modifier.height(8.dp))
-            Text("EPG verisi yok veya sonuç bulunamadı", style = MaterialTheme.typography.bodySmall, color = Palette.TextFaint)
+            Text(uiContext.getString(R.string.ui_epg_empty), style = MaterialTheme.typography.bodySmall, color = Palette.TextFaint)
         }
     }
 }
@@ -173,26 +186,29 @@ private fun epgLaunch(epg: EpgService, block: suspend () -> Unit) {
     epg.scope.launch { block() }
 }
 
-/** "Geçmiş yayınlar": finished programmes of an archive channel, newest first. */
+/** Finished programmes of an archive channel, newest first. */
 @Composable
 fun PastBroadcastsDialog(playlist: Playlist, stream: Stream, onPlay: (Programme) -> Unit, onDismiss: () -> Unit) {
+    val uiContext = LocalContext.current
     val epg = rememberEpg()
+    // Lint misses the direct ProduceStateScope.value assignment in this producer.
+    @SuppressLint("ProduceStateDoesNotAssignValue")
     val list by produceState<List<Programme>?>(null, stream.id) {
         value = epg.past(playlist.id, stream, Catchup.days(stream)).filter { Catchup.playable(playlist, stream, it, EpgService.nowSec()) }
     }
     val first = remember { FocusRequester() }
     LaunchedEffect(list) { if (!list.isNullOrEmpty()) runCatching { first.requestFocus() } }
     DialogPanel(520.dp, onDismiss) {
-        Text("Geçmiş yayınlar", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Palette.Text)
+        Text(uiContext.getString(R.string.ui_past), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Palette.Text)
         Text(
-            "${stream.name} · son ${Catchup.days(stream)} gün",
+            uiContext.getString(R.string.ui_past_days, stream.name, Catchup.days(stream)),
             style = MaterialTheme.typography.bodySmall, color = Palette.TextMuted, maxLines = 1, overflow = TextOverflow.Ellipsis,
         )
         Spacer(Modifier.height(12.dp))
         val l = list
         when {
-            l == null -> Text("Yükleniyor…", color = Palette.TextMuted)
-            l.isEmpty() -> Text("Bu kanal için geçmiş program bilgisi yok", style = MaterialTheme.typography.bodyMedium, color = Palette.TextFaint)
+            l == null -> Text(uiContext.getString(R.string.ui_loading), color = Palette.TextMuted)
+            l.isEmpty() -> Text(uiContext.getString(R.string.ui_past_empty), style = MaterialTheme.typography.bodyMedium, color = Palette.TextFaint)
             else -> LazyColumn(Modifier.heightIn(max = 300.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 items(l.size, key = { l[it].start }) { i ->
                     val p = l[i]
@@ -206,6 +222,7 @@ fun PastBroadcastsDialog(playlist: Playlist, stream: Stream, onPlay: (Programme)
 /** In-app reminder banner. Place once at the app root so it also shows over the player. */
 @Composable
 fun ReminderHost() {
+    val uiContext = LocalContext.current
     var current by remember { mutableStateOf<dev.iptv.player.epg.ReminderEvent?>(null) }
     LaunchedEffect(Unit) { ReminderBus.fired.collect { current = it } }
     val event = current ?: return
@@ -216,17 +233,17 @@ fun ReminderHost() {
     val watch = remember(event) { FocusRequester() }
     LaunchedEffect(event) { delay(100); runCatching { watch.requestFocus() } }
     DialogPanel(420.dp, onDismiss = { current = null }) {
-        Text("PROGRAM BAŞLIYOR", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = Palette.Primary)
+        Text(uiContext.getString(R.string.ui_starting), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = Palette.Primary)
         Spacer(Modifier.height(6.dp))
         Text(event.title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = Palette.Text, maxLines = 2, overflow = TextOverflow.Ellipsis)
         Text(event.channelName, style = MaterialTheme.typography.bodyMedium, color = Palette.TextMuted)
         Spacer(Modifier.height(16.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            EpgButton("İzle", {
+            EpgButton(uiContext.getString(R.string.ui_watch), {
                 ReminderBus.tune.value = dev.iptv.player.epg.TuneRequest(event.playlistId, event.streamId)
                 current = null
             }, Modifier.weight(1f).focusRequester(watch), primary = true)
-            EpgButton("Kapat", { current = null }, Modifier.weight(1f))
+            EpgButton(uiContext.getString(R.string.ui_close), { current = null }, Modifier.weight(1f))
         }
     }
 }

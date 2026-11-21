@@ -9,13 +9,15 @@ import android.database.MatrixCursor
 import android.net.Uri
 import android.provider.BaseColumns
 import dev.iptv.player.App
+import dev.iptv.player.R
 import dev.iptv.player.data.ContentType
 import dev.iptv.player.data.DeepLinks
-import dev.iptv.player.data.ParentalFilter
 import dev.iptv.player.data.Setting
 import dev.iptv.player.data.TextSearch
+import dev.iptv.player.data.localizedContext
 import dev.iptv.player.data.db.ContentDb
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.flow.first
 
 /**
  * Android TV global-search suggestions backed by the cached channel/movie/series lists (ContentDb).
@@ -34,8 +36,21 @@ class SearchProvider : ContentProvider() {
         val raw = selectionArgs?.firstOrNull() ?: uri.lastPathSegment?.takeUnless { it == SearchManager.SUGGEST_URI_PATH_QUERY }
         val query = SearchQuery.parse(raw) ?: return cursor
         val context = context ?: return cursor
+        val labels = runCatching { runBlocking {
+            (context.applicationContext as App).repository.settings.localizedContext(context)
+        } }.getOrDefault(context)
         val limit = uri.getQueryParameter("limit")?.toIntOrNull()?.coerceIn(1, 50) ?: 20
-        val rows = runCatching { runBlocking { SearchLogic.rank(rows(context), query, limit) } }.getOrDefault(emptyList())
+        val rows = runCatching { runBlocking {
+            val repo = (context.applicationContext as App).repository
+            val visibility = SearchVisibility(
+                repo.store.playlists.first().mapTo(HashSet()) { it.id },
+                repo.settings.get(Setting.HiddenChannels),
+                repo.settings.get(Setting.HiddenCategories),
+                repo.settings.get(Setting.LockedCategories),
+                repo.settings.get(Setting.HideAdult),
+            )
+            SearchLogic.rank(rows(context).filter(visibility::allows), query, limit)
+        } }.getOrDefault(emptyList())
         rows.forEachIndexed { i, r ->
             val type = ContentType.valueOf(r.type)
             val link = when (type) {
@@ -47,7 +62,11 @@ class SearchProvider : ContentProvider() {
                 arrayOf<Any?>(
                     i.toLong(),
                     r.name,
-                    listOfNotNull(SearchLogic.typeLabel(r.type), r.year?.takeIf { it.isNotBlank() }).joinToString(" · "),
+                    listOfNotNull(labels.getString(when (type) {
+                        ContentType.LIVE -> R.string.record_search_live
+                        ContentType.MOVIE -> R.string.record_search_movie
+                        ContentType.SERIES -> R.string.record_search_series
+                    }), r.year?.takeIf { it.isNotBlank() }).joinToString(" · "),
                     r.logo,
                     if (type == ContentType.LIVE) "video/live" else "video/mp4",
                     if (type == ContentType.LIVE) "true" else "false",
@@ -67,21 +86,8 @@ class SearchProvider : ContentProvider() {
         val now = System.currentTimeMillis()
         if (cached != null && cached.fetchedAt == fetched && now - cached.builtAt < REBUILD_MS) return cached.rows
 
-        val settings = (context.applicationContext as App).repository.settings
-        val hiddenChannels = settings.get(Setting.HiddenChannels)
-        val hiddenCategories = settings.get(Setting.HiddenCategories)
-        val locked = settings.get(Setting.LockedCategories)
-        val hideAdult = settings.get(Setting.HideAdult)
         val built = dao.searchProjection().asSequence()
-            .filter { p ->
-                val type = runCatching { ContentType.valueOf(p.type) }.getOrNull() ?: return@filter false
-                // Series entries are series; live/movie rows must be playable ids. Empty names never match anyway.
-                ParentalFilter.streamKey(p.playlistId, type, p.id) !in hiddenChannels &&
-                    ParentalFilter.categoryKey(p.playlistId, type, p.categoryId) !in hiddenCategories &&
-                    ParentalFilter.categoryKey(p.playlistId, type, p.categoryId) !in locked &&
-                    !(hideAdult && ParentalFilter.isAdultName(p.name))
-            }
-            .map { SearchRow(it.playlistId, it.type, it.id, it.name, TextSearch.normalize(it.name), it.logo, it.year) }
+            .map { SearchRow(it.playlistId, it.type, it.id, it.name, TextSearch.normalize(it.name), it.logo, it.year, it.categoryId, it.categoryName) }
             .toList()
         index = Index(built, fetched, now)
         return built

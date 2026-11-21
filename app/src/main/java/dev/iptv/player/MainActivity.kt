@@ -1,6 +1,8 @@
 package dev.iptv.player
 
 import android.content.Intent
+import android.app.SearchManager
+import android.widget.Toast
 import android.net.Uri
 import android.os.Bundle
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
@@ -25,7 +27,12 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
+import dev.iptv.player.ui.DisplayPreferences
 import androidx.navigation.NavHostController
+import androidx.navigation.NavType
+import androidx.navigation.navArgument
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
@@ -53,6 +60,7 @@ import kotlinx.coroutines.launch
 class MainActivity : ComponentActivity() {
     // iptvplayer://movie|series/{id}?playlist={pid}, e.g. from the Google TV Watch Next row.
     private val deepLink = mutableStateOf<Uri?>(null)
+    private val searchQuery = mutableStateOf<String?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen()
@@ -60,14 +68,17 @@ class MainActivity : ComponentActivity() {
         val repository = (application as App).repository
         val prefs = (application as App).releasePrefs
         if (savedInstanceState == null) deepLink.value = intent?.data?.takeIf { it.scheme == DeepLinks.SCHEME }
+        if (savedInstanceState == null && intent?.action == Intent.ACTION_SEARCH) searchQuery.value = intent.getStringExtra(SearchManager.QUERY).orEmpty()
         dev.iptv.player.epg.ReminderBus.handleIntent(intent)
         PipState.inPip.value = false
         // Picture-in-Picture state for the player screen (hides overlays while shrunk).
         addOnPictureInPictureModeChangedListener { info -> PipState.inPip.value = info.isInPictureInPictureMode }
         setContent {
-            IptvTheme {
-                AppNav(repository, prefs, deepLink)
-                dev.iptv.player.ui.ReminderHost()
+            DisplayPreferences(repository.settings) {
+                IptvTheme {
+                    AppNav(repository, prefs, deepLink, searchQuery)
+                    dev.iptv.player.ui.ReminderHost()
+                }
             }
         }
     }
@@ -82,12 +93,14 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         deepLink.value = intent.data?.takeIf { it.scheme == DeepLinks.SCHEME }
+        if (intent.action == Intent.ACTION_SEARCH) searchQuery.value = intent.getStringExtra(SearchManager.QUERY).orEmpty()
         dev.iptv.player.epg.ReminderBus.handleIntent(intent)
     }
 }
 
 @Composable
-private fun AppNav(repo: Repository, prefs: dev.iptv.player.data.ReleasePrefs, deepLink: MutableState<Uri?>) {
+private fun AppNav(repo: Repository, prefs: dev.iptv.player.data.ReleasePrefs, deepLink: MutableState<Uri?>, searchQuery: MutableState<String?>) {
+    val context = LocalContext.current
     val nav = rememberNavController()
     val scope = rememberCoroutineScope()
     val playlists by repo.store.playlists.collectAsState(initial = null)
@@ -104,6 +117,12 @@ private fun AppNav(repo: Repository, prefs: dev.iptv.player.data.ReleasePrefs, d
     val st = startup ?: return
     val active = all.firstOrNull { it.id == activeId } ?: all.firstOrNull()
 
+    suspend fun visibleItems(playlist: Playlist, type: ContentType): List<Stream> {
+        val content = repo.content(playlist, type)
+        val rules = repo.prefs.rules.first().copy(unlocked = dev.iptv.player.data.ParentalSession.unlocked)
+        return rules.filterBase(playlist, type, content).items.filter { rules.streamAllowed(playlist, it) }
+    }
+
     fun play(playlist: Playlist, items: List<Stream>, index: Int) {
         PlayerQueue.playlist = playlist
         PlayerQueue.items = items
@@ -118,7 +137,8 @@ private fun AppNav(repo: Repository, prefs: dev.iptv.player.data.ReleasePrefs, d
         val req = tune ?: return@LaunchedEffect
         dev.iptv.player.epg.ReminderBus.tune.value = null
         val playlist = all.firstOrNull { it.id == req.playlistId } ?: return@LaunchedEffect
-        val items = runCatching { repo.content(playlist, dev.iptv.player.data.ContentType.LIVE).items }.getOrNull() ?: return@LaunchedEffect
+        if (!onboarded) return@LaunchedEffect
+        val items = runCatching { visibleItems(playlist, ContentType.LIVE) }.getOrNull() ?: return@LaunchedEffect
         val idx = items.indexOfFirst { it.id == req.streamId }
         if (idx < 0) return@LaunchedEffect
         if (nav.currentDestination?.route == "player") nav.popBackStack()
@@ -168,7 +188,7 @@ private fun AppNav(repo: Repository, prefs: dev.iptv.player.data.ReleasePrefs, d
                     } catch (e: CancellationException) {
                         throw e
                     } catch (e: Exception) {
-                        e.message ?: "Yenilenemedi"
+                        e.message ?: context.getString(R.string.app_refresh_failed)
                     }
                 },
                 loadAccount = { p -> repo.accountInfo(p) },
@@ -181,9 +201,10 @@ private fun AppNav(repo: Repository, prefs: dev.iptv.player.data.ReleasePrefs, d
         composable("add") {
             AddPlaylistScreen(repo, onSaved = { nav.goHome() })
         }
-        composable("home") {
+        composable("home?query={query}", arguments = listOf(navArgument("query") { type = NavType.StringType; nullable = true; defaultValue = null })) { entry ->
+            val query = entry.arguments?.getString("query")
             if (active == null) {
-                StatusText("Yükleniyor…")
+                StatusText(stringResource(R.string.app_loading))
                 // The collected list can lag behind a playlist that was just saved; check the store itself.
                 LaunchedEffect(Unit) {
                     if (repo.store.playlists.first().isEmpty()) nav.navigate("playlists") { popUpTo(0) }
@@ -194,7 +215,8 @@ private fun AppNav(repo: Repository, prefs: dev.iptv.player.data.ReleasePrefs, d
                         Startup.handled = true
                         val (pid, sid) = LastChannel.decode(st.lastChannel) ?: return@LaunchedEffect
                         if (pid != active.id) return@LaunchedEffect
-                        val items = runCatching { repo.content(active, ContentType.LIVE).items }.getOrNull().orEmpty()
+                        if (query != null || deepLink.value != null || searchQuery.value != null) return@LaunchedEffect
+                        val items = runCatching { visibleItems(active, ContentType.LIVE) }.getOrNull().orEmpty()
                         val i = items.indexOfFirst { it.id == sid }
                         if (i >= 0) play(active, items, i)
                     }
@@ -208,6 +230,7 @@ private fun AppNav(repo: Repository, prefs: dev.iptv.player.data.ReleasePrefs, d
                     onPlaylists = { nav.navigate("playlists") },
                     onSettings = { nav.navigate("settings") },
                     initialSection = st.defaultSection,
+                    initialSearchQuery = query,
                     onMultiView = { items, index, n ->
                         PlayerQueue.playlist = active
                         PlayerQueue.items = items
@@ -240,16 +263,39 @@ private fun AppNav(repo: Repository, prefs: dev.iptv.player.data.ReleasePrefs, d
         }
     }
 
+    val requestedSearch = searchQuery.value
+    LaunchedEffect(requestedSearch, onboarded, active) {
+        if (!onboarded || active == null || requestedSearch == null) return@LaunchedEffect
+        nav.navigate("home?query=${Uri.encode(requestedSearch)}") { popUpTo(0) }
+        searchQuery.value = null
+    }
+
     val pending = deepLink.value
-    LaunchedEffect(pending, all) {
+    LaunchedEffect(pending, all, activeId, onboarded) {
         val uri = pending ?: return@LaunchedEffect
-        deepLink.value = null
+        if (!onboarded) return@LaunchedEffect
         val id = uri.lastPathSegment ?: return@LaunchedEffect
         val playlist = all.firstOrNull { it.id == uri.getQueryParameter("playlist") } ?: return@LaunchedEffect
-        repo.store.setActive(playlist.id)
+        val type = when (uri.host) {
+            "live" -> ContentType.LIVE
+            "movie" -> ContentType.MOVIE
+            "series" -> ContentType.SERIES
+            else -> { deepLink.value = null; return@LaunchedEffect }
+        }
+        val visible = runCatching { visibleItems(playlist, type) }.getOrNull().orEmpty()
+        if (visible.none { it.id == id }) {
+            deepLink.value = null
+            Toast.makeText(context, R.string.app_content_unavailable, Toast.LENGTH_LONG).show()
+            return@LaunchedEffect
+        }
+        if (activeId != playlist.id) {
+            repo.store.setActive(playlist.id)
+            return@LaunchedEffect
+        }
+        deepLink.value = null
         if (uri.host == "live") {
             // System search / external link to a live channel: open the player on it.
-            val items = runCatching { repo.content(playlist, ContentType.LIVE).items }.getOrNull().orEmpty().filter { it.url.isNotEmpty() }
+            val items = visible.filter { it.url.isNotEmpty() }
             val idx = items.indexOfFirst { it.id == id }
             if (idx < 0) return@LaunchedEffect
             nav.navigate("home") { popUpTo(0) }

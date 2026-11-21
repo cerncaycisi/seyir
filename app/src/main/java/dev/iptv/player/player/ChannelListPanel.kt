@@ -1,5 +1,9 @@
 package dev.iptv.player.player
 
+import androidx.compose.ui.res.stringResource
+
+import dev.iptv.player.R
+
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -53,8 +57,8 @@ fun ChannelListPanel(
             .background(Color(0xF2111620))
             .padding(horizontal = 16.dp, vertical = 24.dp),
     ) {
-        Text("Kanallar", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = Color.White)
-        Text("${items.size} kanal  ·  OK  izle  ·  Geri  kapat", style = MaterialTheme.typography.labelMedium, color = Palette.TextFaint)
+        Text(stringResource(R.string.play_channels), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = Color.White)
+        Text(stringResource(R.string.play_channels_hint, items.size), style = MaterialTheme.typography.labelMedium, color = Palette.TextFaint)
         Spacer(Modifier.height(12.dp))
         LazyColumn(Modifier.fillMaxSize(), state = state, verticalArrangement = Arrangement.spacedBy(4.dp)) {
             itemsIndexed(items, key = { i, s -> "$i|${s.id}" }) { i, stream ->

@@ -8,7 +8,8 @@ object TitleCleaner {
     private val yearInParens = Regex("""[(\[]\s*((?:19|20)\d{2})\s*[)\]]""")
     private val trailingYear = Regex("""[\s.\-_]((?:19|20)\d{2})\s*$""")
     private val inlineYear = Regex("""[\s.]((?:19|20)\d{2})(?=[\s.](?:\d{3,4}p|4k|uhd|fhd|hd|web|blu|brrip|hdrip|dvd|x26|hevc|tr\b))""", RegexOption.IGNORE_CASE)
-    private val brackets = Regex("""\[[^\]]*]|\{[^}]*}|\([^)]*\)""")
+    // Android's ICU regex engine requires literal closing delimiters to be escaped.
+    private val brackets = Regex("""\[[^\]]*\]|\{[^}]*\}|\([^)]*\)""")
     private val pipeTag = Regex("""\|[^|]{1,12}\|""")
     private val prefix = Regex("""^\s*[A-Za-z]{2,3}\s*[-:|]\s+""")
     private val tags = Regex(

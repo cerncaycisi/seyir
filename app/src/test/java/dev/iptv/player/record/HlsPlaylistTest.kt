@@ -7,6 +7,14 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class HlsPlaylistTest {
+    @Test fun rejectsByteRangesAndChangingInitializationSegments() {
+        val base = "http://example.test/index.m3u8"
+        assertTrue(HlsPlaylist.parse("#EXTM3U\n#EXT-X-BYTERANGE:100@0\n#EXTINF:4,\nall.ts", base).unsupported)
+        assertTrue(HlsPlaylist.parse("#EXTM3U\n#EXT-X-MAP:URI=\"all.mp4\",BYTERANGE=\"100@0\"", base).unsupported)
+        assertTrue(HlsPlaylist.parse("#EXTM3U\n#EXT-X-MAP:URI=\"a.mp4\"\n#EXT-X-MAP:URI=\"b.mp4\"", base).unsupported)
+        assertTrue(HlsPlaylist.parse("<html>Server unavailable</html>", base).unsupported)
+    }
+
     @Test fun masterPicksHighestBandwidth() {
         val text = """
             #EXTM3U

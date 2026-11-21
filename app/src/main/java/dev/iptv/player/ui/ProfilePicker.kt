@@ -1,5 +1,8 @@
 package dev.iptv.player.ui
 
+import dev.iptv.player.R
+import androidx.compose.ui.platform.LocalContext
+
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -35,9 +38,10 @@ import androidx.tv.material3.Text
 import dev.iptv.player.data.Profile
 import dev.iptv.player.data.ProfileStore
 
-/** "Kim izliyor?" screen shown at start when there is more than one profile. */
+/** Profile picker shown at start when there is more than one profile. */
 @Composable
 fun ProfilePicker(profiles: List<Profile>, onPicked: () -> Unit) {
+    val uiContext = LocalContext.current
     var pinFor by remember { mutableStateOf<Profile?>(null) }
     val first = remember { FocusRequester() }
     val lastActive = ProfileStore.activeProfileId
@@ -53,7 +57,7 @@ fun ProfilePicker(profiles: List<Profile>, onPicked: () -> Unit) {
     Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
         BrandMark(44.dp)
         Spacer(Modifier.height(16.dp))
-        Text("Kim izliyor?", style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold, color = Palette.Text)
+        Text(uiContext.getString(R.string.ui_who_watching), style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold, color = Palette.Text)
         Spacer(Modifier.height(32.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(24.dp)) {
             profiles.forEachIndexed { i, p ->
@@ -78,7 +82,7 @@ fun ProfilePicker(profiles: List<Profile>, onPicked: () -> Unit) {
                         Spacer(Modifier.height(10.dp))
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             if (p.pin.isNotEmpty()) {
-                                Icon(Icons.Rounded.Lock, contentDescription = "PIN korumalı", modifier = Modifier.size(14.dp))
+                                Icon(Icons.Rounded.Lock, contentDescription = uiContext.getString(R.string.ui_pin_protected), modifier = Modifier.size(14.dp))
                                 Spacer(Modifier.width(4.dp))
                             }
                             Text(p.name, style = MaterialTheme.typography.titleSmall, maxLines = 1)
@@ -89,6 +93,6 @@ fun ProfilePicker(profiles: List<Profile>, onPicked: () -> Unit) {
         }
     }
     pinFor?.let { p ->
-        PinCheckDialog(p.pin, "${p.name} için PIN", onVerified = { pinFor = null; pick(p) }, onDismiss = { pinFor = null })
+        PinCheckDialog(p.pin, uiContext.getString(R.string.ui_pin_profile, p.name), onVerified = { pinFor = null; pick(p) }, onDismiss = { pinFor = null })
     }
 }

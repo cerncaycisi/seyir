@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="record_already_recording">This channel is already being recorded</string>
+    <string name="record_already_scheduled">A recording already exists for this programme</string>
+    <string name="record_programme_ended">The programme has already ended</string>
+    <string name="record_scheduled">Recording scheduled: %1$s</string>
+    <string name="record_started">Recording started: %1$s</string>
+    <string name="record_service_failed">The recording service could not start</string>
+    <string name="record_space_free">Not enough storage space (free: %1$s)</string>
+    <string name="record_interrupted">Recording was interrupted</string>
+    <string name="record_missed">Recording could not start on time</string>
+    <string name="record_exact_alarm_required">Enable Alarms and reminders in system settings for scheduled recordings, then schedule the recording again.</string>
+    <string name="record_playlist_missing">Playlist not found</string>
+    <string name="record_channel_missing">Channel not found</string>
+    <string name="record_no_space">Not enough storage space</string>
+    <string name="record_storage_full">Storage is full</string>
+    <string name="record_no_data">No data received</string>
+    <string name="record_failed">Recording failed</string>
+    <string name="record_channel_name">Recordings</string>
+    <string name="record_preparing">Preparing…</string>
+    <string name="record_default_channel">Channel</string>
+    <string name="record_notification_single">%1$s · %2$s</string>
+    <string name="record_notification_multiple">%1$d recordings · %2$s</string>
+    <string name="record_notification_title">Recording in progress</string>
+    <string name="record_stop">Stop</string>
+    <string name="record_timeout">The system background recording time limit was reached</string>
+    <string name="record_empty_response">Empty response</string>
+    <string name="record_stream_interrupted">The stream was interrupted</string>
+    <string name="record_encrypted_hls">Encrypted HLS streams cannot be recorded</string>
+    <string name="record_unsupported_hls">This HLS format is not supported for recording</string>
+    <string name="record_http_error">The stream server returned HTTP error %1$d</string>
+    <string name="record_network_error">Could not download the stream. Check the connection.</string>
+    <string name="record_search_live">Live TV</string>
+    <string name="record_search_movie">Movie</string>
+    <string name="record_search_series">Series</string>
+</resources>

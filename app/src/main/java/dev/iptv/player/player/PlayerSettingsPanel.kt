@@ -1,5 +1,11 @@
 package dev.iptv.player.player
 
+import androidx.compose.ui.platform.LocalContext
+
+import androidx.compose.ui.res.stringResource
+
+import dev.iptv.player.R
+
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -44,14 +50,18 @@ import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Surface
 import androidx.tv.material3.Text
 import dev.iptv.player.ui.Palette
+import dev.iptv.player.ui.pointerClick
 import kotlinx.coroutines.android.awaitFrame
 
-enum class AspectMode(val key: String, val label: String, val ratio: Float?) {
-    Fit("FIT", "Sığdır", null),
-    Fill("FILL", "Doldur (ger)", null),
-    Zoom("ZOOM", "Yakınlaştır (kırp)", null),
-    R16x9("16_9", "16:9", 16f / 9f),
-    R4x3("4_3", "4:3", 4f / 3f);
+enum class AspectMode(val key: String, val labelRes: Int, val ratio: Float?) {
+    Fit("FIT", R.string.play_aspect_fit, null),
+    Fill("FILL", R.string.play_aspect_fill, null),
+    Zoom("ZOOM", R.string.play_aspect_zoom, null),
+    R16x9("16_9", R.string.play_aspect_r16x9, 16f / 9f),
+    R4x3("4_3", R.string.play_aspect_r4x3, 4f / 3f);
+
+    val label: String
+        @Composable get() = stringResource(labelRes)
 
     companion object {
         fun fromKey(key: String) = entries.firstOrNull { it.key == key } ?: Fit
@@ -62,19 +72,21 @@ val PlaybackSpeeds = listOf(0.5f, 0.75f, 1f, 1.25f, 1.5f, 2f)
 val SubtitleScales = listOf(75, 100, 125, 150, 200)
 val SleepOptions = listOf(0, 15, 30, 60, 90)
 
-fun speedLabel(s: Float) = if (s == 1f) "Normal (1x)" else "${s.toString().removeSuffix(".0")}x"
-private fun sleepLabel(m: Int) = if (m == 0) "Kapalı" else "$m dk"
+@Composable
+fun speedLabel(s: Float) = if (s == 1f) stringResource(R.string.play_speed_normal) else "${s.toString().removeSuffix(".0")}x"
+@Composable
+private fun sleepLabel(m: Int) = if (m == 0) stringResource(R.string.play_off) else stringResource(R.string.play_minutes, m)
 
-private enum class Page(val title: String) {
-    Main("Oynatıcı ayarları"),
-    Aspect("Görüntü oranı"),
-    Speed("Oynatma hızı"),
-    Quality("Video kalitesi"),
-    Audio("Ses"),
-    Subtitle("Altyazı"),
-    SubSize("Altyazı boyutu"),
-    Sleep("Uyku zamanlayıcı"),
-    Online("Altyazı ara (OpenSubtitles)"),
+private enum class Page(val title: Int) {
+    Main(R.string.play_panel_title),
+    Aspect(R.string.play_aspect),
+    Speed(R.string.play_speed),
+    Quality(R.string.play_quality),
+    Audio(R.string.play_audio),
+    Subtitle(R.string.play_subtitles),
+    SubSize(R.string.play_sub_size),
+    Sleep(R.string.play_sleep),
+    Online(R.string.play_online_subtitles),
 }
 
 private class RowSpec(val label: String, val value: String? = null, val checked: Boolean = false, val onClick: () -> Unit)
@@ -122,7 +134,7 @@ fun PlayerSettingsPanel(
             .background(Color(0xF2111620))
             .padding(horizontal = 20.dp, vertical = 24.dp),
     ) {
-        Text(page.title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = Color.White)
+        Text(stringResource(page.title), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = Color.White)
         Spacer(Modifier.height(16.dp))
 
         key(page) {
@@ -133,23 +145,23 @@ fun PlayerSettingsPanel(
                         val i = rows.size
                         rows += RowSpec(label, value) { mainFocus = i; page = target }
                     }
-                    if (onBackToLive != null) rows += RowSpec("Canlıya dön") { onBackToLive() }
-                    if (onPreviousChannel != null) rows += RowSpec("Önceki kanal") { onPreviousChannel() }
-                    if (onChannelList != null) rows += RowSpec("Kanal listesi") { onChannelList() }
-                    if (onRecordToggle != null) rows += RowSpec(if (recording) "Kaydı durdur" else "Kaydet", if (recording) "● KAYIT" else null) { onRecordToggle() }
+                    if (onBackToLive != null) rows += RowSpec(stringResource(R.string.play_back_live)) { onBackToLive() }
+                    if (onPreviousChannel != null) rows += RowSpec(stringResource(R.string.play_previous_channel)) { onPreviousChannel() }
+                    if (onChannelList != null) rows += RowSpec(stringResource(R.string.play_channel_list)) { onChannelList() }
+                    if (onRecordToggle != null) rows += RowSpec(if (recording) stringResource(R.string.play_stop_recording) else stringResource(R.string.play_record), if (recording) stringResource(R.string.play_record_badge) else null) { onRecordToggle() }
                     if (onMultiView != null) {
-                        rows += RowSpec("Çoklu izleme", "2 kanal") { onMultiView(2) }
-                        rows += RowSpec("Çoklu izleme", "4 kanal") { onMultiView(4) }
+                        rows += RowSpec(stringResource(R.string.play_multiview), stringResource(R.string.play_two_channels)) { onMultiView(2) }
+                        rows += RowSpec(stringResource(R.string.play_multiview), stringResource(R.string.play_four_channels)) { onMultiView(4) }
                     }
-                    if (onPip != null) rows += RowSpec("Resim içinde resim") { onPip() }
-                    add("Görüntü oranı", aspect.label, Page.Aspect)
-                    if (!live) add("Oynatma hızı", speedLabel(speed), Page.Speed)
-                    add("Video kalitesi", if (quality.isEmpty()) "Otomatik" else offOrAuto(quality), Page.Quality)
-                    add("Ses", audio.firstOrNull { it.selected }?.label ?: if (audio.isEmpty()) "Yok" else "—", Page.Audio)
-                    add("Altyazı", subtitles.firstOrNull { it.selected }?.label ?: "Kapalı", Page.Subtitle)
-                    add("Altyazı boyutu", "%$subtitleScale", Page.SubSize)
-                    add("Uyku zamanlayıcı", sleepLabel(sleepMinutes), Page.Sleep)
-                    if (subtitleSearch != null) add("Altyazı ara (OpenSubtitles)", null, Page.Online)
+                    if (onPip != null) rows += RowSpec(stringResource(R.string.play_pip)) { onPip() }
+                    add(stringResource(R.string.play_aspect), aspect.label, Page.Aspect)
+                    if (!live) add(stringResource(R.string.play_speed), speedLabel(speed), Page.Speed)
+                    add(stringResource(R.string.play_quality), if (quality.isEmpty()) stringResource(R.string.play_auto) else offOrAuto(quality), Page.Quality)
+                    add(stringResource(R.string.play_audio), audio.firstOrNull { it.selected }?.label ?: if (audio.isEmpty()) stringResource(R.string.play_none) else "—", Page.Audio)
+                    add(stringResource(R.string.play_subtitles), subtitles.firstOrNull { it.selected }?.label ?: stringResource(R.string.play_off), Page.Subtitle)
+                    add(stringResource(R.string.play_sub_size), "%$subtitleScale", Page.SubSize)
+                    add(stringResource(R.string.play_sleep), sleepLabel(sleepMinutes), Page.Sleep)
+                    if (subtitleSearch != null) add(stringResource(R.string.play_online_subtitles), null, Page.Online)
                     PanelList(rows, mainFocus.coerceIn(0, rows.lastIndex))
                 }
                 Page.Aspect -> {
@@ -160,9 +172,9 @@ fun PlayerSettingsPanel(
                     val rows = PlaybackSpeeds.map { s -> RowSpec(speedLabel(s), checked = s == speed) { onSpeed(s); back() } }
                     PanelList(rows, PlaybackSpeeds.indexOf(speed).coerceAtLeast(0))
                 }
-                Page.Quality -> TrackPage(quality, "Otomatik", onQuality, ::back)
-                Page.Audio -> TrackPage(audio, "Ses izi bulunamadı", onAudio, ::back)
-                Page.Subtitle -> TrackPage(subtitles, "Altyazı bulunamadı", onSubtitle, ::back)
+                Page.Quality -> TrackPage(quality, stringResource(R.string.play_auto), onQuality, ::back)
+                Page.Audio -> TrackPage(audio, stringResource(R.string.play_no_audio), onAudio, ::back)
+                Page.Subtitle -> TrackPage(subtitles, stringResource(R.string.play_no_subtitles), onSubtitle, ::back)
                 Page.SubSize -> {
                     val rows = SubtitleScales.map { s -> RowSpec("%$s", checked = s == subtitleScale) { onSubtitleScale(s); back() } }
                     PanelList(rows, SubtitleScales.indexOf(subtitleScale).coerceAtLeast(1))
@@ -189,24 +201,25 @@ private fun TrackPage(options: List<TrackOption>, emptyText: String, onPick: (Tr
 
 @Composable
 private fun OnlineSubtitlePage(search: SubtitleSearch, onDone: () -> Unit) {
-    var status by remember { mutableStateOf("Aranıyor…") }
+    val context = LocalContext.current
+    var status by remember { mutableStateOf(context.getString(R.string.play_searching)) }
     var hits by remember { mutableStateOf<List<SubtitleHit>>(emptyList()) }
     var chosen by remember { mutableStateOf<SubtitleHit?>(null) }
     LaunchedEffect(Unit) {
         val found = runCatching { search.search() }.getOrNull()
         hits = found.orEmpty()
-        status = if (found == null) "Arama başarısız" else "Sonuç bulunamadı"
+        status = if (found == null) context.getString(R.string.play_search_failed) else context.getString(R.string.play_no_results)
     }
     LaunchedEffect(chosen) {
         val h = chosen ?: return@LaunchedEffect
         val ok = runCatching { search.download(h) }.getOrDefault(false)
-        if (ok) onDone() else { chosen = null; status = "İndirme başarısız" }
+        if (ok) onDone() else { chosen = null; status = context.getString(R.string.play_download_failed) }
     }
     if (hits.isEmpty()) {
         PanelList(listOf(RowSpec(status) {}), 0)
     } else {
         val rows = hits.map { h ->
-            RowSpec("[${h.language.uppercase()}] ${h.release}", if (chosen == h) "İndiriliyor…" else "${h.downloads} indirme") {
+            RowSpec("[${h.language.uppercase()}] ${h.release.ifBlank { context.getString(R.string.play_subtitles) }}", if (chosen == h) context.getString(R.string.play_downloading) else context.getString(R.string.play_downloads, h.downloads)) {
                 if (chosen == null) chosen = h
             }
         }
@@ -235,7 +248,7 @@ private fun PanelRow(row: RowSpec, modifier: Modifier) {
     val shape = RoundedCornerShape(10.dp)
     Surface(
         onClick = row.onClick,
-        modifier = modifier.fillMaxWidth().height(52.dp),
+        modifier = modifier.fillMaxWidth().height(52.dp).pointerClick(row.onClick),
         shape = ClickableSurfaceDefaults.shape(shape),
         colors = ClickableSurfaceDefaults.colors(
             containerColor = Palette.SurfaceHigh,

@@ -52,8 +52,7 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.tv.material3.MaterialTheme
-import androidx.tv.material3.Surface
-import androidx.tv.material3.SurfaceDefaults
+import androidx.tv.material3.LocalContentColor
 import androidx.tv.material3.Text
 import androidx.tv.material3.darkColorScheme
 import kotlin.coroutines.cancellation.CancellationException
@@ -96,10 +95,15 @@ private fun IptvThemeInner(content: @Composable () -> Unit) {
             surface = Palette.Surface,
         ),
     ) {
-        Surface(
-            modifier = Modifier.fillMaxSize(),
-            colors = SurfaceDefaults.colors(containerColor = MaterialTheme.colorScheme.background),
-        ) { content() }
+        // Keep the window root free of Surface's clipping/graphics layer: the player
+        // contains a native SurfaceView, which must punch through to the video surface.
+        androidx.compose.runtime.CompositionLocalProvider(
+            LocalContentColor provides MaterialTheme.colorScheme.onBackground,
+        ) {
+            Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+                content()
+            }
+        }
     }
 }
 

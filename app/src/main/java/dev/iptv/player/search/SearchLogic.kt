@@ -1,6 +1,8 @@
 package dev.iptv.player.search
 
 import dev.iptv.player.data.TextSearch
+import dev.iptv.player.data.ContentType
+import dev.iptv.player.data.ParentalFilter
 
 /** A normalized system-search query: every token must appear in a title. */
 class SearchQuery private constructor(val tokens: List<String>) {
@@ -28,7 +30,27 @@ class SearchRow(
     val norm: String,
     val logo: String?,
     val year: String?,
+    val categoryId: String = "",
+    val categoryName: String? = null,
 )
+
+/** Applied for every query, including a warm index, so new locks take effect immediately. */
+data class SearchVisibility(
+    val playlistIds: Set<String>,
+    val hiddenChannels: Set<String>,
+    val hiddenCategories: Set<String>,
+    val lockedCategories: Set<String>,
+    val hideAdult: Boolean,
+) {
+    fun allows(row: SearchRow): Boolean {
+        val type = runCatching { ContentType.valueOf(row.type) }.getOrNull() ?: return false
+        val category = ParentalFilter.categoryKey(row.playlistId, type, row.categoryId)
+        return row.playlistId in playlistIds &&
+            ParentalFilter.streamKey(row.playlistId, type, row.id) !in hiddenChannels &&
+            category !in hiddenCategories && category !in lockedCategories &&
+            !(hideAdult && (ParentalFilter.isAdultName(row.name) || ParentalFilter.isAdultName(row.categoryName.orEmpty())))
+    }
+}
 
 object SearchLogic {
     private val typeOrder = mapOf("LIVE" to 0, "MOVIE" to 1, "SERIES" to 2)
@@ -57,10 +79,4 @@ object SearchLogic {
             .map { it.first }
             .toList()
 
-    fun typeLabel(type: String) = when (type) {
-        "LIVE" -> "Canlı TV"
-        "MOVIE" -> "Film"
-        "SERIES" -> "Dizi"
-        else -> ""
-    }
 }

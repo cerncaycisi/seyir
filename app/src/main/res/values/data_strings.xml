@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="data_playlist_empty">Listede içerik bulunamadı</string>
+    <string name="data_login_failed">Giriş başarısız: kullanıcı adı veya şifre hatalı</string>
+    <string name="data_series_unsupported">Bu playlist türü dizi detayını desteklemiyor</string>
+    <string name="data_server_http">Sunucu hatası: HTTP %1$d</string>
+    <string name="data_series_missing">Dizi bulunamadı</string>
+    <string name="data_server_invalid">Sunucu geçersiz veri döndürdü</string>
+    <string name="data_url_invalid">Geçerli bir sunucu veya playlist adresi girin</string>
+    <string name="data_server_unreachable">Sunucuya ulaşılamadı. Bağlantınızı ve adresi kontrol edin.</string>
+    <string name="data_playlist_http">Liste indirilemedi: HTTP %1$d</string>
+    <string name="data_episode">Bölüm %1$d</string>
+    <string name="data_remote_forbidden">Erişim reddedildi</string>
+    <string name="data_remote_locked">Çok fazla başarısız deneme. TV\'deki pencereyi kapatıp yeniden açın.</string>
+    <string name="data_remote_not_found">Sayfa bulunamadı</string>
+    <string name="data_backup_version">Yedek sürümü desteklenmiyor: %1$d</string>
+    <string name="data_backup_invalid">Yedek dosyası geçersiz</string>
+    <string name="data_request_invalid">Geçersiz veya çok büyük istek</string>
+    <string name="data_backup_unavailable">Yedekleme şu anda kullanılamıyor</string>
+    <string name="data_operation_failed">İşlem tamamlanamadı. Lütfen tekrar deneyin.</string>
+    <string name="data_url_scheme">Adres http:// veya https:// ile başlamalı</string>
+    <string name="data_credentials_required">Kullanıcı adı ve şifre gerekli</string>
+    <string name="data_m3u_playlist">M3U listesi</string>
+    <string name="data_verification_failed">Doğrulama başarısız. Bağlantı bilgilerini kontrol edin.</string>
+    <string name="data_playlist_added">“%1$s” TV\'ye eklendi</string>
+    <string name="data_file_invalid">Geçersiz veya çok büyük dosya</string>
+    <string name="data_backup_restored">Yedek geri yüklendi</string>
+    <string name="data_add_title">Playlist ekle</string>
+    <string name="data_add_hint">Bilgiler TV\'ye gönderilir, doğrulanır ve kaydedilir.</string>
+    <string name="data_m3u_link">M3U bağlantısı</string>
+    <string name="data_optional_name">Ad (isteğe bağlı)</string>
+    <string name="data_server_url">Sunucu adresi</string>
+    <string name="data_username">Kullanıcı adı</string>
+    <string name="data_password">Şifre</string>
+    <string name="data_m3u_url">M3U adresi</string>
+    <string name="data_send_tv">TV\'ye gönder</string>
+    <string name="data_verifying">Doğrulanıyor…</string>
+    <string name="data_tv_unreachable">TV\'ye ulaşılamadı</string>
+    <string name="data_backup_title">Yedekle / Geri yükle</string>
+    <string name="data_backup_hint">Ayarlarınızı ve playlistlerinizi telefonunuza kaydedin veya geri yükleyin.</string>
+    <string name="data_backup_download">Yedeği indir</string>
+    <string name="data_backup_file">Yedek dosyasından geri yükle</string>
+    <string name="data_restore">Geri yükle</string>
+    <string name="data_choose_file">Önce bir dosya seçin</string>
+    <string name="data_uploading">Yükleniyor…</string>
+</resources>

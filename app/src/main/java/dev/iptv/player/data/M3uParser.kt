@@ -16,7 +16,7 @@ object M3uParser {
         var headerAttrs: Map<String, String> = emptyMap()
         var epgUrl: String? = null
         for (raw in text.lineSequence()) {
-            val line = raw.trim().removePrefix("﻿")
+            val line = raw.trim().removePrefix("\uFEFF")
             when {
                 line.startsWith("#EXTM3U", ignoreCase = true) -> {
                     headerAttrs = attributes(line)

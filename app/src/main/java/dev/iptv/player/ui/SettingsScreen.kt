@@ -1,5 +1,7 @@
 package dev.iptv.player.ui
 
+import dev.iptv.player.R
+
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -63,15 +65,15 @@ import dev.iptv.player.data.Repository
 import dev.iptv.player.data.Setting
 import kotlinx.coroutines.launch
 
-private enum class Page(val label: String) {
-    GENERAL("Genel"),
-    PLAYER("Oynatıcı"),
-    EPG("EPG"),
-    PARENTAL("Ebeveyn kontrolü"),
-    PROFILES("Profiller"),
-    HIDDEN("Gizlenenler"),
-    BACKUP("Yedekle / Geri yükle"),
-    ABOUT("Hakkında"),
+private enum class Page(val labelRes: Int) {
+    GENERAL(R.string.ui_general),
+    PLAYER(R.string.ui_player),
+    EPG(R.string.ui_epg),
+    PARENTAL(R.string.ui_parental),
+    PROFILES(R.string.ui_profiles),
+    HIDDEN(R.string.ui_hidden),
+    BACKUP(R.string.ui_backup),
+    ABOUT(R.string.ui_about),
 }
 
 /** Editable view of one persisted setting; writes are optimistic so quick D-pad repeats stay in step. */
@@ -91,6 +93,7 @@ fun <T> rememberPref(repo: Repository, setting: Setting<T>): Pref<T> {
 
 @Composable
 fun SettingsScreen(repo: Repository, onProfileSwitched: () -> Unit) {
+    val uiContext = LocalContext.current
     var page by rememberSaveable { mutableStateOf(Page.GENERAL) }
     val first = remember { FocusRequester() }
     LaunchedEffect(Unit) {
@@ -99,11 +102,11 @@ fun SettingsScreen(repo: Repository, onProfileSwitched: () -> Unit) {
     }
     Row(Modifier.fillMaxSize().padding(start = 40.dp, top = 24.dp, end = 40.dp)) {
         Column(Modifier.width(220.dp).fillMaxHeight()) {
-            ScreenTitle("Ayarlar")
+            ScreenTitle(uiContext.getString(R.string.ui_settings))
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Page.entries.forEach { p ->
                     CategoryItem(
-                        name = p.label,
+                        name = uiContext.getString(p.labelRes),
                         count = null,
                         selected = p == page,
                         onClick = { page = p },
@@ -140,15 +143,16 @@ private fun PageList(content: LazyListScope.() -> Unit) {
     )
 }
 
-private val sectionOptions get() = Section.entries.map { it.name to it.label }
-private val languageOptions = listOf("system" to "Sistem", "tr" to "Türkçe", "en" to "English")
-private val aspectOptions = listOf("FIT" to "Sığdır", "FILL" to "Doldur", "ZOOM" to "Yakınlaştır")
+private fun sectionOptions(uiContext: android.content.Context) = Section.entries.map { it.name to uiContext.getString(it.labelRes) }
+private fun languageOptions(uiContext: android.content.Context) = listOf("system" to uiContext.getString(R.string.ui_system), "tr" to "Türkçe", "en" to "English")
+private fun aspectOptions(uiContext: android.content.Context) = listOf("FIT" to uiContext.getString(R.string.ui_fit), "FILL" to uiContext.getString(R.string.ui_fill), "ZOOM" to uiContext.getString(R.string.ui_zoom))
 private val audioLangOptions = listOf("tr" to "Türkçe", "en" to "English", "de" to "Deutsch", "fr" to "Français", "ar" to "العربية", "ru" to "Русский")
-private val subtitleLangOptions = listOf("" to "Kapalı") + audioLangOptions
-private val externalOptions = listOf("" to "Yok", "vlc" to "VLC", "mx" to "MX Player")
+private fun subtitleLangOptions(uiContext: android.content.Context) = listOf("" to uiContext.getString(R.string.ui_off)) + audioLangOptions
+private fun externalOptions(uiContext: android.content.Context) = listOf("" to uiContext.getString(R.string.ui_none), "vlc" to "VLC", "mx" to "MX Player")
 
 @Composable
 private fun GeneralPage(repo: Repository) {
+    val uiContext = LocalContext.current
     val language = rememberPref(repo, Setting.Language)
     val clock = rememberPref(repo, Setting.Clock24h)
     val last = rememberPref(repo, Setting.StartWithLastChannel)
@@ -156,23 +160,24 @@ private fun GeneralPage(repo: Repository) {
     val refresh = rememberPref(repo, Setting.AutoRefreshHours)
     val tmdb = rememberPref(repo, Setting.TmdbEnabled)
     PageList {
-        item { PickerRow("Dil", languageOptions, language.value, language.set) }
-        item { ToggleRow("24 saat biçimi", clock.value, clock.set) }
-        item { ToggleRow("Açılışta son kanalı aç", last.value, last.set, subtitle = "Uygulama açılınca en son izlenen canlı kanal başlar") }
-        item { PickerRow("Varsayılan bölüm", sectionOptions, section.value, section.set) }
+        item { PickerRow(uiContext.getString(R.string.ui_language), languageOptions(uiContext), language.value, language.set) }
+        item { ToggleRow(uiContext.getString(R.string.ui_clock_24), clock.value, clock.set) }
+        item { ToggleRow(uiContext.getString(R.string.ui_start_last), last.value, last.set, subtitle = uiContext.getString(R.string.ui_start_last_hint)) }
+        item { PickerRow(uiContext.getString(R.string.ui_default_section), sectionOptions(uiContext), section.value, section.set) }
         item {
             StepperRow(
-                "Otomatik yenileme", refresh.value, 0..72, 6,
-                { if (it == 0) "Kapalı" else "$it saatte bir" }, refresh.set,
-                subtitle = "Playlist içeriğinin yenilenme sıklığı",
+                uiContext.getString(R.string.ui_auto_refresh), refresh.value, 0..72, 6,
+                { if (it == 0) uiContext.getString(R.string.ui_off) else uiContext.getString(R.string.ui_refresh_hours, it) }, refresh.set,
+                subtitle = uiContext.getString(R.string.ui_refresh_frequency),
             )
         }
-        item { ToggleRow("Film/dizi bilgilerini çevrimiçi getir", tmdb.value, tmdb.set) }
+        item { ToggleRow(uiContext.getString(R.string.ui_online_metadata), tmdb.value, tmdb.set) }
     }
 }
 
 @Composable
 private fun PlayerPage(repo: Repository) {
+    val uiContext = LocalContext.current
     val aspect = rememberPref(repo, Setting.AspectMode)
     val audio = rememberPref(repo, Setting.PreferredAudioLanguage)
     val sub = rememberPref(repo, Setting.PreferredSubtitleLanguage)
@@ -183,34 +188,35 @@ private fun PlayerPage(repo: Repository) {
     val external = rememberPref(repo, Setting.ExternalPlayer)
     val fps = rememberPref(repo, Setting.MatchFrameRate)
     PageList {
-        item { PickerRow("Görüntü oranı", aspectOptions, aspect.value, aspect.set) }
-        item { PickerRow("Ses dili", audioLangOptions, audio.value, audio.set) }
-        item { PickerRow("Altyazı dili", subtitleLangOptions, sub.value, sub.set) }
-        item { StepperRow("Altyazı boyutu", subScale.value, 50..200, 10, { "%$it" }, subScale.set) }
-        item { StepperRow("Tampon süresi", buffer.value, 5..60, 5, { "$it sn" }, buffer.set) }
+        item { PickerRow(uiContext.getString(R.string.ui_aspect), aspectOptions(uiContext), aspect.value, aspect.set) }
+        item { PickerRow(uiContext.getString(R.string.ui_audio_language), audioLangOptions, audio.value, audio.set) }
+        item { PickerRow(uiContext.getString(R.string.ui_subtitle_language), subtitleLangOptions(uiContext), sub.value, sub.set) }
+        item { StepperRow(uiContext.getString(R.string.ui_subtitle_size), subScale.value, 50..200, 10, { uiContext.getString(R.string.ui_percentage, it) }, subScale.set) }
+        item { StepperRow(uiContext.getString(R.string.ui_buffer), buffer.value, 5..60, 5, { uiContext.getString(R.string.ui_seconds, it) }, buffer.set) }
         item { TextSettingRow("User-Agent", ua.value, "IPTVPlayer/0.1", ua.set) }
-        item { ToggleRow("Otomatik yeniden bağlan", reconnect.value, reconnect.set, subtitle = "Yayın koparsa kendiliğinden tekrar dener") }
-        item { PickerRow("Harici oynatıcı", externalOptions, external.value, external.set, subtitle = "Seçilirse yayınlar o uygulamada açılır") }
-        item { ToggleRow("Kare hızı eşleştirme", fps.value, fps.set, subtitle = "Ekran yenileme hızını videoya uydurur (destekleyen TV'lerde)") }
+        item { ToggleRow(uiContext.getString(R.string.ui_reconnect), reconnect.value, reconnect.set, subtitle = uiContext.getString(R.string.ui_reconnect_hint)) }
+        item { PickerRow(uiContext.getString(R.string.ui_external_player), externalOptions(uiContext), external.value, external.set, subtitle = uiContext.getString(R.string.ui_external_hint)) }
+        item { ToggleRow(uiContext.getString(R.string.ui_frame_rate), fps.value, fps.set, subtitle = uiContext.getString(R.string.ui_frame_rate_hint)) }
     }
 }
 
 @Composable
 private fun EpgPage(repo: Repository) {
+    val uiContext = LocalContext.current
     val url = rememberPref(repo, Setting.EpgUrlOverride)
     val offset = rememberPref(repo, Setting.EpgOffsetMinutes)
     PageList {
-        item { TextSettingRow("EPG adresi (XMLTV)", url.value, "Boş bırakılırsa playlist'in kendi EPG'si kullanılır", url.set) }
+        item { TextSettingRow(uiContext.getString(R.string.ui_epg_url), url.value, uiContext.getString(R.string.ui_epg_default), url.set) }
         item {
             StepperRow(
-                "Saat kaydırma", offset.value, -720..720, 30,
+                uiContext.getString(R.string.ui_time_offset), offset.value, -720..720, 30,
                 { m ->
                     val sign = if (m > 0) "+" else if (m < 0) "−" else ""
                     val a = kotlin.math.abs(m)
-                    if (m == 0) "Yok" else "$sign${a / 60} sa" + if (a % 60 != 0) " ${a % 60} dk" else ""
+                    if (m == 0) uiContext.getString(R.string.ui_none) else uiContext.getString(R.string.ui_offset_hours, sign, a / 60) + if (a % 60 != 0) " " + uiContext.getString(R.string.ui_offset_minutes, a % 60) else ""
                 },
                 offset.set,
-                subtitle = "Program saatleri TV'de kayık görünüyorsa düzeltin",
+                subtitle = uiContext.getString(R.string.ui_time_offset_hint),
             )
         }
     }
@@ -234,6 +240,7 @@ private sealed interface PinTask {
 
 @Composable
 private fun ParentalPage(repo: Repository) {
+    val uiContext = LocalContext.current
     val scope = rememberCoroutineScope()
     val prefs: ContentPrefs = repo.prefs
     val pinStored by repo.settings.flow(Setting.ParentalPin).collectAsState(initial = "")
@@ -250,17 +257,17 @@ private fun ParentalPage(repo: Repository) {
     PageList {
         item {
             SettingRow(
-                if (hasPin) "PIN'i değiştir" else "PIN belirle",
-                subtitle = if (hasPin) "4 haneli PIN ayarlı" else "Kilitli kategoriler ve ayarlar için 4 haneli PIN",
+                if (hasPin) uiContext.getString(R.string.ui_pin_change) else uiContext.getString(R.string.ui_pin_set),
+                subtitle = if (hasPin) uiContext.getString(R.string.ui_pin_set_hint) else uiContext.getString(R.string.ui_pin_unset_hint),
                 icon = Icons.Rounded.Lock,
                 onClick = { guarded { task = PinTask.Create } },
             )
         }
         if (hasPin) {
-            item { SettingRow("PIN'i kaldır", subtitle = "Kategori kilitleri de kaldırılır", icon = Icons.Rounded.Delete, onClick = { guarded { confirmRemove = true } }) }
+            item { SettingRow(uiContext.getString(R.string.ui_pin_remove), subtitle = uiContext.getString(R.string.ui_pin_unlock_hint), icon = Icons.Rounded.Delete, onClick = { guarded { confirmRemove = true } }) }
             item {
                 SettingRow(
-                    if (ParentalSession.unlocked) "Kilitleri yeniden etkinleştir" else "Kilitli kategorileri bu oturumda aç",
+                    if (ParentalSession.unlocked) uiContext.getString(R.string.ui_relock) else uiContext.getString(R.string.ui_unlock_session),
                     icon = if (ParentalSession.unlocked) Icons.Rounded.Lock else Icons.Rounded.LockOpen,
                     onClick = {
                         if (ParentalSession.unlocked) ParentalSession.unlocked = false else task = PinTask.Verify {}
@@ -270,14 +277,14 @@ private fun ParentalPage(repo: Repository) {
         }
         item {
             ToggleRow(
-                "Yetişkin içeriği gizle", hideAdult.value,
+                uiContext.getString(R.string.ui_hide_adult), hideAdult.value,
                 { v -> guarded { hideAdult.set(v) } },
-                subtitle = "XXX, Adult, 18+, Yetişkin gibi adlara sahip kanallar ve kategoriler listelenmez",
+                subtitle = uiContext.getString(R.string.ui_hide_adult_hint),
             )
         }
         item {
             Text(
-                "Bir kategoriyi kilitlemek için Canlı TV'de kategorinin üzerinde OK tuşunu basılı tutun.",
+                uiContext.getString(R.string.ui_lock_category_hint),
                 style = MaterialTheme.typography.bodySmall, color = Palette.TextFaint, modifier = Modifier.padding(8.dp),
             )
         }
@@ -297,7 +304,7 @@ private fun ParentalPage(repo: Repository) {
     }
     if (confirmRemove) {
         ConfirmDialog(
-            "PIN kaldırılsın mı?", "Kategori kilitleri de kaldırılır.", "Kaldır",
+            uiContext.getString(R.string.ui_pin_remove_confirm), uiContext.getString(R.string.ui_pin_remove_message), uiContext.getString(R.string.ui_remove),
             onConfirm = { scope.launch { prefs.removePin() }; ParentalSession.unlocked = false; confirmRemove = false },
             onDismiss = { confirmRemove = false },
         )
@@ -308,6 +315,7 @@ private fun ParentalPage(repo: Repository) {
 
 @Composable
 private fun HiddenPage(repo: Repository) {
+    val uiContext = LocalContext.current
     val scope = rememberCoroutineScope()
     val rules by repo.prefs.rules.collectAsState(initial = dev.iptv.player.data.ContentRules())
     val labels by repo.prefs.labels.collectAsState(initial = emptyMap())
@@ -316,7 +324,7 @@ private fun HiddenPage(repo: Repository) {
     var verify by remember { mutableStateOf<(() -> Unit)?>(null) }
 
     fun label(key: String) = labels[key] ?: key.substringAfterLast('|')
-    fun kind(key: String) = when (key.split('|').getOrNull(1)) { "LIVE" -> "Canlı"; "MOVIE" -> "Film"; "SERIES" -> "Dizi"; else -> "" }
+    fun kind(key: String) = when (key.split('|').getOrNull(1)) { "LIVE" -> uiContext.getString(R.string.ui_live_kind); "MOVIE" -> uiContext.getString(R.string.ui_movie_kind); "SERIES" -> uiContext.getString(R.string.ui_series_kind); else -> "" }
 
     val channels = rules.hiddenChannels.toList().sortedBy { label(it) }
     val cats = rules.hiddenCategories.toList().sortedBy { label(it) }
@@ -324,20 +332,20 @@ private fun HiddenPage(repo: Repository) {
 
     PageList {
         if (channels.isEmpty() && cats.isEmpty() && locked.isEmpty()) {
-            item { Text("Gizlenmiş veya kilitlenmiş öğe yok.", style = MaterialTheme.typography.bodyMedium, color = Palette.TextMuted, modifier = Modifier.padding(8.dp)) }
+            item { Text(uiContext.getString(R.string.ui_hidden_empty), style = MaterialTheme.typography.bodyMedium, color = Palette.TextMuted, modifier = Modifier.padding(8.dp)) }
         }
         if (channels.isNotEmpty() || cats.isNotEmpty()) {
-            item { SettingRow("Tümünü göster", subtitle = "${channels.size + cats.size} gizli öğe", icon = Icons.Rounded.Visibility, onClick = { scope.launch { repo.prefs.clearHidden() } }) }
+            item { SettingRow(uiContext.getString(R.string.ui_show_all), subtitle = uiContext.getString(R.string.ui_hidden_count, channels.size + cats.size), icon = Icons.Rounded.Visibility, onClick = { scope.launch { repo.prefs.clearHidden() } }) }
         }
         items(channels, key = { "c$it" }) { k ->
-            SettingRow(label(k), subtitle = "Gizli kanal · ${kind(k)} · göstermek için OK", icon = Icons.Rounded.Visibility, onClick = { scope.launch { repo.prefs.setChannelHiddenByKey(k, false) } })
+            SettingRow(label(k), subtitle = uiContext.getString(R.string.ui_hidden_channel, kind(k)), icon = Icons.Rounded.Visibility, onClick = { scope.launch { repo.prefs.setChannelHiddenByKey(k, false) } })
         }
         items(cats, key = { "g$it" }) { k ->
-            SettingRow(label(k), subtitle = "Gizli kategori · ${kind(k)} · göstermek için OK", icon = Icons.Rounded.Visibility, onClick = { scope.launch { repo.prefs.setCategoryHiddenByKey(k, false) } })
+            SettingRow(label(k), subtitle = uiContext.getString(R.string.ui_hidden_category, kind(k)), icon = Icons.Rounded.Visibility, onClick = { scope.launch { repo.prefs.setCategoryHiddenByKey(k, false) } })
         }
         items(locked, key = { "l$it" }) { k ->
             SettingRow(
-                label(k), subtitle = "Kilitli kategori · ${kind(k)} · kilidi kaldırmak için OK", icon = Icons.Rounded.Lock,
+                label(k), subtitle = uiContext.getString(R.string.ui_locked_category, kind(k)), icon = Icons.Rounded.Lock,
                 onClick = {
                     val unlock = { scope.launch { repo.prefs.setCategoryLockedByKey(k, false) }; Unit }
                     if (hasPin && !ParentalSession.unlocked) verify = unlock else unlock()
@@ -354,19 +362,20 @@ private fun HiddenPage(repo: Repository) {
 
 @Composable
 private fun BackupPage(repo: Repository) {
+    val uiContext = LocalContext.current
     var show by remember { mutableStateOf(false) }
     PageList {
         item {
             SettingRow(
-                "Telefonla yedekle / geri yükle",
-                subtitle = "QR kodu okutun; telefondan yedek dosyası indirin veya yükleyin",
+                uiContext.getString(R.string.ui_phone_backup),
+                subtitle = uiContext.getString(R.string.ui_backup_hint),
                 icon = Icons.Rounded.PhoneAndroid,
                 onClick = { show = true },
             )
         }
         item {
             Text(
-                "Yedek; playlistleri, ayarları ve favorileri içerir. Adres yalnızca pencere açıkken ve yerel ağda çalışır.",
+                uiContext.getString(R.string.ui_backup_scope),
                 style = MaterialTheme.typography.bodySmall, color = Palette.TextFaint, modifier = Modifier.padding(8.dp),
             )
         }
@@ -376,6 +385,7 @@ private fun BackupPage(repo: Repository) {
 
 @Composable
 private fun AboutPage() {
+    val uiContext = LocalContext.current
     val context = LocalContext.current
     val version = remember { runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName }.getOrNull() ?: "?" }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(8.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -383,13 +393,13 @@ private fun AboutPage() {
             BrandMark(48.dp)
             Spacer(Modifier.width(14.dp))
             Column {
-                Text("Seyir", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = Palette.Text)
-                Text("Sürüm $version", style = MaterialTheme.typography.bodyMedium, color = Palette.TextMuted)
+                Text(uiContext.getString(R.string.app_name), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = Palette.Text)
+                Text(uiContext.getString(R.string.ui_version, version), style = MaterialTheme.typography.bodyMedium, color = Palette.TextMuted)
             }
         }
         Spacer(Modifier.height(8.dp))
         Text(
-            "Bu uygulama hiçbir içerik sağlamaz veya barındırmaz. Yalnızca kendi eklediğiniz, yasal olarak erişim hakkınız olan playlist'leri oynatır.",
+            uiContext.getString(R.string.ui_content_disclaimer),
             style = MaterialTheme.typography.bodyMedium, color = Palette.TextMuted,
         )
     }
@@ -399,6 +409,7 @@ private fun AboutPage() {
 
 @Composable
 private fun ProfilesPage(repo: Repository, onSwitched: () -> Unit) {
+    val uiContext = LocalContext.current
     val profiles by repo.profiles.profiles.collectAsState(initial = emptyList())
     val active by ProfileStore.activeIdFlow.collectAsState()
     var editing by remember { mutableStateOf<Profile?>(null) }
@@ -419,13 +430,13 @@ private fun ProfilesPage(repo: Repository, onSwitched: () -> Unit) {
                 SettingRow(
                     p.name,
                     modifier = if (p.id == profiles.firstOrNull()?.id) Modifier.focusRequester(firstRow) else Modifier,
-                    subtitle = listOfNotNull(if (p.id == active) "Etkin" else null, if (p.pin.isNotEmpty()) "PIN korumalı" else null).joinToString(" · ").ifEmpty { null },
+                    subtitle = listOfNotNull(if (p.id == active) uiContext.getString(R.string.ui_selected) else null, if (p.pin.isNotEmpty()) uiContext.getString(R.string.ui_pin_protected) else null).joinToString(" · ").ifEmpty { null },
                     onClick = { editing = p },
                     trailing = { AvatarBubble(p.name, p.color, 36.dp) },
                 )
             }
             item {
-                SettingRow("Profil ekle", icon = Icons.Rounded.Add, onClick = {
+                SettingRow(uiContext.getString(R.string.ui_add_profile), icon = Icons.Rounded.Add, onClick = {
                     editing = Profile("", "", profiles.size % ProfileStore.avatarColors.size)
                 })
             }
@@ -437,6 +448,7 @@ private fun ProfilesPage(repo: Repository, onSwitched: () -> Unit) {
 
 @Composable
 private fun ProfileEditor(repo: Repository, original: Profile, isActive: Boolean, onDone: () -> Unit, onUse: (Profile) -> Unit) {
+    val uiContext = LocalContext.current
     val scope = rememberCoroutineScope()
     val isNew = original.id.isEmpty()
     var name by remember { mutableStateOf(original.name) }
@@ -451,7 +463,7 @@ private fun ProfileEditor(repo: Repository, original: Profile, isActive: Boolean
     }
 
     fun build(): Profile {
-        val finalName = name.trim().ifEmpty { "Profil" }
+        val finalName = name.trim().ifEmpty { uiContext.getString(R.string.ui_profile) }
         return if (isNew) ProfileStore.newProfile(finalName, color).copy(pin = pin) else original.copy(name = finalName, color = color, pin = pin)
     }
 
@@ -459,31 +471,31 @@ private fun ProfileEditor(repo: Repository, original: Profile, isActive: Boolean
         Row(verticalAlignment = Alignment.CenterVertically) {
             AvatarBubble(name.ifBlank { "?" }, color, 48.dp)
             Spacer(Modifier.width(14.dp))
-            Text(if (isNew) "Yeni profil" else "Profili düzenle", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = Palette.Text)
+            Text(if (isNew) uiContext.getString(R.string.ui_new_profile) else uiContext.getString(R.string.ui_edit_profile), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = Palette.Text)
         }
-        Box(Modifier.focusRequester(start)) { TvTextField(name, { name = it.take(24) }, "Profil adı") }
+        Box(Modifier.focusRequester(start)) { TvTextField(name, { name = it.take(24) }, uiContext.getString(R.string.ui_profile_name)) }
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             ProfileStore.avatarColors.forEachIndexed { i, c ->
-                ColorChip(Color(c), selected = i == color, description = "Renk ${i + 1}") { color = i }
+                ColorChip(Color(c), selected = i == color, description = uiContext.getString(R.string.ui_color, i + 1)) { color = i }
             }
         }
         SettingRow(
-            if (pin.isEmpty()) "Profil PIN'i belirle" else "Profil PIN'ini kaldır",
-            subtitle = "İsteğe bağlı; profil seçilirken sorulur",
+            if (pin.isEmpty()) uiContext.getString(R.string.ui_profile_pin_set) else uiContext.getString(R.string.ui_profile_pin_remove),
+            subtitle = uiContext.getString(R.string.ui_profile_pin_hint),
             icon = Icons.Rounded.Lock,
             onClick = { if (pin.isEmpty()) createPin = true else pin = "" },
         )
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            TvButton("Kaydet", { scope.launch { repo.profiles.save(build()); onDone() } }, icon = Icons.Rounded.Check, primary = true)
-            if (!isNew && !isActive) TvButton("Bu profili kullan", { scope.launch { repo.profiles.save(build()); onUse(original) } })
-            if (!isNew && original.id != ProfileStore.DEFAULT_ID) TvButton("Sil", { confirmDelete = true }, icon = Icons.Rounded.Delete, destructive = true)
-            TvButton("Vazgeç", onDone)
+            TvButton(uiContext.getString(R.string.ui_save), { scope.launch { repo.profiles.save(build()); onDone() } }, icon = Icons.Rounded.Check, primary = true)
+            if (!isNew && !isActive) TvButton(uiContext.getString(R.string.ui_use_profile), { scope.launch { repo.profiles.save(build()); onUse(original) } })
+            if (!isNew && original.id != ProfileStore.DEFAULT_ID) TvButton(uiContext.getString(R.string.ui_delete), { confirmDelete = true }, icon = Icons.Rounded.Delete, destructive = true)
+            TvButton(uiContext.getString(R.string.ui_cancel), onDone)
         }
     }
     if (createPin) PinCreateDialog(onCreated = { pin = dev.iptv.player.data.ParentalFilter.hashPin(it); createPin = false }, onDismiss = { createPin = false })
     if (confirmDelete) {
         ConfirmDialog(
-            "Profil silinsin mi?", "Bu profilin favorileri ve izleme konumları artık görünmez.", "Sil",
+            uiContext.getString(R.string.ui_profile_delete), uiContext.getString(R.string.ui_profile_delete_hint), uiContext.getString(R.string.ui_delete),
             onConfirm = { scope.launch { repo.profiles.delete(original.id); onDone() } },
             onDismiss = { confirmDelete = false },
         )

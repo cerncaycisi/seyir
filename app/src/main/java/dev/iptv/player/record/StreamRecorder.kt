@@ -11,6 +11,11 @@ import java.io.IOException
 import java.io.OutputStream
 import java.util.concurrent.TimeUnit
 
+enum class RecorderError { EMPTY_RESPONSE, INTERRUPTED, ENCRYPTED_HLS, UNSUPPORTED_HLS, HTTP }
+
+/** Technical failure code; the service supplies a localized message without exposing source URLs. */
+class RecorderException(val reason: RecorderError, val httpCode: Int = 0) : IOException(reason.name)
+
 /**
  * Writes a live stream to [out] by downloading the raw bytes. Blocking: call [run] from an IO thread, [stop] from any other.
  *
@@ -19,7 +24,7 @@ import java.util.concurrent.TimeUnit
  *  - HLS (`#EXTM3U`): the media playlist is polled and every new segment is appended in order. A master playlist is resolved
  *    to its highest-bandwidth variant. Segments are concatenated, which yields a valid .ts (or fMP4 when an init segment exists).
  *
- * Limitations: AES-128 / SAMPLE-AES encrypted HLS is rejected, DASH/RTMP/RTSP are not supported, the highest-bitrate variant is
+ * Limitations: encrypted or byte-range HLS is rejected, DASH/RTMP/RTSP are not supported, the highest-bitrate variant is
  * always recorded, and no remuxing happens (the file keeps the source container).
  */
 class StreamRecorder(
@@ -47,7 +52,7 @@ class StreamRecorder(
             val os = fos.buffered(256 * 1024)
             try {
                 val first = open(url)
-                val body = first.body ?: throw IOException("Boş yanıt")
+                val body = first.body ?: run { first.close(); throw RecorderException(RecorderError.EMPTY_RESPONSE) }
                 val source = body.source()
                 val hls = source.request(7) && source.peek().readUtf8(7) == "#EXTM3U"
                 if (hls) {
@@ -75,7 +80,7 @@ class StreamRecorder(
         if (!r.isSuccessful) {
             val code = r.code
             r.close()
-            throw IOException("HTTP $code")
+            throw RecorderException(RecorderError.HTTP, code)
         }
         return r
     }
@@ -111,11 +116,11 @@ class StreamRecorder(
             response = null
             val before = written
             try {
-                r.use { resp -> copy((resp.body ?: throw IOException("Boş yanıt")).source(), os) }
+                r.use { resp -> copy((resp.body ?: throw RecorderException(RecorderError.EMPTY_RESPONSE)).source(), os) }
             } catch (e: IOException) {
                 if (stopped) break
             }
-            if (written > before) failures = 0 else if (++failures > MAX_FAILURES) throw IOException("Yayın kesildi")
+            if (written > before) failures = 0 else if (++failures > MAX_FAILURES) throw RecorderException(RecorderError.INTERRUPTED)
             sleep(1_000)
         }
     }
@@ -127,47 +132,79 @@ class StreamRecorder(
     }
 
     private fun download(u: String, os: OutputStream) {
-        open(u).use { r -> copy((r.body ?: throw IOException("Boş yanıt")).source(), os) }
+        // A disconnected segment must not leave partial bytes in the final file before it is retried.
+        val part = File.createTempFile("record-segment-", ".part", out.parentFile)
+        try {
+            open(u).use { r ->
+                val source = (r.body ?: throw RecorderException(RecorderError.EMPTY_RESPONSE)).source()
+                part.outputStream().buffered().use { target ->
+                    val bytes = ByteArray(64 * 1024)
+                    while (!stopped) {
+                        val n = source.read(bytes)
+                        if (n < 0) break
+                        target.write(bytes, 0, n)
+                    }
+                }
+            }
+            if (!stopped) part.inputStream().use { input ->
+                val bytes = ByteArray(64 * 1024)
+                while (!stopped) {
+                    val n = input.read(bytes)
+                    if (n < 0) break
+                    os.write(bytes, 0, n)
+                    written += n
+                    onBytes(written)
+                }
+            }
+        } finally {
+            part.delete()
+        }
     }
 
     private fun recordHls(firstText: String, firstUrl: String, os: OutputStream) {
         var playlistUrl = firstUrl
         var parsed = HlsPlaylist.parse(firstText, playlistUrl)
+        if (parsed.encrypted) throw RecorderException(RecorderError.ENCRYPTED_HLS)
+        if (parsed.unsupported) throw RecorderException(RecorderError.UNSUPPORTED_HLS)
         parsed.bestVariant()?.let { v ->
             val (text, resolved) = fetchText(v.url)
             playlistUrl = resolved
             parsed = HlsPlaylist.parse(text, playlistUrl)
         }
         var lastSeq = -1L
-        var wroteInit = false
+        var wroteInit: String? = null
         var errors = 0
         while (!stopped) {
-            if (parsed.encrypted) throw IOException("Şifreli HLS yayını kaydedilemez")
+            if (parsed.encrypted) throw RecorderException(RecorderError.ENCRYPTED_HLS)
+            if (parsed.unsupported || parsed.variants.isNotEmpty()) throw RecorderException(RecorderError.UNSUPPORTED_HLS)
             val init = parsed.initUrl
-            if (!wroteInit && init != null) {
+            if (wroteInit != null && init != wroteInit) throw RecorderException(RecorderError.UNSUPPORTED_HLS)
+            if (wroteInit == null && init != null) {
                 download(init, os)
-                wroteInit = true
+                wroteInit = init
             }
             // Start near "now": only the newest segments of the first window, then everything that appears.
             val fresh = if (lastSeq < 0) parsed.segments.takeLast(START_SEGMENTS) else parsed.segments.filter { it.seq > lastSeq }
+            var failedSegment = false
             for (s in fresh) {
                 if (stopped) break
                 try {
                     download(s.url, os)
                     errors = 0
+                    lastSeq = s.seq
                 } catch (e: IOException) {
                     if (stopped) break
                     if (++errors > MAX_FAILURES) throw e
+                    failedSegment = true
+                    break
                 }
-                lastSeq = s.seq
             }
-            if (parsed.endList || stopped) break
+            if ((parsed.endList && !failedSegment) || stopped) break
             sleep(maxOf(1_000L, parsed.targetDurationSec * 500L))
             try {
                 val (text, resolved) = fetchText(playlistUrl)
                 playlistUrl = resolved
                 parsed = HlsPlaylist.parse(text, playlistUrl)
-                errors = 0
             } catch (e: IOException) {
                 if (stopped) break
                 if (++errors > MAX_FAILURES) throw e

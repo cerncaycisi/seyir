@@ -1,5 +1,9 @@
 package dev.iptv.player.ui
 
+import dev.iptv.player.R
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
+
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -117,13 +121,13 @@ class CardAction(
     val onClick: () -> Unit,
 )
 
-/** Long-press action card. "Vazgeç" takes the initial focus so a stray OK never changes anything. */
+/** Long-press action card. Cancel takes the initial focus so a stray OK never changes anything. */
 @Composable
 fun ActionCard(
     title: String,
     subtitle: String? = null,
     actions: List<CardAction>,
-    cancelLabel: String = "Vazgeç",
+    cancelLabel: String = stringResource(R.string.ui_cancel),
     onDismiss: () -> Unit,
 ) {
     val cancelFocus = remember { FocusRequester() }
@@ -165,6 +169,7 @@ fun ConfirmDialog(title: String, message: String, confirmLabel: String, onConfir
 /** 4-digit PIN pad; works with D-pad (grid of keys) and with the number keys of a remote/keyboard. */
 @Composable
 fun PinDialog(title: String, subtitle: String? = null, error: String? = null, onComplete: (String) -> Unit, onDismiss: () -> Unit) {
+    val uiContext = LocalContext.current
     var digits by remember { mutableStateOf("") }
     val start = remember { FocusRequester() }
     val onCompleteNow by rememberUpdatedState(onComplete)
@@ -204,7 +209,7 @@ fun PinDialog(title: String, subtitle: String? = null, error: String? = null, on
             Spacer(Modifier.height(14.dp))
             Row(
                 horizontalArrangement = Arrangement.spacedBy(14.dp),
-                modifier = Modifier.semantics { contentDescription = "${digits.length} hane girildi" },
+                modifier = Modifier.semantics { contentDescription = uiContext.getString(R.string.ui_pin_entered, digits.length) },
             ) {
                 repeat(4) { i ->
                     Box(Modifier.size(16.dp).clip(CircleShape).background(if (i < digits.length) Palette.Primary else Palette.SurfaceHigh))
@@ -220,9 +225,9 @@ fun PinDialog(title: String, subtitle: String? = null, error: String? = null, on
                     }
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    PinKey(null, { digits = digits.dropLast(1) }, icon = Icons.AutoMirrored.Rounded.Backspace, description = "Sil")
+                    PinKey(null, { digits = digits.dropLast(1) }, icon = Icons.AutoMirrored.Rounded.Backspace, description = uiContext.getString(R.string.ui_delete))
                     PinKey("0", { press('0') })
-                    PinKey("İptal", onDismiss, small = true)
+                    PinKey(uiContext.getString(R.string.ui_cancel_short), onDismiss, small = true)
                 }
             }
         }
@@ -331,13 +336,14 @@ fun SettingRow(
 
 @Composable
 fun ToggleRow(title: String, checked: Boolean, onChange: (Boolean) -> Unit, modifier: Modifier = Modifier, subtitle: String? = null) {
+    val uiContext = LocalContext.current
     SettingRow(
         title, modifier, subtitle, onClick = { onChange(!checked) },
         trailing = {
             Box(
                 Modifier.size(width = 46.dp, height = 26.dp).clip(RoundedCornerShape(13.dp))
                     .background(if (checked) Palette.Primary else Palette.Border)
-                    .semantics { contentDescription = if (checked) "Açık" else "Kapalı" },
+                    .semantics { contentDescription = if (checked) uiContext.getString(R.string.ui_on) else uiContext.getString(R.string.ui_off) },
             ) {
                 Box(
                     Modifier.align(if (checked) Alignment.CenterEnd else Alignment.CenterStart)

@@ -2,12 +2,30 @@ package dev.iptv.player.search
 
 import dev.iptv.player.data.TextSearch
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class SearchLogicTest {
+    @Test fun changedRestrictionsApplyToPreviouslyIndexedRows() {
+        val cached = SearchRow("p", "LIVE", "42", "Channel", "channel", null, null, "news", "News")
+        val open = SearchVisibility(setOf("p"), emptySet(), emptySet(), emptySet(), false)
+        assertTrue(open.allows(cached))
+        assertFalse(open.copy(lockedCategories = setOf("p|LIVE|news")).allows(cached))
+        assertFalse(open.copy(hiddenChannels = setOf("p|LIVE|42")).allows(cached))
+        assertFalse(open.copy(hiddenCategories = setOf("p|LIVE|news")).allows(cached))
+        assertFalse(open.copy(playlistIds = emptySet()).allows(cached))
+    }
+
+    @Test fun adultCategoryIsHiddenEvenWhenTheChannelNameIsInnocuous() {
+        val cached = SearchRow("p", "LIVE", "42", "Channel", "channel", null, null, "adult", "18+ Adult")
+        val visibility = SearchVisibility(setOf("p"), emptySet(), emptySet(), emptySet(), true)
+        assertFalse(visibility.allows(cached))
+        assertTrue(visibility.copy(hideAdult = false).allows(cached))
+    }
+
     private fun row(type: String, name: String, id: String = name) = SearchRow("p", type, id, name, TextSearch.normalize(name), null, null)
 
     @Test fun parseNormalizesAndRejectsShort() {

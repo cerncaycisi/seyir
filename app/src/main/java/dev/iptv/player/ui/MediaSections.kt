@@ -1,5 +1,9 @@
 package dev.iptv.player.ui
 
+import android.annotation.SuppressLint
+
+import dev.iptv.player.R
+
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
 import androidx.compose.ui.semantics.contentDescription
@@ -71,24 +75,27 @@ import kotlinx.coroutines.delay
 /** [direct] rows resume on click (continue watching) instead of opening the detail page. */
 data class MediaRow(val title: String, val items: List<Stream>, val direct: Boolean = false, val categoryName: String? = null)
 
-private fun buildRows(content: Content, playlist: Playlist, type: ContentType, rules: ContentRules): List<MediaRow> {
+private fun buildRows(uiContext: android.content.Context, content: Content, playlist: Playlist, type: ContentType, rules: ContentRules): List<MediaRow> {
     val base = rules.filterBase(playlist, type, content)
-    return buildRowsRaw(base, playlist, type, rules)
+    return buildRowsRaw(uiContext, base, playlist, type, rules)
 }
 
-private fun buildRowsRaw(content: Content, playlist: Playlist, type: ContentType, rules: ContentRules): List<MediaRow> {
+private fun buildRowsRaw(uiContext: android.content.Context, content: Content, playlist: Playlist, type: ContentType, rules: ContentRules): List<MediaRow> {
     val byCategory = content.items.groupBy { it.categoryId }
     val known = content.categories.mapNotNull { c -> byCategory[c.id]?.let { MediaRow(c.name, it, categoryName = c.name) } }.filter { !rules.isCategoryLocked(playlist, type, it.items.first().categoryId) }
     val knownIds = content.categories.mapTo(HashSet()) { it.id }
     val rest = content.items.filter { it.categoryId !in knownIds }
-    return if (rest.isEmpty()) known else known + MediaRow("Diğer", rest)
+    return if (rest.isEmpty()) known else known + MediaRow(uiContext.getString(R.string.ui_other), rest)
 }
 
-private suspend fun allStreams(repo: Repository, playlist: Playlist): List<Stream> =
-    ContentType.entries.flatMap { t -> runCatching { repo.content(playlist, t).items }.getOrDefault(emptyList()) }
+private suspend fun allContent(repo: Repository, playlist: Playlist): Map<ContentType, Content> =
+    ContentType.entries.associateWith { t -> runCatching { repo.content(playlist, t) }.getOrDefault(Content(emptyList(), emptyList())) }
 
 @Composable
 fun VodSection(repo: Repository, playlist: Playlist, type: ContentType, actions: HomeActions) {
+    val uiContext = LocalContext.current
+    // Lint misses the direct ProduceStateScope.value assignment in this producer.
+    @SuppressLint("ProduceStateDoesNotAssignValue")
     val state by produceState<Load<Content>>(Load.Loading, playlist.id, type) {
         value = loadCatching { repo.content(playlist, type) }
     }
@@ -96,32 +103,35 @@ fun VodSection(repo: Repository, playlist: Playlist, type: ContentType, actions:
         Load.Loading -> LoadingState()
         is Load.Err -> ErrorState(s.message)
         is Load.Ok -> if (s.value.items.isEmpty()) {
-            EmptyState(Icons.Rounded.Movie, if (type == ContentType.MOVIE) "Film bulunamadı" else "Dizi bulunamadı")
+            EmptyState(Icons.Rounded.Movie, if (type == ContentType.MOVIE) uiContext.getString(R.string.ui_no_movie) else uiContext.getString(R.string.ui_no_series))
         } else {
             VodBrowser(repo, playlist, type, s.value, actions)
         }
     }
 }
 
-private fun buildVodRows(content: Content, playlist: Playlist, type: ContentType, rules: ContentRules, sort: VodSort, genre: String?): List<MediaRow> {
+private fun buildVodRows(uiContext: android.content.Context, content: Content, playlist: Playlist, type: ContentType, rules: ContentRules, sort: VodSort, genre: String?): List<MediaRow> {
     val filtered = rules.filterBase(playlist, type, content)
     val items = filterByGenre(rules.unlockedItems(playlist, type, filtered.items), genre)
     if (items.isEmpty()) return emptyList()
     // Sorting replaces the category rows with one flat, sorted row.
-    if (sort != VodSort.DEFAULT) return listOf(MediaRow("Sıralama: ${sort.label}", sortStreams(items, sort)))
-    val base = buildRows(Content(filtered.categories, items), playlist, type, rules)
-    return listOf(MediaRow("Son eklenenler", latestOf(items, 30))) + base
+    if (sort != VodSort.DEFAULT) return listOf(MediaRow(uiContext.getString(R.string.ui_sort_heading, sortLabel(uiContext, sort)), sortStreams(items, sort)))
+    val base = buildRows(uiContext, Content(filtered.categories, items), playlist, type, rules)
+    return listOf(MediaRow(uiContext.getString(R.string.ui_recent_items), latestOf(items, 30))) + base
 }
 
 @Composable
 private fun VodBrowser(repo: Repository, playlist: Playlist, type: ContentType, content: Content, actions: HomeActions) {
+    val uiContext = LocalContext.current
     var sort by rememberSaveable { mutableStateOf(VodSort.DEFAULT) }
     var genre by rememberSaveable { mutableStateOf<String?>(null) }
     val genres = remember(content, actions.rules) { genresOf(actions.rules.unlockedItems(playlist, type, actions.rules.filterBase(playlist, type, content).items)).take(24) }
     val rules = actions.rules
-    val rows = remember(content, rules, sort, genre) { buildVodRows(content, playlist, type, rules, sort, genre) }
+    val rows = remember(uiContext, content, rules, sort, genre) { buildVodRows(uiContext, content, playlist, type, rules, sort, genre) }
     var focused by remember { mutableStateOf<Stream?>(null) }
     val shown = focused ?: rows.firstOrNull()?.items?.firstOrNull()
+    // Lint misses the direct ProduceStateScope.value assignment in this producer.
+    @SuppressLint("ProduceStateDoesNotAssignValue")
     val info by produceState<VodInfo?>(null, shown) {
         value = null
         if (type == ContentType.MOVIE && shown != null) {
@@ -145,16 +155,16 @@ private fun VodBrowser(repo: Repository, playlist: Playlist, type: ContentType, 
         }
         // Chips cycle on OK so no dialog or dropdown is needed on a remote.
         Row(Modifier.padding(vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            ControlChip("Sırala", sort.label) { sort = VodSort.entries[(sort.ordinal + 1) % VodSort.entries.size] }
+            ControlChip(uiContext.getString(R.string.ui_sort), sortLabel(uiContext, sort)) { sort = VodSort.entries[(sort.ordinal + 1) % VodSort.entries.size] }
             if (genres.isNotEmpty()) {
-                ControlChip("Tür", genre ?: "Tümü") {
+                ControlChip(uiContext.getString(R.string.ui_genre), genre ?: uiContext.getString(R.string.ui_all)) {
                     val i = genre?.let { genres.indexOf(it) } ?: -1
                     genre = genres.getOrNull(i + 1)
                 }
             }
         }
         if (rows.isEmpty()) {
-            EmptyState(Icons.Rounded.SearchOff, "Bu türde içerik yok", "Başka bir tür seçin")
+            EmptyState(Icons.Rounded.SearchOff, uiContext.getString(R.string.ui_no_genre), uiContext.getString(R.string.ui_choose_genre))
         } else {
             MediaRows(rows, playlist, actions, onFocused = { focused = it }, modifier = Modifier.weight(1f))
         }
@@ -165,6 +175,7 @@ private fun VodBrowser(repo: Repository, playlist: Playlist, type: ContentType, 
 private fun ControlChip(label: String, value: String, onClick: () -> Unit) {
     Surface(
         onClick = onClick,
+        modifier = Modifier.pointerClick(onClick),
         shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(50)),
         colors = ClickableSurfaceDefaults.colors(
             containerColor = Palette.Surface,
@@ -248,23 +259,27 @@ private fun MediaRowView(row: MediaRow, playlist: Playlist, actions: HomeActions
 
 @Composable
 fun FavoritesSection(repo: Repository, playlist: Playlist, actions: HomeActions) {
-    val state by produceState<Load<List<Stream>>>(Load.Loading, playlist.id) {
-        value = loadCatching { allStreams(repo, playlist) }
+    val uiContext = LocalContext.current
+    // Lint misses the direct ProduceStateScope.value assignment in this producer.
+    @SuppressLint("ProduceStateDoesNotAssignValue")
+    val state by produceState<Load<Map<ContentType, Content>>>(Load.Loading, playlist.id) {
+        value = loadCatching { allContent(repo, playlist) }
     }
     Column(Modifier.fillMaxSize()) {
-        ScreenTitle("Favoriler")
+        ScreenTitle(uiContext.getString(R.string.ui_favorites))
         when (val s = state) {
             Load.Loading -> LoadingState()
             is Load.Err -> ErrorState(s.message)
             is Load.Ok -> {
-                val favorites = s.value.filter { favoriteKey(playlist, it) in actions.favorites && actions.rules.streamAllowed(playlist, it) }
+                val favorites = s.value.flatMap { (type, content) -> visibleContentItems(playlist, type, content, actions.rules) }
+                    .filter { favoriteKey(playlist, it) in actions.favorites }
                 val rows = listOf(
-                    MediaRow("Kanallar", favorites.filter { it.type == ContentType.LIVE }),
-                    MediaRow("Filmler", favorites.filter { it.type == ContentType.MOVIE }),
-                    MediaRow("Diziler", favorites.filter { it.type == ContentType.SERIES }),
+                    MediaRow(uiContext.getString(R.string.ui_channels), favorites.filter { it.type == ContentType.LIVE }),
+                    MediaRow(uiContext.getString(R.string.ui_movies), favorites.filter { it.type == ContentType.MOVIE }),
+                    MediaRow(uiContext.getString(R.string.ui_series), favorites.filter { it.type == ContentType.SERIES }),
                 ).filter { it.items.isNotEmpty() }
                 if (rows.isEmpty()) {
-                    EmptyState(Icons.Rounded.FavoriteBorder, "Henüz favori yok", "Bir içeriğin üzerinde OK tuşunu basılı tutarak ekleyin")
+                    EmptyState(Icons.Rounded.FavoriteBorder, uiContext.getString(R.string.ui_no_favorites), uiContext.getString(R.string.ui_favorites_hint))
                 } else {
                     MediaRows(rows, playlist, actions, onFocused = {})
                 }
@@ -274,32 +289,36 @@ fun FavoritesSection(repo: Repository, playlist: Playlist, actions: HomeActions)
 }
 
 @Composable
-fun SearchSection(repo: Repository, playlist: Playlist, actions: HomeActions) {
-    var query by rememberSaveable { mutableStateOf("") }
-    val all by produceState<List<Stream>?>(null, playlist.id) { value = allStreams(repo, playlist) }
+fun SearchSection(repo: Repository, playlist: Playlist, actions: HomeActions, initialQuery: String? = null) {
+    val uiContext = LocalContext.current
+    var query by rememberSaveable(initialQuery) { mutableStateOf(initialQuery.orEmpty()) }
+    // Lint misses the direct ProduceStateScope.value assignment in this producer.
+    @SuppressLint("ProduceStateDoesNotAssignValue")
+    val all by produceState<Map<ContentType, Content>?>(null, playlist.id) { value = allContent(repo, playlist) }
     val q = query.trim()
     val rules = actions.rules
-    val rows = remember(all, q, rules) {
+    val rows = remember(uiContext, all, q, rules) {
         val source = all
         if (source == null || q.length < 2) {
             emptyList()
         } else {
-            val hits = source.filter { dev.iptv.player.data.TextSearch.matches(it.name, q) && rules.streamAllowed(playlist, it) }
+            val hits = source.flatMap { (type, content) -> visibleContentItems(playlist, type, content, rules) }
+                .filter { dev.iptv.player.data.TextSearch.matches(it.name, q) }
             listOf(
-                MediaRow("Kanallar", hits.filter { it.type == ContentType.LIVE }.take(60)),
-                MediaRow("Filmler", hits.filter { it.type == ContentType.MOVIE }.take(60)),
-                MediaRow("Diziler", hits.filter { it.type == ContentType.SERIES }.take(60)),
+                MediaRow(uiContext.getString(R.string.ui_channels), hits.filter { it.type == ContentType.LIVE }.take(60)),
+                MediaRow(uiContext.getString(R.string.ui_movies), hits.filter { it.type == ContentType.MOVIE }.take(60)),
+                MediaRow(uiContext.getString(R.string.ui_series), hits.filter { it.type == ContentType.SERIES }.take(60)),
             ).filter { it.items.isNotEmpty() }
         }
     }
     Column(Modifier.fillMaxSize()) {
-        ScreenTitle("Ara", "Kanallar, filmler ve diziler arasında")
+        ScreenTitle(uiContext.getString(R.string.ui_search), uiContext.getString(R.string.ui_search_hint))
         val context = LocalContext.current
-        val voiceIntent = remember {
+        val voiceIntent = remember(uiContext) {
             Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
                 putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-                putExtra(RecognizerIntent.EXTRA_LANGUAGE, "tr-TR")
-                putExtra(RecognizerIntent.EXTRA_PROMPT, "Ne izlemek istersiniz?")
+                putExtra(RecognizerIntent.EXTRA_LANGUAGE, uiContext.resources.configuration.locales[0].toLanguageTag())
+                putExtra(RecognizerIntent.EXTRA_PROMPT, uiContext.getString(R.string.ui_search_prompt))
             }
         }
         val voiceAvailable = remember { voiceIntent.resolveActivity(context.packageManager) != null }
@@ -307,7 +326,7 @@ fun SearchSection(repo: Repository, playlist: Playlist, actions: HomeActions) {
             r.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)?.firstOrNull()?.let { query = it }
         }
         Row(Modifier.widthIn(max = 760.dp), verticalAlignment = Alignment.CenterVertically) {
-            TvTextField(query, { query = it }, "Ne izlemek istersiniz?", Modifier.weight(1f), leadingIcon = Icons.Rounded.Search)
+            TvTextField(query, { query = it }, uiContext.getString(R.string.ui_search_prompt), Modifier.weight(1f), leadingIcon = Icons.Rounded.Search)
             if (voiceAvailable) {
                 Spacer(Modifier.width(10.dp))
                 MicButton { runCatching { launcher.launch(voiceIntent) } }
@@ -316,8 +335,8 @@ fun SearchSection(repo: Repository, playlist: Playlist, actions: HomeActions) {
         Spacer(Modifier.height(20.dp))
         when {
             all == null -> LoadingState()
-            q.length < 2 -> EmptyState(Icons.Rounded.Search, "Aramaya başlayın", "En az 2 harf yazın")
-            rows.isEmpty() -> EmptyState(Icons.Rounded.SearchOff, "Sonuç bulunamadı", "\"$q\" için eşleşen içerik yok")
+            q.length < 2 -> EmptyState(Icons.Rounded.Search, uiContext.getString(R.string.ui_start_search), uiContext.getString(R.string.ui_search_minimum))
+            rows.isEmpty() -> EmptyState(Icons.Rounded.SearchOff, uiContext.getString(R.string.ui_no_results), uiContext.getString(R.string.ui_search_no_match, q))
             else -> MediaRows(rows, playlist, actions, onFocused = {})
         }
     }
@@ -325,9 +344,10 @@ fun SearchSection(repo: Repository, playlist: Playlist, actions: HomeActions) {
 
 @Composable
 private fun MicButton(onClick: () -> Unit) {
+    val uiContext = LocalContext.current
     androidx.tv.material3.Surface(
         onClick = onClick,
-        modifier = Modifier.size(52.dp).pointerClick(onClick).semantics { contentDescription = "Sesli arama" },
+        modifier = Modifier.size(52.dp).pointerClick(onClick).semantics { contentDescription = uiContext.getString(R.string.ui_voice_search) },
         shape = androidx.tv.material3.ClickableSurfaceDefaults.shape(androidx.compose.foundation.shape.CircleShape),
         colors = androidx.tv.material3.ClickableSurfaceDefaults.colors(
             containerColor = Palette.Surface,
@@ -338,7 +358,15 @@ private fun MicButton(onClick: () -> Unit) {
         scale = androidx.tv.material3.ClickableSurfaceDefaults.scale(focusedScale = 1.08f),
     ) {
         Box(Modifier.size(52.dp), contentAlignment = Alignment.Center) {
-            androidx.tv.material3.Icon(Icons.Rounded.Mic, contentDescription = "Sesli arama")
+            androidx.tv.material3.Icon(Icons.Rounded.Mic, contentDescription = uiContext.getString(R.string.ui_voice_search))
         }
     }
 }
+
+private fun sortLabel(context: android.content.Context, sort: VodSort): String = context.getString(when (sort) {
+    VodSort.DEFAULT -> R.string.ui_sort_default
+    VodSort.RECENT -> R.string.ui_recent
+    VodSort.RATING -> R.string.ui_sort_rating
+    VodSort.AZ -> R.string.ui_sort_az
+    VodSort.YEAR -> R.string.ui_sort_year
+})

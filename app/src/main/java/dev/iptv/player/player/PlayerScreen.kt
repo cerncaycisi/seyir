@@ -1,5 +1,9 @@
 package dev.iptv.player.player
 
+import androidx.compose.ui.res.stringResource
+
+import dev.iptv.player.R
+
 import android.app.Activity
 import android.content.ActivityNotFoundException
 import android.content.Context
@@ -88,6 +92,7 @@ import dev.iptv.player.record.RecordingManager
 import dev.iptv.player.ui.Palette
 import dev.iptv.player.ui.Pill
 import dev.iptv.player.ui.formatClock
+import dev.iptv.player.ui.RecordingDurationDialog
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -98,6 +103,8 @@ private const val MAX_RECONNECTS = 10
 private const val NEXT_EPISODE_WINDOW_MS = 10_000L
 
 private fun requestHeadersFor(stream: Stream): Map<String, String> = stream.headers
+
+private data class RecordingTarget(val stream: Stream, val title: String, val programmeEndSec: Long?)
 
 private class ViewHolder { var view: PlayerView? = null }
 
@@ -212,6 +219,7 @@ private fun PlayerContent(repo: Repository, cfg: PlayerConfig, onBack: () -> Uni
     // Recording (DVR) state for the current channel.
     val recordings by remember { RecordingDb.get(context).dao().observeAll() }.collectAsState(initial = emptyList())
     val activeRecording = if (live) recordings.firstOrNull { it.status == RecStatus.RECORDING && it.playlistId == playlist.id && it.streamId == current.id } else null
+    var recordingTarget by remember { mutableStateOf<RecordingTarget?>(null) }
 
     // Live pause / timeshift: catch-up when the playlist offers it, otherwise ExoPlayer's back buffer (see buildPlayer).
     var shiftStartSec by remember { mutableStateOf<Long?>(null) }
@@ -239,11 +247,11 @@ private fun PlayerContent(repo: Repository, cfg: PlayerConfig, onBack: () -> Uni
             val running = activeRecording
             if (running != null) {
                 RecordingManager.stop(context, running.id)
-                toast("Kayıt durduruluyor")
+                toast(context.getString(R.string.play_stopping_recording))
             } else {
                 val now = System.currentTimeMillis() / 1000
                 val prog = epg.firstOrNull { it.start <= now && it.end > now }
-                toast(RecordingManager.startNow(context, playlist, current, prog?.title.orEmpty(), prog?.end).message)
+                recordingTarget = RecordingTarget(current, prog?.title.orEmpty(), prog?.end)
             }
         }
     }
@@ -275,7 +283,7 @@ private fun PlayerContent(repo: Repository, cfg: PlayerConfig, onBack: () -> Uni
         val attempt = reconnectAttempt
         if (attempt >= MAX_RECONNECTS) {
             reconnectAttempt = 0
-            error = describe(cause)
+            error = describe(context, cause)
             return
         }
         reconnectAttempt = attempt + 1
@@ -298,7 +306,7 @@ private fun PlayerContent(repo: Repository, cfg: PlayerConfig, onBack: () -> Uni
                 } else if (liveNow && cfg.autoReconnect && e.isRetriable()) {
                     scheduleReconnect(e)
                 } else {
-                    error = describe(e)
+                    error = describe(context, e)
                 }
             }
 
@@ -482,7 +490,7 @@ private fun PlayerContent(repo: Repository, cfg: PlayerConfig, onBack: () -> Uni
         if (panel == Panel.None && !nextVisible) runCatching { focus.requestFocus() }
     }
 
-    val blocking = panel != Panel.None || nextVisible
+    val blocking = panel != Panel.None || nextVisible || recordingTarget != null
 
     val subtitleSearch = remember(index) {
         if (!OpenSubtitles.enabled || live) null else object : SubtitleSearch {
@@ -581,11 +589,8 @@ private fun PlayerContent(repo: Repository, cfg: PlayerConfig, onBack: () -> Uni
     ) {
         AndroidView(
             factory = { ctx ->
-                PlayerView(ctx).apply {
+                createPlayerView(ctx).apply {
                     this.player = player
-                    useController = false
-                    keepScreenOn = true
-                    setShowBuffering(PlayerView.SHOW_BUFFERING_ALWAYS)
                     viewHolder.view = this
                 }
             },
@@ -604,7 +609,7 @@ private fun PlayerContent(repo: Repository, cfg: PlayerConfig, onBack: () -> Uni
             Row(
                 Modifier.align(Alignment.Center).clip(RoundedCornerShape(16.dp)).background(Color(0xE6111620)).padding(horizontal = 28.dp, vertical = 18.dp),
             ) {
-                Text("Yeniden bağlanıyor…  ($reconnectAttempt/$MAX_RECONNECTS)", style = MaterialTheme.typography.titleMedium, color = Color.White)
+                Text(stringResource(R.string.play_reconnecting, reconnectAttempt, MAX_RECONNECTS), style = MaterialTheme.typography.titleMedium, color = Color.White)
             }
         }
 
@@ -615,14 +620,14 @@ private fun PlayerContent(repo: Repository, cfg: PlayerConfig, onBack: () -> Uni
             ) {
                 Icon(Icons.Rounded.ErrorOutline, contentDescription = null, tint = Palette.Live, modifier = Modifier.size(44.dp))
                 Spacer(Modifier.height(12.dp))
-                Text("Yayın açılamadı", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = Color.White)
+                Text(context.getString(R.string.play_no_stream), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = Color.White)
                 Text(it.substringBefore('\n'), style = MaterialTheme.typography.titleMedium, color = Palette.TextMuted)
                 it.substringAfter('\n', "").takeIf { c -> c.isNotEmpty() }?.let { c ->
                     Text(c, style = MaterialTheme.typography.labelSmall, color = Palette.TextFaint, modifier = Modifier.padding(top = 4.dp))
                 }
                 if (live) {
                     Spacer(Modifier.height(16.dp))
-                    Text("Kanal değiştirmek için ▲ ▼", style = MaterialTheme.typography.bodyMedium, color = Palette.TextMuted)
+                    Text(context.getString(R.string.play_channel_hint), style = MaterialTheme.typography.bodyMedium, color = Palette.TextMuted)
                 }
             }
         }
@@ -639,7 +644,7 @@ private fun PlayerContent(repo: Repository, cfg: PlayerConfig, onBack: () -> Uni
 
         if (activeRecording != null && !inPip) {
             Pill(
-                "● KAYIT",
+                context.getString(R.string.play_record_badge),
                 modifier = Modifier.align(Alignment.TopEnd).padding(end = 40.dp, top = 68.dp),
                 color = Palette.Live,
                 contentColor = Color.White,
@@ -655,7 +660,7 @@ private fun PlayerContent(repo: Repository, cfg: PlayerConfig, onBack: () -> Uni
             )
             if (sleepMinutes > 0) {
                 Pill(
-                    "Uyku: $sleepMinutes dk",
+                    stringResource(R.string.play_sleep_remaining, sleepMinutes),
                     modifier = Modifier.align(Alignment.TopStart).padding(horizontal = 40.dp, vertical = 28.dp),
                     color = Color(0x33FFFFFF),
                     contentColor = Color.White,
@@ -670,11 +675,11 @@ private fun PlayerContent(repo: Repository, cfg: PlayerConfig, onBack: () -> Uni
             ) {
                 if (live && (!playing || canReturnToLive)) {
                     Row(Modifier.padding(bottom = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                        if (!playing) Pill("DURAKLATILDI", color = Color(0x33FFFFFF), contentColor = Color.White)
+                        if (!playing) Pill(context.getString(R.string.play_paused), color = Color(0x33FFFFFF), contentColor = Color.White)
                         if (canReturnToLive) {
                             Spacer(Modifier.size(10.dp))
-                            Pill(Timeshift.label(behindSec), color = Palette.Gold, contentColor = Color.Black)
-                            Text("   Canlıya dön: Menü ▸ Canlıya dön", style = MaterialTheme.typography.labelMedium, color = Palette.TextMuted)
+                            Pill(if (behindSec < 60) stringResource(R.string.play_behind_seconds, behindSec) else stringResource(R.string.play_behind_minutes, behindSec / 60, behindSec % 60), color = Palette.Gold, contentColor = Color.Black)
+                            Text(context.getString(R.string.play_live_hint), style = MaterialTheme.typography.labelMedium, color = Palette.TextMuted)
                         }
                     }
                 }
@@ -709,11 +714,11 @@ private fun PlayerContent(repo: Repository, cfg: PlayerConfig, onBack: () -> Uni
                 },
                 speed = speed,
                 onSpeed = { speed = it; player.setPlaybackSpeed(it) },
-                audio = trackOptions(tracks, trackParams, C.TRACK_TYPE_AUDIO, null),
+                audio = trackOptions(context, tracks, trackParams, C.TRACK_TYPE_AUDIO, null),
                 onAudio = { player.selectTrack(C.TRACK_TYPE_AUDIO, it) },
-                subtitles = trackOptions(tracks, trackParams, C.TRACK_TYPE_TEXT, "Kapalı"),
+                subtitles = trackOptions(context, tracks, trackParams, C.TRACK_TYPE_TEXT, context.getString(R.string.play_off)),
                 onSubtitle = { player.selectTrack(C.TRACK_TYPE_TEXT, it) },
-                quality = trackOptions(tracks, trackParams, C.TRACK_TYPE_VIDEO, null),
+                quality = trackOptions(context, tracks, trackParams, C.TRACK_TYPE_VIDEO, null),
                 onQuality = { player.selectTrack(C.TRACK_TYPE_VIDEO, it) },
                 subtitleScale = subtitleScale,
                 onSubtitleScale = { s ->
@@ -735,6 +740,19 @@ private fun PlayerContent(repo: Repository, cfg: PlayerConfig, onBack: () -> Uni
             )
             Panel.None -> Unit
         }
+    }
+    recordingTarget?.let { target ->
+        RecordingDurationDialog(
+            channelName = target.stream.name,
+            programmeEndSec = target.programmeEndSec,
+            onSelectEnd = { endSec ->
+                recordingTarget = null
+                scope.launch {
+                    toast(RecordingManager.startNow(context, playlist, target.stream, target.title, endSec).message)
+                }
+            },
+            onDismiss = { recordingTarget = null },
+        )
     }
 }
 

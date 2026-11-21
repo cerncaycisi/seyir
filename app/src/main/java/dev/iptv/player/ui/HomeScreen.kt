@@ -1,6 +1,14 @@
 package dev.iptv.player.ui
 
+import androidx.compose.ui.platform.LocalContext
+
+import androidx.compose.ui.res.stringResource
+
+import dev.iptv.player.R
+
 import androidx.compose.foundation.background
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -63,15 +71,18 @@ import dev.iptv.player.data.Stream
 import dev.iptv.player.data.favoriteKey
 import kotlinx.coroutines.launch
 
-enum class Section(val label: String, val icon: ImageVector) {
-    HOME("Ana Sayfa", Icons.Rounded.Home),
-    LIVE("Canlı TV", Icons.Rounded.LiveTv),
-    GUIDE("Rehber", Icons.Rounded.CalendarViewWeek),
-    MOVIES("Filmler", Icons.Rounded.Movie),
-    SERIES("Diziler", Icons.Rounded.VideoLibrary),
-    FAVORITES("Favoriler", Icons.Rounded.Favorite),
-    RECORDINGS("Kayıtlar", Icons.Rounded.FiberManualRecord),
-    SEARCH("Ara", Icons.Rounded.Search),
+enum class Section(val labelRes: Int, val icon: ImageVector) {
+    HOME(R.string.play_section_home, Icons.Rounded.Home),
+    LIVE(R.string.play_section_live, Icons.Rounded.LiveTv),
+    GUIDE(R.string.play_section_guide, Icons.Rounded.CalendarViewWeek),
+    MOVIES(R.string.play_section_movies, Icons.Rounded.Movie),
+    SERIES(R.string.play_section_series, Icons.Rounded.VideoLibrary),
+    FAVORITES(R.string.play_section_favorites, Icons.Rounded.Favorite),
+    RECORDINGS(R.string.play_section_recordings, Icons.Rounded.FiberManualRecord),
+    SEARCH(R.string.play_section_search, Icons.Rounded.Search);
+
+    val label: String
+        @Composable get() = stringResource(labelRes)
 }
 
 // Without an explicit target, focus is lost after returning from the player and the first key
@@ -112,13 +123,20 @@ fun HomeScreen(
     onPlaylists: () -> Unit,
     onSettings: () -> Unit = {},
     initialSection: String? = null,
+    initialSearchQuery: String? = null,
     /** (live channel list, index, 2 or 4): opens the multi-view screen. */
     onMultiView: (List<Stream>, Int, Int) -> Unit = { _, _, _ -> },
 ) {
-    var section by rememberSaveable { mutableStateOf(Section.entries.firstOrNull { it.name == initialSection } ?: Section.HOME) }
+    var section by rememberSaveable(initialSearchQuery) {
+        mutableStateOf(
+            if (initialSearchQuery != null) Section.SEARCH
+            else Section.entries.firstOrNull { it.name == initialSection } ?: Section.HOME,
+        )
+    }
     var restoreId by rememberSaveable { mutableStateOf<String?>(null) }
     var initialFocus by rememberSaveable { mutableStateOf(true) }
     val navFocus = remember { Section.entries.map { FocusRequester() } }
+    val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val favorites by repo.store.favorites.collectAsState(initial = emptySet())
     val history by repo.history.entries.collectAsState(initial = emptyList())
@@ -172,6 +190,7 @@ fun HomeScreen(
                     .fillMaxHeight()
                     .background(if (open) Palette.Surface else Palette.Background)
                     .padding(horizontal = 8.dp, vertical = 8.dp)
+                    .verticalScroll(rememberScrollState())
                     // Entering the menu lands on the current section instead of the nearest item.
                     .focusProperties { enter = { navFocus[section.ordinal] } },
                 verticalArrangement = Arrangement.spacedBy(2.dp),
@@ -181,7 +200,7 @@ fun HomeScreen(
                     if (open) {
                         Spacer(Modifier.width(12.dp))
                         Column {
-                            Text("Seyir", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Palette.Text)
+                            Text(stringResource(R.string.app_name), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Palette.Text)
                             Text(
                                 playlist.name,
                                 style = MaterialTheme.typography.labelMedium,
@@ -198,25 +217,25 @@ fun HomeScreen(
                         selected = s == section,
                         onClick = { section = s },
                         leadingContent = { Icon(s.icon, contentDescription = null) },
-                        modifier = Modifier.focusRequester(navFocus[s.ordinal]).pointerClick({ section = s }),
+                        modifier = Modifier.height(42.dp).focusRequester(navFocus[s.ordinal]).pointerClick({ section = s }),
                     ) { Text(s.label) }
                 }
                 Spacer(Modifier.weight(1f))
                 NavigationDrawerItem(
                     selected = false,
                     onClick = onSettings,
-                    leadingContent = { Icon(Icons.Rounded.Settings, contentDescription = "Ayarlar") },
-                    modifier = Modifier.pointerClick(onSettings),
-                ) { Text("Ayarlar") }
+                    leadingContent = { Icon(Icons.Rounded.Settings, contentDescription = context.getString(R.string.play_settings)) },
+                    modifier = Modifier.height(42.dp).pointerClick(onSettings),
+                ) { Text(context.getString(R.string.play_settings)) }
                 NavigationDrawerItem(
                     selected = false,
                     onClick = {
                         scope.launch { repo.refresh(playlist.id) }
                         onPlaylists()
                     },
-                    leadingContent = { Icon(Icons.AutoMirrored.Rounded.PlaylistPlay, contentDescription = "Playlistler") },
-                    modifier = Modifier.pointerClick({ scope.launch { repo.refresh(playlist.id) }; onPlaylists() }),
-                ) { Text("Playlistler") }
+                    leadingContent = { Icon(Icons.AutoMirrored.Rounded.PlaylistPlay, contentDescription = context.getString(R.string.play_playlists)) },
+                    modifier = Modifier.height(42.dp).pointerClick({ scope.launch { repo.refresh(playlist.id) }; onPlaylists() }),
+                ) { Text(context.getString(R.string.play_playlists)) }
             }
         },
     ) {
@@ -230,7 +249,7 @@ fun HomeScreen(
                     Section.SERIES -> VodSection(repo, playlist, ContentType.SERIES, actions)
                     Section.FAVORITES -> FavoritesSection(repo, playlist, actions)
                     Section.RECORDINGS -> RecordingsSection(repo, playlist, onPlay)
-                    Section.SEARCH -> SearchSection(repo, playlist, actions)
+                    Section.SEARCH -> SearchSection(repo, playlist, actions, initialQuery = initialSearchQuery)
                 }
             }
         }
@@ -252,8 +271,9 @@ private fun HomeOverlays(
     clearUnlock: () -> Unit,
     onMultiView: (List<Stream>, Int, Int) -> Unit,
 ) {
+    val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val noPin = "Kilitlemek için önce Ayarlar > Ebeveyn kontrolü'nden PIN belirleyin"
+    val noPin = context.getString(R.string.play_pin_needed)
     when (target) {
         is ActionTarget.Channel -> {
             val s = target.stream
@@ -261,17 +281,17 @@ private fun HomeOverlays(
             val cat = target.categoryName
             val locked = rules.isCategoryMarkedLocked(playlist, s.type, s.categoryId)
             val actions = buildList {
-                add(CardAction(if (fav) "Favoriden çıkar" else "Favori ekle", Icons.Rounded.Favorite) {
+                add(CardAction(if (fav) context.getString(R.string.play_favorite_remove) else context.getString(R.string.play_favorite_add), Icons.Rounded.Favorite) {
                     scope.launch { repo.store.toggleFavorite(favoriteKey(playlist, s)) }
                     dismiss()
                 })
-                add(CardAction("Gizle", Icons.Rounded.VisibilityOff) {
+                add(CardAction(context.getString(R.string.play_hide), Icons.Rounded.VisibilityOff) {
                     scope.launch { repo.prefs.setChannelHidden(playlist, s, true) }
                     dismiss()
                 })
                 if (s.type == ContentType.LIVE) {
                     for (n in intArrayOf(2, 4)) {
-                        add(CardAction("Çoklu izleme ($n kanal)", Icons.Rounded.GridView) {
+                        add(CardAction(context.getString(R.string.play_multi_count, n), Icons.Rounded.GridView) {
                             dismiss()
                             scope.launch {
                                 val content = runCatching { repo.content(playlist, ContentType.LIVE) }.getOrNull() ?: return@launch
@@ -287,7 +307,7 @@ private fun HomeOverlays(
                     if (!hasPin) {
                         add(CardAction(noPin, enabled = false) {})
                     } else {
-                        add(CardAction(if (locked) "Kategori kilidini kaldır" else "Kategoriyi kilitle", Icons.Rounded.Lock) {
+                        add(CardAction(if (locked) context.getString(R.string.play_category_unlock) else context.getString(R.string.play_category_lock), Icons.Rounded.Lock) {
                             scope.launch { repo.prefs.setCategoryLocked(playlist, s.type, s.categoryId, cat, !locked) }
                             dismiss()
                         })
@@ -299,14 +319,14 @@ private fun HomeOverlays(
         is ActionTarget.Category -> {
             val locked = rules.isCategoryMarkedLocked(playlist, target.type, target.id)
             val actions = buildList {
-                add(CardAction("Kategoriyi gizle", Icons.Rounded.VisibilityOff) {
+                add(CardAction(context.getString(R.string.play_category_hide), Icons.Rounded.VisibilityOff) {
                     scope.launch { repo.prefs.setCategoryHidden(playlist, target.type, target.id, target.name, true) }
                     dismiss()
                 })
                 if (!hasPin) {
                     add(CardAction(noPin, enabled = false) {})
                 } else {
-                    add(CardAction(if (locked) "Kilidi kaldır" else "Kategoriyi kilitle", Icons.Rounded.Lock) {
+                    add(CardAction(if (locked) context.getString(R.string.play_unlock) else context.getString(R.string.play_category_lock), Icons.Rounded.Lock) {
                         scope.launch { repo.prefs.setCategoryLocked(playlist, target.type, target.id, target.name, !locked) }
                         dismiss()
                     })

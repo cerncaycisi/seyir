@@ -1,5 +1,9 @@
 package dev.iptv.player.ui
 
+import dev.iptv.player.R
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
+
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -104,7 +108,12 @@ fun initials(name: String): String =
         .uppercase()
         .ifEmpty { "TV" }
 
-fun formatClock(epochSeconds: Long): String = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(epochSeconds * 1000))
+@Composable
+fun formatClock(epochSeconds: Long): String {
+    val locale = LocalContext.current.resources.configuration.locales[0]
+    val pattern = if (LocalClock24h.current) "HH:mm" else "h:mm a"
+    return SimpleDateFormat(pattern, locale).format(Date(epochSeconds * 1000))
+}
 
 @Composable
 fun BrandMark(size: Dp = 40.dp) {
@@ -162,6 +171,7 @@ fun PosterCard(
     /** Watch progress 0..1 (null = never watched); >= 0.95 shows a "watched" check instead of the bar. */
     progress: Float? = null,
 ) {
+    val uiContext = LocalContext.current
     Card(
         onClick = onClick,
         onLongClick = onLongClick,
@@ -199,7 +209,7 @@ fun PosterCard(
                 if (progress >= WATCHED_FRACTION) {
                     Icon(
                         Icons.Rounded.CheckCircle,
-                        contentDescription = "İzlendi",
+                        contentDescription = uiContext.getString(R.string.ui_watched),
                         tint = Palette.Accent,
                         modifier = Modifier.align(Alignment.BottomEnd).padding(6.dp).size(22.dp),
                     )
@@ -210,7 +220,7 @@ fun PosterCard(
             if (favorite) {
                 Icon(
                     Icons.Rounded.Star,
-                    contentDescription = "Favori",
+                    contentDescription = uiContext.getString(R.string.ui_favorite),
                     tint = Palette.Gold,
                     modifier = Modifier.align(Alignment.TopEnd).padding(6.dp).size(22.dp),
                 )
@@ -261,6 +271,7 @@ fun ChannelRow(
     nowTitle: String? = null,
     progress: Float? = null,
 ) {
+    val uiContext = LocalContext.current
     Surface(
         onClick = onClick,
         onLongClick = onLongClick,
@@ -307,7 +318,7 @@ fun ChannelRow(
                     }
                 }
             }
-            if (favorite) Icon(Icons.Rounded.Star, contentDescription = "Favori", tint = Palette.Gold, modifier = Modifier.size(20.dp))
+            if (favorite) Icon(Icons.Rounded.Star, contentDescription = uiContext.getString(R.string.ui_favorite), tint = Palette.Gold, modifier = Modifier.size(20.dp))
         }
     }
 }
@@ -322,6 +333,7 @@ fun CategoryItem(
     onLongClick: (() -> Unit)? = null,
     locked: Boolean = false,
 ) {
+    val uiContext = LocalContext.current
     Surface(
         onClick = onClick,
         onLongClick = onLongClick,
@@ -349,7 +361,7 @@ fun CategoryItem(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
-            if (locked) Icon(Icons.Rounded.Lock, contentDescription = "Kilitli", modifier = Modifier.size(16.dp))
+            if (locked) Icon(Icons.Rounded.Lock, contentDescription = uiContext.getString(R.string.ui_locked), modifier = Modifier.size(16.dp))
             count?.let { Text("$it", style = MaterialTheme.typography.labelMedium) }
         }
     }
@@ -432,7 +444,7 @@ fun EmptyState(icon: ImageVector, title: String, subtitle: String? = null, modif
 }
 
 @Composable
-fun ErrorState(message: String) = EmptyState(Icons.Rounded.ErrorOutline, "Yüklenemedi", message)
+fun ErrorState(message: String) = EmptyState(Icons.Rounded.ErrorOutline, stringResource(R.string.ui_load_failed), message)
 
 @Composable
 fun LoadingState(modifier: Modifier = Modifier) {

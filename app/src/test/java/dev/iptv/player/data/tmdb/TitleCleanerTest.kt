@@ -13,6 +13,12 @@ class TitleCleanerTest {
     }
 
     @Test
+    fun stripsSquareCurlyAndRoundProviderTags() {
+        assertEquals(CleanTitle("Tulsa King", null), clean("Tulsa King [HD] {provider} (Dublaj)"))
+        assertEquals(CleanTitle("Tulsa King", "2022"), clean("Tulsa King [2022] {HD}"))
+    }
+
+    @Test
     fun stripsLanguagePrefixAndDubTag() {
         assertEquals(CleanTitle("The Matrix", null), clean("TR - The Matrix [Dublaj] FHD"))
     }

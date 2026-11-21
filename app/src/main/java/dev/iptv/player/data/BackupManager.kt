@@ -37,6 +37,10 @@ data class BackupData(
 
 data class ImportResult(val playlistsAdded: Int, val playlistsUpdated: Int, val favorites: Int, val positions: Int, val settings: Int)
 
+/** Machine-readable validation failures; presentation layers supply localized messages. */
+class InvalidBackupException(val unsupportedVersion: Int? = null, cause: Throwable? = null) :
+    IllegalArgumentException("Invalid or unsupported backup", cause)
+
 /**
  * Exports playlists, favorites, watch positions and settings to one JSON document and merges such a document back.
  * The export contains Xtream passwords / M3U URLs in CLEAR TEXT (they are decrypted), so the UI must treat the
@@ -83,9 +87,9 @@ class BackupManager(private val store: PlaylistStore, private val settings: Sett
             val data = try {
                 format.decodeFromString(BackupData.serializer(), json)
             } catch (e: SerializationException) {
-                throw IllegalArgumentException("Yedek dosyası geçersiz", e)
+                throw InvalidBackupException(cause = e)
             }
-            require(data.version in 1..VERSION) { "Yedek sürümü desteklenmiyor: ${data.version}" }
+            if (data.version !in 1..VERSION) throw InvalidBackupException(unsupportedVersion = data.version)
             return data.copy(playlists = data.playlists.filter { it.id.isNotBlank() && it.source.isUsable() })
         }
 

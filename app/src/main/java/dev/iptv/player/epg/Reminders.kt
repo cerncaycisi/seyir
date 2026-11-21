@@ -14,6 +14,8 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.ProcessLifecycleOwner
 import dev.iptv.player.MainActivity
 import dev.iptv.player.R
+import dev.iptv.player.data.SettingsStore
+import dev.iptv.player.data.localizedContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -89,7 +91,7 @@ object ReminderScheduler {
         if (!canNotify(context)) return
         val nm = context.getSystemService(NotificationManager::class.java) ?: return
         if (Build.VERSION.SDK_INT >= 26) {
-            nm.createNotificationChannel(NotificationChannel(CHANNEL_ID, "Program hatırlatıcıları", NotificationManager.IMPORTANCE_HIGH))
+            nm.createNotificationChannel(NotificationChannel(CHANNEL_ID, context.getString(R.string.epg_notification_channel), NotificationManager.IMPORTANCE_HIGH))
         }
         val open = Intent(context, MainActivity::class.java)
             .setFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
@@ -100,7 +102,7 @@ object ReminderScheduler {
         val notification = builder
             .setSmallIcon(R.drawable.ic_launcher)
             .setContentTitle(event.title)
-            .setContentText("${event.channelName} şimdi başlıyor")
+            .setContentText(context.getString(R.string.epg_notification_starting, event.channelName))
             .setContentIntent(content)
             .setAutoCancel(true)
             .build()
@@ -120,15 +122,16 @@ class ReminderReceiver : BroadcastReceiver() {
         )
         val id = intent.getStringExtra("id")
         val foreground = ProcessLifecycleOwner.get().lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)
-        if (foreground) ReminderBus.fired.tryEmit(event) else ReminderScheduler.notify(context, event)
-        if (id != null) {
-            val pending = goAsync()
-            CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
-                try {
+        if (foreground) ReminderBus.fired.tryEmit(event)
+        val pending = goAsync()
+        CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
+            try {
+                if (!foreground) ReminderScheduler.notify(SettingsStore(context).localizedContext(context), event)
+                if (id != null) {
                     EpgService.get(context).reminderDao.delete(id)
-                } finally {
-                    pending.finish()
                 }
+            } finally {
+                pending.finish()
             }
         }
     }

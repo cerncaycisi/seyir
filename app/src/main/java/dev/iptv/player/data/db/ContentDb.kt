@@ -60,11 +60,12 @@ data class SearchProjection(
     val logo: String?,
     val categoryId: String,
     val year: String?,
+    val categoryName: String?,
 )
 
 @Dao
 abstract class ContentDao {
-    @Query("SELECT playlistId, type, id, name, logo, categoryId, year FROM streams")
+    @Query("SELECT s.playlistId, s.type, s.id, s.name, s.logo, s.categoryId, s.year, c.name AS categoryName FROM streams s LEFT JOIN categories c ON c.playlistId = s.playlistId AND c.type = s.type AND c.id = s.categoryId")
     abstract suspend fun searchProjection(): List<SearchProjection>
 
     @Query("SELECT COALESCE(MAX(fetchedAt), 0) FROM sync")

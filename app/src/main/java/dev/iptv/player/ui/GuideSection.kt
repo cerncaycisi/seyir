@@ -1,6 +1,11 @@
 package dev.iptv.player.ui
 
+import androidx.compose.ui.res.stringResource
+
+import dev.iptv.player.R
+
 import android.Manifest
+import android.annotation.SuppressLint
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -115,13 +120,15 @@ private class GuideEnv(
 
 @Composable
 fun GuideSection(repo: Repository, playlist: Playlist, actions: HomeActions) {
+    // Lint fails to resolve ProduceStateScope.value here; the producer assigns it directly.
+    @SuppressLint("ProduceStateDoesNotAssignValue")
     val state by produceState<Load<Content>>(Load.Loading, playlist.id) {
         value = loadCatching { repo.content(playlist, ContentType.LIVE) }
     }
     when (val s = state) {
         Load.Loading -> LoadingState()
         is Load.Err -> ErrorState(s.message)
-        is Load.Ok -> if (s.value.items.isEmpty()) EmptyState(Icons.Rounded.History, "Kanal yok") else Guide(playlist, s.value.items, actions)
+        is Load.Ok -> if (s.value.items.isEmpty()) EmptyState(Icons.Rounded.History, stringResource(R.string.play_guide_no_channels)) else Guide(playlist, s.value.items, actions)
     }
 }
 
@@ -136,9 +143,12 @@ private fun Guide(playlist: Playlist, allChannels: List<Stream>, actions: HomeAc
     val status by epg.status.collectAsState()
     val reminders by epg.reminderIds.collectAsState(initial = emptySet())
     val recordings by remember { dev.iptv.player.record.RecordingDb.get(context).dao().observeAll() }.collectAsState(initial = emptyList())
+    // These producers assign their own value after the suspend calls complete.
+    @SuppressLint("ProduceStateDoesNotAssignValue")
     val updated by produceState<Long?>(null, gen, status) { value = epg.lastUpdated() }
 
     var epgOnly by rememberSaveable { mutableStateOf(false) }
+    @SuppressLint("ProduceStateDoesNotAssignValue")
     val withEpg by produceState<Set<String>?>(null, allChannels, gen) {
         value = allChannels.filter { epg.resolve(playlist.id, it) != null }.map { it.id }.toSet()
     }
@@ -159,11 +169,13 @@ private fun Guide(playlist: Playlist, allChannels: List<Stream>, actions: HomeAc
     var pending by remember { mutableStateOf<PendingFocus?>(null) }
     var message by remember { mutableStateOf<String?>(null) }
     var menu by remember { mutableStateOf<GuideFocus?>(null) }
+    var recordFor by remember { mutableStateOf<GuideFocus?>(null) }
     var matchFor by remember { mutableStateOf<Stream?>(null) }
     var askedNotifications by remember { mutableStateOf(false) }
+    var askExactAlarmAccess by remember { mutableStateOf(false) }
 
     val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        if (!granted) message = "Bildirim izni yok: hatırlatıcılar yalnızca uygulama açıkken görünür"
+        if (!granted) message = context.getString(R.string.play_guide_no_permission)
     }
 
     LaunchedEffect(playlist.id) { epg.requestFresh(playlist) }
@@ -191,7 +203,7 @@ private fun Guide(playlist: Playlist, allChannels: List<Stream>, actions: HomeAc
         }
         scope.launch {
             val set = epg.toggleReminder(playlist, stream, p)
-            message = if (set) "Hatırlatıcı kuruldu: ${p.title}" else "Hatırlatıcı kaldırıldı"
+            message = if (set) context.getString(R.string.play_guide_reminder_set, p.title) else context.getString(R.string.play_guide_reminder_removed)
         }
     }
 
@@ -203,7 +215,7 @@ private fun Guide(playlist: Playlist, allChannels: List<Stream>, actions: HomeAc
     fun playPast(stream: Stream, p: Programme) {
         val now = EpgService.nowSec()
         val copy = if (Catchup.playable(playlist, stream, p, now)) Catchup.streamFor(playlist, stream, p, now) else null
-        if (copy != null) actions.open(listOf(copy), 0) else message = "Bu program için geri izleme yok"
+        if (copy != null) actions.open(listOf(copy), 0) else message = context.getString(R.string.play_guide_no_catchup)
     }
 
     fun activate(f: GuideFocus) {
@@ -299,39 +311,66 @@ private fun Guide(playlist: Playlist, allChannels: List<Stream>, actions: HomeAc
                 when {
                     f.prog.start > now -> {
                         val set = Reminder.idOf(playlist.id, f.stream.id, f.prog.start) in reminders
-                        add(DialogOption(if (set) "Hatırlatıcıyı kaldır" else "Hatırlatıcı kur") { toggleReminder(f.stream, f.prog) })
+                        add(DialogOption(if (set) context.getString(R.string.play_guide_reminder_remove) else context.getString(R.string.play_guide_reminder_add)) { toggleReminder(f.stream, f.prog) })
                         val planned = recordings.firstOrNull {
                             it.id == dev.iptv.player.record.Recording.idOf(playlist.id, f.stream.id, f.prog.start * 1000) &&
                                 it.status == dev.iptv.player.record.RecStatus.SCHEDULED
                         }
-                        add(DialogOption(if (planned != null) "Kaydı iptal et" else "Kaydı planla") {
+                        add(DialogOption(if (planned != null) context.getString(R.string.play_guide_record_cancel) else context.getString(R.string.play_guide_record_schedule)) {
                             scope.launch {
                                 message = if (planned != null) {
                                     dev.iptv.player.record.RecordingManager.cancel(context, planned)
-                                    "Kayıt planı kaldırıldı"
+                                    context.getString(R.string.play_guide_schedule_removed)
                                 } else {
-                                    dev.iptv.player.record.RecordingManager.schedule(context, playlist, f.stream, f.prog.title, f.prog.start, f.prog.stop).message
+                                    val outcome = dev.iptv.player.record.RecordingManager.schedule(context, playlist, f.stream, f.prog.title, f.prog.start, f.prog.stop)
+                                    askExactAlarmAccess = outcome.requiresExactAlarmPermission
+                                    outcome.message
                                 }
                             }
                         })
                     }
-                    f.prog.stop > now -> add(DialogOption("Şimdi kaydet") {
-                        scope.launch {
-                            message = dev.iptv.player.record.RecordingManager.startNow(context, playlist, f.stream, f.prog.title, f.prog.stop).message
-                        }
+                    f.prog.stop > now -> add(DialogOption(context.getString(R.string.play_guide_record_now)) {
+                        recordFor = f
                     })
                     f.prog.stop <= now && Catchup.playable(playlist, f.stream, f.prog, now) ->
-                        add(DialogOption("Geri izle") { playPast(f.stream, f.prog) })
+                        add(DialogOption(context.getString(R.string.play_guide_catchup)) { playPast(f.stream, f.prog) })
                 }
             }
-            add(DialogOption("Canlı izle") { playLive(f.stream) })
-            add(DialogOption("EPG eşleştir") { matchFor = f.stream })
-            add(DialogOption("EPG'yi yenile") { scope.launch { epg.refresh(playlist) } })
-            add(DialogOption(if (epgOnly) "Tüm kanalları göster" else "Yalnızca EPG'li kanalları göster") { epgOnly = !epgOnly })
+            add(DialogOption(context.getString(R.string.play_guide_live)) { playLive(f.stream) })
+            add(DialogOption(context.getString(R.string.play_guide_match)) { matchFor = f.stream })
+            add(DialogOption(context.getString(R.string.play_guide_refresh)) { scope.launch { epg.refresh(playlist) } })
+            add(DialogOption(if (epgOnly) context.getString(R.string.play_guide_all_channels) else context.getString(R.string.play_guide_epg_channels)) { epgOnly = !epgOnly })
         }
         OptionsDialog(f.stream.name, f.prog.title.takeUnless { f.filler }, options) { menu = null }
     }
     matchFor?.let { s -> EpgMatchDialog(playlist, s, onDismiss = { matchFor = null }) }
+    recordFor?.let { target ->
+        RecordingDurationDialog(
+            channelName = target.stream.name,
+            programmeEndSec = target.prog.stop,
+            onSelectEnd = { endSec ->
+                recordFor = null
+                scope.launch {
+                    message = dev.iptv.player.record.RecordingManager.startNow(context, playlist, target.stream, target.prog.title, endSec).message
+                }
+            },
+            onDismiss = { recordFor = null },
+        )
+    }
+    if (askExactAlarmAccess) {
+        ConfirmDialog(
+            title = stringResource(R.string.play_alarm_access_title),
+            message = stringResource(R.string.play_alarm_access_message),
+            confirmLabel = stringResource(R.string.play_alarm_access_open),
+            onConfirm = {
+                askExactAlarmAccess = false
+                if (!dev.iptv.player.record.RecordingManager.requestExactAlarmPermission(context)) {
+                    message = context.getString(R.string.play_alarm_access_unavailable)
+                }
+            },
+            onDismiss = { askExactAlarmAccess = false },
+        )
+    }
 }
 
 @Composable
@@ -344,28 +383,29 @@ private fun GuideHeader(
     playlist: Playlist,
     reminders: Set<String>,
 ) {
+    val context = LocalContext.current
     val statusText = when (status) {
-        is EpgStatus.Refreshing -> "EPG güncelleniyor… ${if (status.programmes > 0) "(${status.programmes})" else ""}"
-        is EpgStatus.Error -> "EPG hatası: ${status.message}"
-        EpgStatus.Idle -> updated?.let { "EPG güncellendi: ${formatDayTime(it)}" } ?: "EPG verisi yok"
+        is EpgStatus.Refreshing -> context.getString(R.string.play_guide_refreshing, if (status.programmes > 0) "(${status.programmes})" else "")
+        is EpgStatus.Error -> context.getString(R.string.play_guide_error, status.message)
+        EpgStatus.Idle -> updated?.let { context.getString(R.string.play_guide_updated, formatDayTime(it)) } ?: context.getString(R.string.play_guide_no_data)
     }
     Column(Modifier.fillMaxWidth().height(96.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("Rehber", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, color = Palette.Text)
+            Text(context.getString(R.string.play_guide_title), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, color = Palette.Text)
             Spacer(Modifier.width(12.dp))
             Text(
                 statusText, style = MaterialTheme.typography.labelMedium,
                 color = if (status is EpgStatus.Error) Palette.Live else Palette.TextFaint,
                 maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f),
             )
-            Text("OK izle · Basılı tut seçenekler", style = MaterialTheme.typography.labelMedium, color = Palette.TextFaint)
+            Text(context.getString(R.string.play_guide_controls), style = MaterialTheme.typography.labelMedium, color = Palette.TextFaint)
         }
         Spacer(Modifier.height(6.dp))
         if (focus == null) return@Column
         val p = focus.prog
         if (focus.filler) {
             Text(focus.stream.name, style = MaterialTheme.typography.titleMedium, color = Palette.Text, maxLines = 1)
-            Text(message ?: "Program bilgisi yok. Basılı tutup \"EPG eşleştir\" ile kanalı bir EPG kanalına bağlayabilirsiniz.", style = MaterialTheme.typography.bodySmall, color = Palette.TextMuted, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            Text(message ?: context.getString(R.string.play_guide_match_hint), style = MaterialTheme.typography.bodySmall, color = Palette.TextMuted, maxLines = 2, overflow = TextOverflow.Ellipsis)
             return@Column
         }
         val live = p.start <= nowSec && p.stop > nowSec
@@ -373,9 +413,9 @@ private fun GuideHeader(
         val hasReminder = Reminder.idOf(playlist.id, focus.stream.id, p.start) in reminders
         Row(verticalAlignment = Alignment.CenterVertically) {
             when {
-                live -> Pill("ŞİMDİ", color = Palette.Live, contentColor = Color.White)
-                past -> Pill("GEÇMİŞ", color = Palette.SurfaceHigh)
-                else -> Pill(if (hasReminder) "HATIRLATICI" else "SONRA", color = if (hasReminder) Palette.Gold else Palette.SurfaceHigh, contentColor = if (hasReminder) Color.Black else Palette.Text)
+                live -> Pill(context.getString(R.string.play_guide_now), color = Palette.Live, contentColor = Color.White)
+                past -> Pill(context.getString(R.string.play_guide_past), color = Palette.SurfaceHigh)
+                else -> Pill(if (hasReminder) context.getString(R.string.play_guide_reminder) else context.getString(R.string.play_guide_next), color = if (hasReminder) Palette.Gold else Palette.SurfaceHigh, contentColor = if (hasReminder) Color.Black else Palette.Text)
             }
             Spacer(Modifier.width(8.dp))
             Text(
@@ -389,11 +429,13 @@ private fun GuideHeader(
     }
 }
 
-private val labelTime get() = SimpleDateFormat("HH:mm", Locale.getDefault())
-private val labelDay get() = SimpleDateFormat("EEE d MMM", Locale("tr"))
-
 @Composable
 private fun Ruler(env: GuideEnv) {
+    val locale = LocalContext.current.resources.configuration.locales[0]
+    val clock24h = LocalClock24h.current
+    val labelTime = remember(locale, clock24h) { SimpleDateFormat(if (clock24h) "HH:mm" else "h:mm a", locale) }
+    val labelDay = remember(locale) { SimpleDateFormat("EEE d MMM", locale) }
+    val midnightFormat = remember(locale) { SimpleDateFormat("HH:mm", locale) }
     Row(Modifier.fillMaxWidth().height(22.dp)) {
         Spacer(Modifier.width(ChannelW))
         Box(Modifier.weight(1f).fillMaxHeight().clipToBounds()) {
@@ -405,11 +447,12 @@ private fun Ruler(env: GuideEnv) {
                 androidx.compose.runtime.key(minute) {
                     val date = Date((env.winStartSec + minute * 60L) * 1000)
                     val time = labelTime.format(date)
+                    val midnight = midnightFormat.format(date) == "00:00"
                     Text(
-                        if (time == "00:00") labelDay.format(date) else time,
+                        if (midnight) labelDay.format(date) else time,
                         style = MaterialTheme.typography.labelMedium,
-                        fontWeight = if (time == "00:00") FontWeight.Bold else FontWeight.Normal,
-                        color = if (time == "00:00") Palette.Primary else Palette.TextMuted,
+                        fontWeight = if (midnight) FontWeight.Bold else FontWeight.Normal,
+                        color = if (midnight) Palette.Primary else Palette.TextMuted,
                         maxLines = 1,
                         modifier = Modifier.offset { IntOffset(((minute - env.viewStart.value) * env.dpmPx).roundToInt() + 6.dp.roundToPx(), 0) },
                     )
@@ -438,6 +481,9 @@ private fun GuideRow(
     onActivate: (GuideFocus) -> Unit,
     onMenu: (GuideFocus) -> Unit,
 ) {
+    val context = LocalContext.current
+    // Lint misses this direct ProduceStateScope.value assignment.
+    @SuppressLint("ProduceStateDoesNotAssignValue")
     val progs by produceState<List<Programme>?>(null, stream.id, gen) { value = epg.programmes(env.playlist.id, stream) }
     val archive = remember(stream) { Catchup.available(env.playlist, stream) }
     val requesters = remember { HashMap<Long, FocusRequester>() }
@@ -446,7 +492,8 @@ private fun GuideRow(
     val margin = env.viewportMin * 0.5f + 30f
     val from = env.visFrom.value - margin
     val to = env.visFrom.value + env.viewportMin + 60f + margin
-    val cells = remember(progs, from, to) {
+    val noProgramme = stringResource(R.string.play_guide_no_programme)
+    val cells = remember(progs, from, to, noProgramme) {
         val list = progs
         when {
             list == null -> emptyList()
@@ -455,7 +502,7 @@ private fun GuideRow(
                 val b1 = ceil(min(to, env.totalMin) / FillerMinutes).toInt()
                 (b0 until b1).map { b ->
                     val s = env.winStartSec + b * FillerMinutes * 60L
-                    Cell(Programme("", s, s + FillerMinutes * 60L, "Program bilgisi yok"), true)
+                    Cell(Programme("", s, s + FillerMinutes * 60L, noProgramme), true)
                 }
             }
             else -> list.filter { env.minOf(it.start) < to && env.minOf(it.stop) > from }.map { Cell(it, false) }
@@ -540,6 +587,7 @@ private fun GuideCell(
             .offset { IntOffset(((startMin - env.viewStart.value) * env.dpmPx).roundToInt(), 0) }
             .width(((durMin * DpPerMin).dp - 2.dp).coerceAtLeast(6.dp))
             .height(RowH)
+            .pointerClick(onClick, onLongClick)
             .onFocusChanged { if (it.isFocused) onFocus() },
         shape = ClickableSurfaceDefaults.shape(shape),
         colors = ClickableSurfaceDefaults.colors(

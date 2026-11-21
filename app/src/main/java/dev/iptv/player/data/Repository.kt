@@ -1,6 +1,7 @@
 package dev.iptv.player.data
 
 import android.content.Context
+import dev.iptv.player.R
 import dev.iptv.player.data.db.ContentDb
 import dev.iptv.player.data.db.ContentMapper
 import dev.iptv.player.data.db.SyncEntity
@@ -14,12 +15,16 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.SerializationException
 import dev.iptv.player.data.tmdb.Tmdb
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.IOException
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
+
+/** A localized message that is safe to display; never contains provider URLs, bodies or credentials. */
+internal class ProviderMessage(message: String) : IOException(message)
 
 /**
  * Content access. Layers: in-memory map -> Room (`content.db`, opens instantly) -> network.
@@ -68,9 +73,9 @@ class Repository(context: Context) {
 
     suspend fun verify(playlist: Playlist) {
         when (val source = playlist.source) {
-            is PlaylistSource.M3u -> if (fetchM3u(source.url).streams.isEmpty()) throw IOException("Listede içerik bulunamadı")
-            is PlaylistSource.Xtream -> if (!XtreamApi(source, http).login()) {
-                throw IOException("Giriş başarısız: kullanıcı adı veya şifre hatalı")
+            is PlaylistSource.M3u -> if (fetchM3u(source.url).streams.isEmpty()) throw providerMessage(R.string.data_playlist_empty)
+            is PlaylistSource.Xtream -> if (!fromXtream(source) { it.login() }) {
+                throw providerMessage(R.string.data_login_failed)
             }
         }
     }
@@ -120,8 +125,8 @@ class Repository(context: Context) {
 
     suspend fun seriesInfo(playlist: Playlist, seriesId: String): SeriesInfo {
         val source = playlist.source as? PlaylistSource.Xtream
-            ?: throw IOException("Bu playlist türü dizi detayını desteklemiyor")
-        return XtreamApi(source, http).seriesInfo(seriesId)
+            ?: throw providerMessage(R.string.data_series_unsupported)
+        return fromXtream(source) { it.seriesInfo(seriesId) }
     }
 
     private val vodInfoCache = HashMap<String, VodInfo?>()
@@ -130,18 +135,18 @@ class Repository(context: Context) {
         val source = playlist.source as? PlaylistSource.Xtream ?: return null
         val key = "${playlist.id}|${stream.id}"
         if (key in vodInfoCache) return vodInfoCache[key]
-        return XtreamApi(source, http).vodInfo(stream.id).also { vodInfoCache[key] = it }
+        return fromXtream(source) { it.vodInfo(stream.id) }.also { vodInfoCache[key] = it }
     }
 
     suspend fun shortEpg(playlist: Playlist, stream: Stream): List<EpgEntry> {
         val source = playlist.source as? PlaylistSource.Xtream ?: return emptyList()
-        return XtreamApi(source, http).shortEpg(stream.id)
+        return fromXtream(source) { it.shortEpg(stream.id) }
     }
 
     /** Xtream account details (status, expiry, connections); null for M3U playlists. Throws on network errors. */
     suspend fun accountInfo(playlist: Playlist): AccountInfo? {
         val source = playlist.source as? PlaylistSource.Xtream ?: return null
-        return XtreamApi(source, http).accountInfo()
+        return fromXtream(source) { it.accountInfo() }
     }
 
     /**
@@ -235,11 +240,12 @@ class Repository(context: Context) {
                 }
             }
             is PlaylistSource.Xtream -> {
-                val content = coroutineScope {
-                    val api = XtreamApi(source, http)
-                    val categories = async { api.categories(type) }
-                    val streams = async { api.streams(type) }
-                    Content(categories.await(), streams.await())
+                val content = fromXtream(source) { api ->
+                    coroutineScope {
+                        val categories = async { api.categories(type) }
+                        val streams = async { api.streams(type) }
+                        Content(categories.await(), streams.await())
+                    }
                 }
                 store(playlist, type, content, System.currentTimeMillis(), null)
             }
@@ -264,10 +270,38 @@ class Repository(context: Context) {
         forceFresh -= key
     }
 
-    private suspend fun fetchM3u(url: String): M3uDocument = withContext(Dispatchers.IO) {
-        http.newCall(Request.Builder().url(url.trim()).build()).execute().use { response ->
-            if (!response.isSuccessful) throw IOException("Liste indirilemedi: HTTP ${response.code}")
-            M3uParser.parseDocument(response.body?.string().orEmpty())
+    private suspend fun providerMessage(resource: Int, vararg args: Any): ProviderMessage =
+        ProviderMessage(settings.localizedContext(appContext).getString(resource, *args))
+
+    private suspend fun <T> providerRequest(request: suspend () -> T): T = try {
+        request()
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: ProviderMessage) {
+        throw e
+    } catch (e: XtreamFailure.Http) {
+        throw providerMessage(R.string.data_server_http, e.status)
+    } catch (_: XtreamFailure.SeriesMissing) {
+        throw providerMessage(R.string.data_series_missing)
+    } catch (_: SerializationException) {
+        throw providerMessage(R.string.data_server_invalid)
+    } catch (_: IllegalArgumentException) {
+        throw providerMessage(R.string.data_url_invalid)
+    } catch (_: IOException) {
+        throw providerMessage(R.string.data_server_unreachable)
+    }
+
+    private suspend fun <T> fromXtream(source: PlaylistSource.Xtream, request: suspend (XtreamApi) -> T): T = providerRequest {
+        val localized = settings.localizedContext(appContext)
+        request(XtreamApi(source, http) { number -> localized.getString(R.string.data_episode, number) })
+    }
+
+    private suspend fun fetchM3u(url: String): M3uDocument = providerRequest {
+        withContext(Dispatchers.IO) {
+            http.newCall(Request.Builder().url(url.trim()).build()).execute().use { response ->
+                if (!response.isSuccessful) throw providerMessage(R.string.data_playlist_http, response.code)
+                M3uParser.parseDocument(response.body?.string().orEmpty())
+            }
         }
     }
 }

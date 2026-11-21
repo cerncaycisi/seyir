@@ -13,6 +13,7 @@ data class HlsPlaylist(
     val endList: Boolean,
     val initUrl: String?,
     val encrypted: Boolean,
+    val unsupported: Boolean = false,
 ) {
     fun bestVariant(): HlsVariant? = variants.maxByOrNull { it.bandwidth }
 
@@ -32,6 +33,7 @@ data class HlsPlaylist(
             var end = false
             var init: String? = null
             var encrypted = false
+            var unsupported = false
             var seq = 0L
             var pendingBandwidth: Long? = null
             var pendingDuration: Double? = null
@@ -46,7 +48,16 @@ data class HlsPlaylist(
                         val method = attrs(line)["METHOD"]
                         if (method != null && !method.equals("NONE", true)) encrypted = true
                     }
-                    line.startsWith("#EXT-X-MAP:") -> attrs(line)["URI"]?.let { init = resolve(baseUrl, it) }
+                    line.startsWith("#EXT-X-BYTERANGE:") -> unsupported = true
+                    line.startsWith("#EXT-X-MAP:") -> {
+                        val values = attrs(line)
+                        if (values.containsKey("BYTERANGE")) unsupported = true
+                        values["URI"]?.let {
+                            val next = resolve(baseUrl, it)
+                            if (init != null && init != next) unsupported = true
+                            init = next
+                        }
+                    }
                     line.startsWith("#EXT-X-STREAM-INF:") -> pendingBandwidth = attrs(line)["BANDWIDTH"]?.toLongOrNull() ?: 0
                     line.startsWith("#EXTINF:") -> pendingDuration = line.substringAfter(':').substringBefore(',').trim().toDoubleOrNull() ?: 0.0
                     line.startsWith("#") -> Unit
@@ -62,7 +73,8 @@ data class HlsPlaylist(
                     }
                 }
             }
-            return HlsPlaylist(variants, segments, target, end, init, encrypted)
+            if (!text.trimStart().startsWith("#EXTM3U")) unsupported = true
+            return HlsPlaylist(variants, segments, target, end, init, encrypted, unsupported)
         }
     }
 }

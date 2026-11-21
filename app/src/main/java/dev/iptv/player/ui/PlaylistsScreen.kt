@@ -1,5 +1,10 @@
 package dev.iptv.player.ui
 
+import android.annotation.SuppressLint
+
+import dev.iptv.player.R
+import androidx.compose.ui.platform.LocalContext
+
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -43,11 +48,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.Border
-import androidx.tv.material3.Button
+import dev.iptv.player.ui.PointerButton as Button
 import androidx.tv.material3.ClickableSurfaceDefaults
 import androidx.tv.material3.Icon
 import androidx.tv.material3.MaterialTheme
-import androidx.tv.material3.OutlinedButton
+import dev.iptv.player.ui.PointerOutlinedButton as OutlinedButton
 import androidx.tv.material3.Surface
 import androidx.tv.material3.Text
 import dev.iptv.player.data.AccountInfo
@@ -72,6 +77,7 @@ fun PlaylistsScreen(
     /** Xtream account details for the action card; null when not applicable. May throw on network errors. */
     loadAccount: suspend (Playlist) -> AccountInfo? = { null },
 ) {
+    val uiContext = LocalContext.current
     var pendingDelete by remember { mutableStateOf<Playlist?>(null) }
     var actionTarget by remember { mutableStateOf<Playlist?>(null) }
     var focusId by remember { mutableStateOf(activeId) }
@@ -95,9 +101,9 @@ fun PlaylistsScreen(
                 BrandMark(44.dp)
                 Spacer(Modifier.width(14.dp))
                 Column {
-                    Text("Playlistler", style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold, color = Palette.Text)
+                    Text(uiContext.getString(R.string.ui_playlists), style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold, color = Palette.Text)
                     Text(
-                        "Kendi IPTV sağlayıcınızın M3U bağlantısını veya Xtream bilgilerini ekleyin.",
+                        uiContext.getString(R.string.ui_playlist_intro),
                         style = MaterialTheme.typography.bodyMedium,
                         color = Palette.TextMuted,
                     )
@@ -107,13 +113,15 @@ fun PlaylistsScreen(
 
             val action = actionTarget
             if (action != null) {
-                val account by produceState<String?>(null, action.id) {
+                // Lint misses the direct ProduceStateScope.value assignment in this producer.
+                @SuppressLint("ProduceStateDoesNotAssignValue")
+                val account by produceState<String?>(null, action.id, uiContext) {
                     value = if (action.source !is PlaylistSource.Xtream) {
                         ""
                     } else {
                         runCatching { loadAccount(action) }.fold(
-                            onSuccess = { it?.let(::describeAccount) ?: "Hesap bilgisi alınamadı" },
-                            onFailure = { if (it is CancellationException) throw it else "Hesap bilgisi alınamadı" },
+                            onSuccess = { it?.let { accountInfo -> describeAccount(uiContext, accountInfo) } ?: uiContext.getString(R.string.ui_account_failed) },
+                            onFailure = { if (it is CancellationException) throw it else uiContext.getString(R.string.ui_account_failed) },
                         )
                     }
                 }
@@ -124,7 +132,7 @@ fun PlaylistsScreen(
                     Text(describeSource(action), style = MaterialTheme.typography.bodySmall, color = Palette.TextMuted, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     if (action.source is PlaylistSource.Xtream) {
                         Text(
-                            account ?: "Hesap bilgisi alınıyor…",
+                            account ?: uiContext.getString(R.string.ui_account_loading),
                             modifier = Modifier.padding(top = 10.dp),
                             style = MaterialTheme.typography.bodyMedium,
                             color = Palette.Text,
@@ -139,22 +147,22 @@ fun PlaylistsScreen(
                     Spacer(Modifier.height(16.dp))
                     // Vazgeç holds the initial focus so a stray OK press never triggers anything.
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Button(onClick = { onEdit(action); actionTarget = null }) { Text("Düzenle") }
+                        Button(onClick = { onEdit(action); actionTarget = null }) { Text(uiContext.getString(R.string.ui_edit)) }
                         OutlinedButton(onClick = {
                             if (!refreshing) {
                                 refreshing = true
-                                refreshStatus = "Yenileniyor…"
+                                refreshStatus = uiContext.getString(R.string.ui_refreshing)
                                 scope.launch {
-                                    refreshStatus = onRefresh(action) ?: "Yenilendi"
+                                    refreshStatus = onRefresh(action) ?: uiContext.getString(R.string.ui_refreshed)
                                     refreshing = false
                                 }
                             }
-                        }) { Text("Yenile") }
-                        OutlinedButton(onClick = { pendingDelete = action; actionTarget = null }) { Text("Sil") }
+                        }) { Text(uiContext.getString(R.string.ui_refresh)) }
+                        OutlinedButton(onClick = { pendingDelete = action; actionTarget = null }) { Text(uiContext.getString(R.string.ui_delete)) }
                         OutlinedButton(
                             onClick = { focusId = action.id; actionTarget = null },
                             modifier = Modifier.focusRequester(actionCancelFocus),
-                        ) { Text("Vazgeç") }
+                        ) { Text(uiContext.getString(R.string.ui_cancel)) }
                     }
                 }
                 LaunchedEffect(action) {
@@ -172,10 +180,10 @@ fun PlaylistsScreen(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Rounded.DeleteOutline, contentDescription = null, tint = Palette.Live, modifier = Modifier.size(32.dp))
                         Spacer(Modifier.width(14.dp))
-                        Text("\"${target.name}\" silinsin mi?", style = MaterialTheme.typography.headlineSmall, color = Palette.Text)
+                        Text(uiContext.getString(R.string.ui_playlist_delete, target.name), style = MaterialTheme.typography.headlineSmall, color = Palette.Text)
                     }
                     Text(
-                        "Playlist ve bu playlist'e ait favoriler bu cihazdan kaldırılır. Aboneliğiniz etkilenmez.",
+                        uiContext.getString(R.string.ui_playlist_delete_hint),
                         modifier = Modifier.padding(top = 8.dp),
                         style = MaterialTheme.typography.bodyMedium,
                         color = Palette.TextMuted,
@@ -186,8 +194,8 @@ fun PlaylistsScreen(
                         OutlinedButton(
                             onClick = { focusId = target.id; pendingDelete = null },
                             modifier = Modifier.focusRequester(cancelFocus),
-                        ) { Text("Vazgeç") }
-                        Button(onClick = { focusId = null; onDelete(target); pendingDelete = null }) { Text("Sil") }
+                        ) { Text(uiContext.getString(R.string.ui_cancel)) }
+                        Button(onClick = { focusId = null; onDelete(target); pendingDelete = null }) { Text(uiContext.getString(R.string.ui_delete)) }
                     }
                 }
                 LaunchedEffect(target) { runCatching { cancelFocus.requestFocus() } }
@@ -218,13 +226,13 @@ fun PlaylistsScreen(
                     ) {
                         Icon(Icons.Rounded.Add, contentDescription = null)
                         Spacer(Modifier.width(8.dp))
-                        Text("Playlist ekle")
+                        Text(uiContext.getString(R.string.ui_add_playlist))
                     }
                 }
                 if (playlists.isNotEmpty()) {
                     item {
                         Text(
-                            "Düzenle, yenile veya silmek için bir playlist'in üzerinde OK tuşunu basılı tutun.",
+                            uiContext.getString(R.string.ui_playlist_options),
                             modifier = Modifier.padding(top = 12.dp),
                             style = MaterialTheme.typography.labelMedium,
                             color = Palette.TextFaint,
@@ -238,6 +246,7 @@ fun PlaylistsScreen(
 
 @Composable
 private fun PlaylistRow(playlist: Playlist, active: Boolean, onClick: () -> Unit, onLongClick: () -> Unit, modifier: Modifier = Modifier) {
+    val uiContext = LocalContext.current
     val shape = RoundedCornerShape(16.dp)
     val (icon, kind, detail) = when (val s = playlist.source) {
         // Only the host is shown: M3U URLs often embed credentials.
@@ -247,7 +256,7 @@ private fun PlaylistRow(playlist: Playlist, active: Boolean, onClick: () -> Unit
     Surface(
         onClick = onClick,
         onLongClick = onLongClick,
-        modifier = modifier.fillMaxWidth().height(68.dp),
+        modifier = modifier.fillMaxWidth().height(68.dp).pointerClick(onClick, onLongClick),
         shape = ClickableSurfaceDefaults.shape(shape),
         colors = ClickableSurfaceDefaults.colors(
             containerColor = Palette.Surface,
@@ -267,7 +276,7 @@ private fun PlaylistRow(playlist: Playlist, active: Boolean, onClick: () -> Unit
                 Text(playlist.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text("$kind · $detail", style = MaterialTheme.typography.bodySmall, color = Palette.TextMuted, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
-            if (active) Pill("AKTİF", color = Palette.Primary, contentColor = Color.White)
+            if (active) Pill(uiContext.getString(R.string.ui_active_badge), color = Palette.Primary, contentColor = Color.White)
         }
     }
 }
@@ -279,18 +288,18 @@ private fun describeSource(playlist: Playlist) = when (val s = playlist.source) 
     is PlaylistSource.Xtream -> "Xtream · ${s.server} · ${s.username}"
 }
 
-private fun describeAccount(info: AccountInfo): String {
+private fun describeAccount(uiContext: android.content.Context, info: AccountInfo): String {
     val status = when (info.status?.lowercase()) {
-        "active" -> "Aktif"
-        "expired" -> "Süresi dolmuş"
-        "banned" -> "Engellenmiş"
-        "disabled" -> "Devre dışı"
-        null -> "Bilinmiyor"
+        "active" -> uiContext.getString(R.string.ui_active)
+        "expired" -> uiContext.getString(R.string.ui_expired)
+        "banned" -> uiContext.getString(R.string.ui_banned)
+        "disabled" -> uiContext.getString(R.string.ui_disabled)
+        null -> uiContext.getString(R.string.ui_unknown)
         else -> info.status
     }
-    val expiry = info.expiresAt?.let { SimpleDateFormat("dd.MM.yyyy", Locale("tr")).format(Date(it * 1000)) } ?: "Süresiz"
-    val parts = mutableListOf("Durum: $status", "Bitiş: $expiry")
-    if (info.maxConnections != null) parts += "Bağlantı: ${info.activeConnections ?: 0}/${info.maxConnections}"
-    if (info.trial) parts += "Deneme hesabı"
+    val expiry = info.expiresAt?.let { java.text.DateFormat.getDateInstance(java.text.DateFormat.MEDIUM, uiContext.resources.configuration.locales[0]).format(Date(it * 1000)) } ?: uiContext.getString(R.string.ui_unlimited)
+    val parts = mutableListOf(uiContext.getString(R.string.ui_account_status, status), uiContext.getString(R.string.ui_account_expiry, expiry))
+    if (info.maxConnections != null) parts += uiContext.getString(R.string.ui_account_connections, info.activeConnections ?: 0, info.maxConnections)
+    if (info.trial) parts += uiContext.getString(R.string.ui_trial)
     return parts.joinToString(" · ")
 }

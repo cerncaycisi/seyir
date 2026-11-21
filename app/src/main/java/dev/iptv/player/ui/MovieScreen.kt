@@ -1,5 +1,9 @@
 package dev.iptv.player.ui
 
+import android.annotation.SuppressLint
+
+import dev.iptv.player.R
+
 import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
@@ -75,10 +79,13 @@ fun MovieScreen(
     onPlay: (List<Stream>, Int) -> Unit,
     onMovie: (Stream) -> Unit,
 ) {
+    val uiContext = LocalContext.current
+    // Lint misses the direct ProduceStateScope.value assignment in this producer.
+    @SuppressLint("ProduceStateDoesNotAssignValue")
     val state by produceState<Load<MovieData>>(Load.Loading, playlist.id, movieId) {
         value = loadCatching {
             val items = repo.content(playlist, ContentType.MOVIE).items
-            val stream = items.firstOrNull { it.id == movieId } ?: throw IOException("Film bulunamadı")
+            val stream = items.firstOrNull { it.id == movieId } ?: throw IOException(uiContext.getString(R.string.ui_no_movie))
             val similar = items.filter { it.categoryId == stream.categoryId && it.id != stream.id }.take(30)
             val resume = repo.store.position(favoriteKey(playlist, stream))
             MovieData(stream, similar, if (resume >= dev.iptv.player.data.HistoryEntry.MIN_RESUME_MS) resume else 0L)
@@ -99,6 +106,7 @@ private fun MovieDetail(
     onPlay: (List<Stream>, Int) -> Unit,
     onMovie: (Stream) -> Unit,
 ) {
+    val uiContext = LocalContext.current
     val stream = data.stream
     val key = favoriteKey(playlist, stream)
     val scope = rememberCoroutineScope()
@@ -106,6 +114,8 @@ private fun MovieDetail(
     val favorites by repo.store.favorites.collectAsState(initial = emptySet())
     val isFavorite = key in favorites
     val progress by repo.history.entries.collectAsState(initial = emptyList())
+    // Lint misses the direct ProduceStateScope.value assignment in this producer.
+    @SuppressLint("ProduceStateDoesNotAssignValue")
     val info by produceState<VodInfo?>(null, stream.id) { value = runCatching { repo.movieDetails(playlist, stream) }.getOrNull() }
     val primary = remember { FocusRequester() }
     LaunchedEffect(Unit) {
@@ -145,7 +155,7 @@ private fun MovieDetail(
                     info?.year ?: stream.year,
                     (info?.rating ?: stream.rating)?.let { "★ $it" },
                     info?.genre ?: stream.genre,
-                    durationLabel(info),
+                    durationLabel(uiContext, info),
                 ).forEach { Pill(it) }
             }
             (info?.plot ?: stream.plot)?.let {
@@ -158,37 +168,37 @@ private fun MovieDetail(
                     overflow = TextOverflow.Ellipsis,
                 )
             }
-            info?.director?.let { CreditLine("Yönetmen", it) }
-            info?.cast?.let { CreditLine("Oyuncular", it) }
+            info?.director?.let { CreditLine(uiContext.getString(R.string.ui_director), it) }
+            info?.cast?.let { CreditLine(uiContext.getString(R.string.ui_cast), it) }
 
             Row(Modifier.padding(top = 18.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 if (data.resumeMs > 0) {
                     ActionButton(
-                        "Kaldığın yerden devam et (${formatPosition(data.resumeMs)})",
+                        uiContext.getString(R.string.ui_resume_position, formatPosition(data.resumeMs)),
                         Icons.Rounded.PlayArrow,
                         primary = true,
                         onClick = { onPlay(listOf(stream), 0) },
                         modifier = Modifier.focusRequester(primary),
                     )
-                    ActionButton("Baştan başla", Icons.Rounded.Replay) {
+                    ActionButton(uiContext.getString(R.string.ui_restart), Icons.Rounded.Replay) {
                         scope.launch {
                             repo.store.savePosition(key, 0)
                             onPlay(listOf(stream), 0)
                         }
                     }
                 } else {
-                    ActionButton("Oynat", Icons.Rounded.PlayArrow, primary = true, onClick = { onPlay(listOf(stream), 0) }, modifier = Modifier.focusRequester(primary))
+                    ActionButton(uiContext.getString(R.string.ui_play), Icons.Rounded.PlayArrow, primary = true, onClick = { onPlay(listOf(stream), 0) }, modifier = Modifier.focusRequester(primary))
                 }
                 ActionButton(
-                    if (isFavorite) "Favorilerde" else "Favorilere ekle",
+                    if (isFavorite) uiContext.getString(R.string.ui_in_favorites) else uiContext.getString(R.string.ui_add_favorites),
                     if (isFavorite) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
                 ) { scope.launch { repo.store.toggleFavorite(key) } }
-                info?.trailer?.let { id -> ActionButton("Fragman", Icons.Rounded.Theaters) { openTrailer(context, id) } }
+                info?.trailer?.let { id -> ActionButton(uiContext.getString(R.string.ui_trailer), Icons.Rounded.Theaters) { openTrailer(context, id) } }
             }
 
             if (data.similar.isNotEmpty()) {
                 Spacer(Modifier.height(18.dp))
-                SectionTitle("Benzer içerikler")
+                SectionTitle(uiContext.getString(R.string.ui_similar))
                 val byKey = progress.associate { it.favKey to (if (it.finished) 1f else it.fraction) }
                 LazyRow(
                     horizontalArrangement = Arrangement.spacedBy(14.dp),
@@ -209,7 +219,7 @@ private fun MovieDetail(
             if (repo.tmdb.configured) {
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    "Bu ürün TMDB API'sini kullanır, ancak TMDB tarafından onaylanmamış veya sertifikalandırılmamıştır.",
+                    uiContext.getString(R.string.ui_tmdb_notice),
                     style = MaterialTheme.typography.labelSmall,
                     color = Palette.TextFaint,
                 )
@@ -241,7 +251,7 @@ internal fun ActionButton(
 ) {
     Surface(
         onClick = onClick,
-        modifier = modifier,
+        modifier = modifier.pointerClick(onClick),
         shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(50)),
         colors = ClickableSurfaceDefaults.colors(
             containerColor = if (primary) Palette.Text else Palette.Surface,
@@ -267,12 +277,12 @@ internal fun formatPosition(ms: Long): String {
     return if (h > 0) "%d:%02d:%02d".format(h, m, s) else "%02d:%02d".format(m, s)
 }
 
-private fun durationLabel(info: VodInfo?): String? {
+private fun durationLabel(uiContext: Context, info: VodInfo?): String? {
     info ?: return null
     info.durationSecs?.let { secs ->
         val h = secs / 3600
         val m = (secs % 3600) / 60
-        return if (h > 0) "$h sa $m dk" else "$m dk"
+        return if (h > 0) uiContext.getString(R.string.ui_duration_hours, h, m) else uiContext.getString(R.string.ui_duration_minutes, m)
     }
     return info.duration
 }

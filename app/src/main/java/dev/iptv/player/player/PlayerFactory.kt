@@ -2,6 +2,7 @@ package dev.iptv.player.player
 
 import android.content.Context
 import android.os.Build
+import android.view.LayoutInflater
 import android.view.Surface
 import android.view.SurfaceView
 import androidx.annotation.OptIn
@@ -15,6 +16,7 @@ import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.ui.PlayerView
+import dev.iptv.player.R
 import dev.iptv.player.data.Setting
 import dev.iptv.player.data.SettingsStore
 
@@ -49,6 +51,26 @@ data class PlayerConfig(
 class RequestHeaders {
     @Volatile
     var value: Map<String, String> = emptyMap()
+}
+
+/**
+ * Software-emulated displays need video in the same compositor as Compose.
+ * Real TVs retain SurfaceView for HDR, efficient decoding and frame-rate switching.
+ */
+@OptIn(UnstableApi::class)
+fun createPlayerView(context: Context): PlayerView {
+    val emulatedDisplay = Build.HARDWARE == "ranchu" || Build.HARDWARE == "goldfish"
+    return (if (emulatedDisplay) {
+        LayoutInflater.from(context).inflate(R.layout.player_texture_view, null, false) as PlayerView
+    } else {
+        PlayerView(context)
+    }).apply {
+        useController = false
+        keepScreenOn = true
+        isFocusable = false
+        descendantFocusability = android.view.ViewGroup.FOCUS_BLOCK_DESCENDANTS
+        setShowBuffering(PlayerView.SHOW_BUFFERING_ALWAYS)
+    }
 }
 
 @OptIn(UnstableApi::class)

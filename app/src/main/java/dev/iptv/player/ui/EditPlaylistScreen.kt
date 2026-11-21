@@ -1,5 +1,8 @@
 package dev.iptv.player.ui
 
+import dev.iptv.player.R
+import androidx.compose.ui.platform.LocalContext
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -35,10 +38,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
-import androidx.tv.material3.Button
+import dev.iptv.player.ui.PointerButton as Button
 import androidx.tv.material3.Icon
 import androidx.tv.material3.MaterialTheme
-import androidx.tv.material3.OutlinedButton
+import dev.iptv.player.ui.PointerOutlinedButton as OutlinedButton
 import androidx.tv.material3.Text
 import dev.iptv.player.data.Playlist
 import dev.iptv.player.data.PlaylistSource
@@ -48,6 +51,7 @@ import kotlinx.coroutines.launch
 /** Edits name and credentials / URL of an existing playlist. Changed credentials are verified before saving. */
 @Composable
 fun EditPlaylistScreen(repo: Repository, playlist: Playlist, onDone: () -> Unit) {
+    val uiContext = LocalContext.current
     val scope = rememberCoroutineScope()
     val source = playlist.source
     var name by rememberSaveable { mutableStateOf(playlist.name) }
@@ -68,7 +72,7 @@ fun EditPlaylistScreen(repo: Repository, playlist: Playlist, onDone: () -> Unit)
             is PlaylistSource.M3u -> newSource.url.isNotBlank()
         }
         if (!valid) {
-            error = "Lütfen tüm alanları doldurun"
+            error = uiContext.getString(R.string.ui_fill_fields)
             return
         }
         val updated = playlist.copy(name = name.ifBlank { playlist.name }, source = newSource)
@@ -95,21 +99,21 @@ fun EditPlaylistScreen(repo: Repository, playlist: Playlist, onDone: () -> Unit)
             Modifier.widthIn(max = 640.dp).fillMaxWidth().verticalScroll(rememberScrollState()).padding(vertical = 32.dp, horizontal = 24.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            Text("Playlist düzenle", style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold, color = Palette.Text)
+            Text(uiContext.getString(R.string.ui_edit_playlist), style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold, color = Palette.Text)
             Text(
-                "Bağlantı bilgileri değiştirilirse kaydetmeden önce doğrulanır.",
+                uiContext.getString(R.string.ui_edit_instructions),
                 style = MaterialTheme.typography.bodyMedium,
                 color = Palette.TextMuted,
             )
             Spacer(Modifier.height(8.dp))
-            TvTextField(name, { name = it }, "Ad", leadingIcon = Icons.Rounded.Label)
+            TvTextField(name, { name = it }, uiContext.getString(R.string.ui_name), leadingIcon = Icons.Rounded.Label)
             when (source) {
                 is PlaylistSource.Xtream -> {
-                    TvTextField(server, { server = it }, "Sunucu adresi", keyboardType = KeyboardType.Uri, leadingIcon = Icons.Rounded.Dns)
-                    TvTextField(username, { username = it }, "Kullanıcı adı", leadingIcon = Icons.Rounded.Person)
-                    TvTextField(password, { password = it }, "Şifre", password = true, leadingIcon = Icons.Rounded.Lock)
+                    TvTextField(server, { server = it }, uiContext.getString(R.string.ui_server), keyboardType = KeyboardType.Uri, leadingIcon = Icons.Rounded.Dns)
+                    TvTextField(username, { username = it }, uiContext.getString(R.string.ui_username), leadingIcon = Icons.Rounded.Person)
+                    TvTextField(password, { password = it }, uiContext.getString(R.string.ui_password), password = true, leadingIcon = Icons.Rounded.Lock)
                 }
-                is PlaylistSource.M3u -> TvTextField(url, { url = it }, "M3U adresi (http://…)", keyboardType = KeyboardType.Uri, leadingIcon = Icons.Rounded.Link)
+                is PlaylistSource.M3u -> TvTextField(url, { url = it }, uiContext.getString(R.string.ui_m3u_url), keyboardType = KeyboardType.Uri, leadingIcon = Icons.Rounded.Link)
             }
             error?.let {
                 Row(
@@ -124,10 +128,10 @@ fun EditPlaylistScreen(repo: Repository, playlist: Playlist, onDone: () -> Unit)
             Spacer(Modifier.height(4.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Button(onClick = { if (!busy) save() }, contentPadding = PaddingValues(horizontal = 28.dp, vertical = 12.dp)) {
-                    Text(if (busy) "Kontrol ediliyor…" else "Kaydet")
+                    Text(if (busy) uiContext.getString(R.string.ui_checking) else uiContext.getString(R.string.ui_save))
                 }
                 OutlinedButton(onClick = { if (!busy) onDone() }, contentPadding = PaddingValues(horizontal = 28.dp, vertical = 12.dp)) {
-                    Text("Vazgeç")
+                    Text(uiContext.getString(R.string.ui_cancel))
                 }
             }
         }

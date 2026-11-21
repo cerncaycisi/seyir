@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="data_playlist_empty">No content found in this playlist</string>
+    <string name="data_login_failed">Login failed: incorrect username or password</string>
+    <string name="data_series_unsupported">This playlist type does not support series details</string>
+    <string name="data_server_http">Server error: HTTP %1$d</string>
+    <string name="data_series_missing">Series not found</string>
+    <string name="data_server_invalid">The server returned invalid data</string>
+    <string name="data_url_invalid">Enter a valid server or playlist URL</string>
+    <string name="data_server_unreachable">Unable to reach the server. Check your connection and URL.</string>
+    <string name="data_playlist_http">Unable to download playlist: HTTP %1$d</string>
+    <string name="data_episode">Episode %1$d</string>
+    <string name="data_remote_forbidden">Access denied</string>
+    <string name="data_remote_locked">Too many failed attempts. Close and reopen the window on your TV.</string>
+    <string name="data_remote_not_found">Page not found</string>
+    <string name="data_backup_version">Unsupported backup version: %1$d</string>
+    <string name="data_backup_invalid">Invalid backup file</string>
+    <string name="data_request_invalid">Invalid or oversized request</string>
+    <string name="data_backup_unavailable">Backup is currently unavailable</string>
+    <string name="data_operation_failed">Unable to complete the operation. Please try again.</string>
+    <string name="data_url_scheme">The URL must start with http:// or https://</string>
+    <string name="data_credentials_required">Username and password are required</string>
+    <string name="data_m3u_playlist">M3U playlist</string>
+    <string name="data_verification_failed">Verification failed. Check your connection details.</string>
+    <string name="data_playlist_added">“%1$s” was added to your TV</string>
+    <string name="data_file_invalid">Invalid or oversized file</string>
+    <string name="data_backup_restored">Backup restored</string>
+    <string name="data_add_title">Add playlist</string>
+    <string name="data_add_hint">Your details are sent to the TV, verified and saved.</string>
+    <string name="data_m3u_link">M3U link</string>
+    <string name="data_optional_name">Name (optional)</string>
+    <string name="data_server_url">Server URL</string>
+    <string name="data_username">Username</string>
+    <string name="data_password">Password</string>
+    <string name="data_m3u_url">M3U URL</string>
+    <string name="data_send_tv">Send to TV</string>
+    <string name="data_verifying">Verifying…</string>
+    <string name="data_tv_unreachable">Unable to reach the TV</string>
+    <string name="data_backup_title">Back up / Restore</string>
+    <string name="data_backup_hint">Save your settings and playlists to your phone or restore a backup.</string>
+    <string name="data_backup_download">Download backup</string>
+    <string name="data_backup_file">Restore from a backup file</string>
+    <string name="data_restore">Restore</string>
+    <string name="data_choose_file">Choose a file first</string>
+    <string name="data_uploading">Uploading…</string>
+</resources>

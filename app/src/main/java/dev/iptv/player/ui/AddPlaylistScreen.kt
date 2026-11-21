@@ -1,5 +1,8 @@
 package dev.iptv.player.ui
 
+import dev.iptv.player.R
+import androidx.compose.ui.platform.LocalContext
+
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -44,7 +47,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.Border
-import androidx.tv.material3.Button
+import dev.iptv.player.ui.PointerButton as Button
 import androidx.tv.material3.ClickableSurfaceDefaults
 import androidx.tv.material3.Icon
 import androidx.tv.material3.MaterialTheme
@@ -58,6 +61,7 @@ import java.util.UUID
 
 @Composable
 fun AddPlaylistScreen(repo: Repository, onSaved: () -> Unit) {
+    val uiContext = LocalContext.current
     val scope = rememberCoroutineScope()
     var xtream by rememberSaveable { mutableStateOf(true) }
     var name by rememberSaveable { mutableStateOf("") }
@@ -73,10 +77,10 @@ fun AddPlaylistScreen(repo: Repository, onSaved: () -> Unit) {
         val source = if (xtream) PlaylistSource.Xtream(server, username, password) else PlaylistSource.M3u(url)
         val valid = if (xtream) server.isNotBlank() && username.isNotBlank() && password.isNotBlank() else url.isNotBlank()
         if (!valid) {
-            error = "Lütfen tüm alanları doldurun"
+            error = uiContext.getString(R.string.ui_fill_fields)
             return
         }
-        val playlist = Playlist(UUID.randomUUID().toString(), name.ifBlank { if (xtream) server else "M3U listesi" }, source)
+        val playlist = Playlist(UUID.randomUUID().toString(), name.ifBlank { if (xtream) server else uiContext.getString(R.string.ui_m3u_list) }, source)
         busy = true
         error = null
         scope.launch {
@@ -98,21 +102,21 @@ fun AddPlaylistScreen(repo: Repository, onSaved: () -> Unit) {
             Modifier.widthIn(max = 640.dp).fillMaxWidth().verticalScroll(rememberScrollState()).padding(vertical = 32.dp, horizontal = 24.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            Text("Playlist ekle", style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold, color = Palette.Text)
-            Text("Bağlantı türünü seçin ve bilgileri girin. Bilgiler kaydetmeden önce doğrulanır.", style = MaterialTheme.typography.bodyMedium, color = Palette.TextMuted)
+            Text(uiContext.getString(R.string.ui_add_playlist), style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold, color = Palette.Text)
+            Text(uiContext.getString(R.string.ui_add_instructions), style = MaterialTheme.typography.bodyMedium, color = Palette.TextMuted)
             Spacer(Modifier.height(8.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                TypeOption(Icons.Rounded.Dns, "Xtream Codes", "Sunucu, kullanıcı adı ve şifre", xtream, Modifier.weight(1f)) { xtream = true }
-                TypeOption(Icons.Rounded.Link, "M3U bağlantısı", "Tek bir playlist adresi", !xtream, Modifier.weight(1f)) { xtream = false }
+                TypeOption(Icons.Rounded.Dns, "Xtream Codes", uiContext.getString(R.string.ui_xtream_details), xtream, Modifier.weight(1f)) { xtream = true }
+                TypeOption(Icons.Rounded.Link, uiContext.getString(R.string.ui_m3u_connection), uiContext.getString(R.string.ui_single_url), !xtream, Modifier.weight(1f)) { xtream = false }
             }
             Spacer(Modifier.height(8.dp))
-            TvTextField(name, { name = it }, "Ad (isteğe bağlı)", leadingIcon = Icons.Rounded.Label)
+            TvTextField(name, { name = it }, uiContext.getString(R.string.ui_optional_name), leadingIcon = Icons.Rounded.Label)
             if (xtream) {
-                TvTextField(server, { server = it }, "Sunucu adresi (ör. http://sunucu.com:8080)", keyboardType = KeyboardType.Uri, leadingIcon = Icons.Rounded.Dns)
-                TvTextField(username, { username = it }, "Kullanıcı adı", leadingIcon = Icons.Rounded.Person)
-                TvTextField(password, { password = it }, "Şifre", password = true, leadingIcon = Icons.Rounded.Lock)
+                TvTextField(server, { server = it }, uiContext.getString(R.string.ui_server_example), keyboardType = KeyboardType.Uri, leadingIcon = Icons.Rounded.Dns)
+                TvTextField(username, { username = it }, uiContext.getString(R.string.ui_username), leadingIcon = Icons.Rounded.Person)
+                TvTextField(password, { password = it }, uiContext.getString(R.string.ui_password), password = true, leadingIcon = Icons.Rounded.Lock)
             } else {
-                TvTextField(url, { url = it }, "M3U adresi (http://…)", keyboardType = KeyboardType.Uri, leadingIcon = Icons.Rounded.Link)
+                TvTextField(url, { url = it }, uiContext.getString(R.string.ui_m3u_url), keyboardType = KeyboardType.Uri, leadingIcon = Icons.Rounded.Link)
             }
             error?.let {
                 Row(
@@ -126,9 +130,9 @@ fun AddPlaylistScreen(repo: Repository, onSaved: () -> Unit) {
             }
             Spacer(Modifier.height(4.dp))
             Button(onClick = { if (!busy) save() }, contentPadding = PaddingValues(horizontal = 28.dp, vertical = 12.dp)) {
-                Text(if (busy) "Kontrol ediliyor…" else "Kaydet ve bağlan")
+                Text(if (busy) uiContext.getString(R.string.ui_checking) else uiContext.getString(R.string.ui_save_connect))
             }
-            TvButton("Telefondan ekle", { phone = true }, icon = Icons.Rounded.PhoneAndroid)
+            TvButton(uiContext.getString(R.string.ui_add_phone), { phone = true }, icon = Icons.Rounded.PhoneAndroid)
         }
     }
 }
@@ -146,7 +150,7 @@ private fun TypeOption(
     val shape = RoundedCornerShape(16.dp)
     Surface(
         onClick = onClick,
-        modifier = modifier.height(72.dp),
+        modifier = modifier.height(72.dp).pointerClick(onClick),
         shape = ClickableSurfaceDefaults.shape(shape),
         colors = ClickableSurfaceDefaults.colors(
             containerColor = if (selected) Palette.SurfaceHigh else Palette.Surface,

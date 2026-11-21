@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="record_already_recording">Bu kanal zaten kaydediliyor</string>
+    <string name="record_already_scheduled">Bu program için kayıt zaten mevcut</string>
+    <string name="record_programme_ended">Program zaten bitmiş</string>
+    <string name="record_scheduled">Kayıt planlandı: %1$s</string>
+    <string name="record_started">Kayıt başladı: %1$s</string>
+    <string name="record_service_failed">Kayıt servisi başlatılamadı</string>
+    <string name="record_space_free">Yetersiz depolama alanı (boş: %1$s)</string>
+    <string name="record_interrupted">Kayıt yarıda kesildi</string>
+    <string name="record_missed">Zamanında başlatılamadı</string>
+    <string name="record_exact_alarm_required">Zamanlanmış kayıt için sistem ayarlarında Alarmlar ve hatırlatıcılar iznini açın, sonra kaydı tekrar planlayın.</string>
+    <string name="record_playlist_missing">Playlist bulunamadı</string>
+    <string name="record_channel_missing">Kanal bulunamadı</string>
+    <string name="record_no_space">Yetersiz depolama alanı</string>
+    <string name="record_storage_full">Depolama alanı doldu</string>
+    <string name="record_no_data">Veri alınamadı</string>
+    <string name="record_failed">Kayıt hatası</string>
+    <string name="record_channel_name">Kayıtlar</string>
+    <string name="record_preparing">Hazırlanıyor…</string>
+    <string name="record_default_channel">Kanal</string>
+    <string name="record_notification_single">%1$s · %2$s</string>
+    <string name="record_notification_multiple">%1$d kayıt · %2$s</string>
+    <string name="record_notification_title">Kayıt yapılıyor</string>
+    <string name="record_stop">Durdur</string>
+    <string name="record_timeout">Sistemin arka plan kayıt süresi sınırına ulaşıldı</string>
+    <string name="record_empty_response">Boş yanıt</string>
+    <string name="record_stream_interrupted">Yayın kesildi</string>
+    <string name="record_encrypted_hls">Şifreli HLS yayını kaydedilemez</string>
+    <string name="record_unsupported_hls">Bu HLS biçimi kayıt için desteklenmiyor</string>
+    <string name="record_http_error">Yayın sunucusu HTTP %1$d hatası döndürdü</string>
+    <string name="record_network_error">Yayın indirilemedi. Bağlantıyı kontrol edin.</string>
+    <string name="record_search_live">Canlı TV</string>
+    <string name="record_search_movie">Film</string>
+    <string name="record_search_series">Dizi</string>
+</resources>

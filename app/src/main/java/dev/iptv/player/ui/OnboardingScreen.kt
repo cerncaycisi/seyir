@@ -25,7 +25,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.tv.material3.Button
+import dev.iptv.player.ui.PointerButton as Button
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import dev.iptv.player.R

@@ -1,5 +1,9 @@
 package dev.iptv.player.ui
 
+import androidx.compose.ui.res.stringResource
+
+import dev.iptv.player.R
+
 import android.net.Uri
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
@@ -89,20 +93,20 @@ fun RecordingsSection(repo: Repository, playlist: Playlist, onPlay: (List<Stream
     fun play(rec: Recording) {
         val path = rec.filePath
         if (path == null || !File(path).exists()) {
-            message = "Kayıt dosyası bulunamadı"
+            message = context.getString(R.string.play_record_file_missing)
             return
         }
         onPlay(listOf(recordingStream(rec)), 0)
     }
 
     Column(Modifier.fillMaxSize()) {
-        ScreenTitle("Kayıtlar", "Boş alan: ${RecordingMath.formatBytes(free)}  ·  Kayıtlar uygulamaya özel depolamada tutulur")
+        ScreenTitle(context.getString(R.string.play_recordings), stringResource(R.string.play_record_storage, RecordingMath.formatBytes(free)))
         message?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = Palette.Gold, modifier = Modifier.padding(bottom = 8.dp)) }
         if (recs.isEmpty()) {
             EmptyState(
                 Icons.Rounded.FiberManualRecord,
-                "Henüz kayıt yok",
-                "Canlı yayında Ayarlar panelinden \"Kaydı başlat\", Rehber'de ise gelecek programlarda \"Kaydı planla\" seçin",
+                context.getString(R.string.play_record_empty),
+                context.getString(R.string.play_record_help),
             )
         } else {
             LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp), contentPadding = PaddingValues(bottom = 48.dp, start = 4.dp, end = 4.dp, top = 4.dp)) {
@@ -120,18 +124,18 @@ fun RecordingsSection(repo: Repository, playlist: Playlist, onPlay: (List<Stream
 
     menu?.let { r ->
         val actions = buildList {
-            if (r.status == RecStatus.DONE) add(CardAction("Oynat", Icons.Rounded.PlayArrow) { menu = null; play(r) })
-            if (r.status == RecStatus.RECORDING) add(CardAction("Kaydı durdur", Icons.Rounded.Stop) { menu = null; RecordingManager.stop(context, r.id) })
-            if (r.status == RecStatus.SCHEDULED) add(CardAction("Planı iptal et", Icons.Rounded.Stop) { menu = null; scope.launch { RecordingManager.cancel(context, r) } })
-            if (r.status != RecStatus.SCHEDULED) add(CardAction("Sil", Icons.Rounded.Delete, destructive = true) { menu = null; confirmDelete = r })
+            if (r.status == RecStatus.DONE) add(CardAction(context.getString(R.string.play_play), Icons.Rounded.PlayArrow) { menu = null; play(r) })
+            if (r.status == RecStatus.RECORDING) add(CardAction(context.getString(R.string.play_stop_recording), Icons.Rounded.Stop) { menu = null; RecordingManager.stop(context, r.id) })
+            if (r.status == RecStatus.SCHEDULED) add(CardAction(context.getString(R.string.play_record_cancel), Icons.Rounded.Stop) { menu = null; scope.launch { RecordingManager.cancel(context, r) } })
+            if (r.status != RecStatus.SCHEDULED) add(CardAction(context.getString(R.string.play_delete), Icons.Rounded.Delete, destructive = true) { menu = null; confirmDelete = r })
         }
         ActionCard(r.channelName, r.title, actions, onDismiss = { menu = null })
     }
     confirmDelete?.let { r ->
         ConfirmDialog(
-            title = "Kaydı sil",
-            message = "\"${r.title.ifBlank { r.channelName }}\" cihazdan kalıcı olarak silinecek.",
-            confirmLabel = "Sil",
+            title = context.getString(R.string.play_record_delete),
+            message = stringResource(R.string.play_record_delete_confirm, r.title.ifBlank { r.channelName }),
+            confirmLabel = context.getString(R.string.play_delete),
             onConfirm = { confirmDelete = null; scope.launch { RecordingManager.delete(context, r) } },
             onDismiss = { confirmDelete = null },
         )
@@ -164,9 +168,10 @@ private fun RecordingRow(rec: Recording, onClick: () -> Unit, onLongClick: () ->
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
+                val recordedAt = formatDayTime(rec.startAt / 1000)
                 val detail = buildList {
                     add(rec.channelName)
-                    add(formatDayTime(rec.startAt / 1000))
+                    add(recordedAt)
                     rec.error?.takeIf { rec.status != RecStatus.DONE || it.isNotBlank() }?.let { add(it) }
                 }.joinToString("  ·  ")
                 Text(detail, style = MaterialTheme.typography.labelMedium, color = Palette.TextMuted, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -176,10 +181,10 @@ private fun RecordingRow(rec: Recording, onClick: () -> Unit, onLongClick: () ->
                 Spacer(Modifier.width(12.dp))
             }
             when (rec.status) {
-                RecStatus.SCHEDULED -> Pill("PLANLANDI", color = Palette.Gold, contentColor = Color.Black)
-                RecStatus.RECORDING -> Pill("KAYIT", color = Palette.Live, contentColor = Color.White)
-                RecStatus.DONE -> Pill("HAZIR", color = Palette.Primary, contentColor = Color.White)
-                else -> Pill("HATA")
+                RecStatus.SCHEDULED -> Pill(stringResource(R.string.play_record_scheduled), color = Palette.Gold, contentColor = Color.Black)
+                RecStatus.RECORDING -> Pill(stringResource(R.string.play_record_active), color = Palette.Live, contentColor = Color.White)
+                RecStatus.DONE -> Pill(stringResource(R.string.play_record_ready), color = Palette.Primary, contentColor = Color.White)
+                else -> Pill(stringResource(R.string.play_record_error))
             }
         }
     }

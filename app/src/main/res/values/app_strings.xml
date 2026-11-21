@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_refresh_failed">Yenilenemedi</string>
+    <string name="app_loading">Yükleniyor…</string>
+    <string name="app_content_unavailable">İçerik kullanılamıyor veya bu profil için gizli ya da kilitli.</string>
+    <string name="epg_no_url">Bu playlist için EPG adresi yok. Ayarlardan bir XMLTV adresi girin.</string>
+    <string name="epg_download_failed">EPG indirilemedi: HTTP %1$d</string>
+    <string name="epg_empty_response">EPG yanıtı boş</string>
+    <string name="epg_empty_file">EPG dosyası okunamadı veya boş</string>
+    <string name="epg_notification_channel">Program hatırlatıcıları</string>
+    <string name="epg_notification_starting">%1$s şimdi başlıyor</string>
+</resources>

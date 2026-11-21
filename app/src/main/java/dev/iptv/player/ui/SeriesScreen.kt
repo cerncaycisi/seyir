@@ -1,5 +1,10 @@
 package dev.iptv.player.ui
 
+import android.annotation.SuppressLint
+
+import dev.iptv.player.R
+import androidx.compose.ui.platform.LocalContext
+
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -70,6 +75,8 @@ import kotlinx.coroutines.launch
 
 @Composable
 fun SeriesScreen(repo: Repository, playlist: Playlist, seriesId: String, onPlay: (List<Stream>, Int) -> Unit) {
+    // Lint misses the direct ProduceStateScope.value assignment in this producer.
+    @SuppressLint("ProduceStateDoesNotAssignValue")
     val state by produceState<Load<SeriesInfo>>(Load.Loading, seriesId) {
         value = loadCatching { repo.seriesDetails(playlist, seriesId) }
     }
@@ -84,12 +91,13 @@ private class ContinueTarget(val index: Int, val resuming: Boolean)
 
 @Composable
 private fun SeriesDetail(repo: Repository, playlist: Playlist, seriesId: String, info: SeriesInfo, onPlay: (List<Stream>, Int) -> Unit) {
+    val uiContext = LocalContext.current
     val scope = rememberCoroutineScope()
     val seasons = remember(info) { info.episodes.groupBy { it.season }.toSortedMap() }
     // Every episode as a playable stream; ids and series id let history and deep links find them again.
-    val all = remember(info) {
+    val all = remember(uiContext, info) {
         info.episodes.map { e ->
-            Stream(e.id, "${info.name} · S${e.season}B${e.number} · ${e.title}", info.cover, e.url, "", ContentType.SERIES, seriesId = seriesId)
+            Stream(e.id, uiContext.getString(R.string.ui_episode_name, info.name, e.season, e.number, e.title), info.cover, e.url, "", ContentType.SERIES, seriesId = seriesId)
         }
     }
     val seriesStream = remember(info) { Stream(seriesId, info.name, info.cover, "", "", ContentType.SERIES) }
@@ -156,8 +164,8 @@ private fun SeriesDetail(repo: Repository, playlist: Playlist, seriesId: String,
                     info.year,
                     info.rating?.let { "★ $it" },
                     info.genre,
-                    "${seasons.size} sezon",
-                    "${info.episodes.size} bölüm",
+                    uiContext.getString(R.string.ui_season_count, seasons.size),
+                    uiContext.getString(R.string.ui_episode_count, info.episodes.size),
                 ).forEach { Pill(it) }
             }
             info.plot?.let {
@@ -172,14 +180,14 @@ private fun SeriesDetail(repo: Repository, playlist: Playlist, seriesId: String,
             }
             Spacer(Modifier.height(14.dp))
             if (seasons.isEmpty()) {
-                EmptyState(Icons.Rounded.VideoLibrary, "Bu dizide bölüm bulunamadı")
+                EmptyState(Icons.Rounded.VideoLibrary, uiContext.getString(R.string.ui_no_episodes))
                 return@Column
             }
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.padding(start = 4.dp)) {
                 val label = when {
-                    target == null -> "Oynat"
-                    target.resuming -> "Kaldığın yerden devam et · ${episodeTag(info, target.index)}"
-                    else -> "Sıradaki bölüm · ${episodeTag(info, target.index)}"
+                    target == null -> uiContext.getString(R.string.ui_play)
+                    target.resuming -> uiContext.getString(R.string.ui_resume_episode, episodeTag(uiContext, info, target.index))
+                    else -> uiContext.getString(R.string.ui_next_episode, episodeTag(uiContext, info, target.index))
                 }
                 ActionButton(
                     label,
@@ -189,13 +197,13 @@ private fun SeriesDetail(repo: Repository, playlist: Playlist, seriesId: String,
                     modifier = Modifier.focusRequester(primary),
                 )
                 ActionButton(
-                    if (isFavorite) "Favorilerde" else "Favorilere ekle",
+                    if (isFavorite) uiContext.getString(R.string.ui_in_favorites) else uiContext.getString(R.string.ui_add_favorites),
                     if (isFavorite) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
                 ) { scope.launch { repo.store.toggleFavorite(favKey) } }
             }
             Spacer(Modifier.height(8.dp))
             LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp), contentPadding = PaddingValues(vertical = 6.dp, horizontal = 4.dp)) {
-                items(seasons.keys.toList()) { n -> SeasonChip("Sezon $n", n == season) { chosenSeason = n } }
+                items(seasons.keys.toList()) { n -> SeasonChip(uiContext.getString(R.string.ui_season, n), n == season) { chosenSeason = n } }
             }
             Spacer(Modifier.height(8.dp))
             LazyColumn(
@@ -215,7 +223,7 @@ private fun SeriesDetail(repo: Repository, playlist: Playlist, seriesId: String,
             }
             if (repo.tmdb.configured) {
                 Text(
-                    "Bu ürün TMDB API'sini kullanır, ancak TMDB tarafından onaylanmamış veya sertifikalandırılmamıştır.",
+                    uiContext.getString(R.string.ui_tmdb_notice),
                     style = MaterialTheme.typography.labelSmall,
                     color = Palette.TextFaint,
                 )
@@ -224,13 +232,14 @@ private fun SeriesDetail(repo: Repository, playlist: Playlist, seriesId: String,
     }
 }
 
-private fun episodeTag(info: SeriesInfo, index: Int) = info.episodes[index].let { "S${it.season}B${it.number}" }
+private fun episodeTag(uiContext: android.content.Context, info: SeriesInfo, index: Int) = info.episodes[index].let { uiContext.getString(R.string.ui_episode_tag, it.season, it.number) }
 
 // One composable for both states so selecting a season does not drop focus.
 @Composable
 private fun SeasonChip(label: String, selected: Boolean, onClick: () -> Unit) {
     Surface(
         onClick = onClick,
+        modifier = Modifier.pointerClick(onClick),
         shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(50)),
         colors = ClickableSurfaceDefaults.colors(
             containerColor = if (selected) Palette.Text else Palette.Surface,
@@ -251,11 +260,12 @@ private fun SeasonChip(label: String, selected: Boolean, onClick: () -> Unit) {
 
 @Composable
 private fun EpisodeRow(number: Int, title: String, progress: Float?, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    val uiContext = LocalContext.current
     var focused by remember { mutableStateOf(false) }
     val shape = RoundedCornerShape(12.dp)
     Surface(
         onClick = onClick,
-        modifier = modifier.fillMaxWidth().height(52.dp).onFocusChanged { focused = it.isFocused || it.hasFocus },
+        modifier = modifier.fillMaxWidth().height(52.dp).pointerClick(onClick).onFocusChanged { focused = it.isFocused || it.hasFocus },
         shape = ClickableSurfaceDefaults.shape(shape),
         colors = ClickableSurfaceDefaults.colors(
             containerColor = Palette.Surface.copy(alpha = 0.7f),
@@ -282,7 +292,7 @@ private fun EpisodeRow(number: Int, title: String, progress: Float?, onClick: ()
             if (progress != null) {
                 Spacer(Modifier.width(12.dp))
                 if (progress >= WATCHED_FRACTION) {
-                    Icon(Icons.Rounded.CheckCircle, contentDescription = "İzlendi", tint = Palette.Accent, modifier = Modifier.size(22.dp))
+                    Icon(Icons.Rounded.CheckCircle, contentDescription = uiContext.getString(R.string.ui_watched), tint = Palette.Accent, modifier = Modifier.size(22.dp))
                 } else if (progress > 0.01f) {
                     ProgressBar(progress, Modifier.width(64.dp))
                 }

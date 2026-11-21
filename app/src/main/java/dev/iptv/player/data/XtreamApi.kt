@@ -14,7 +14,16 @@ import okhttp3.Request
 import java.io.IOException
 import java.net.URLEncoder
 
-class XtreamApi(source: PlaylistSource.Xtream, private val http: OkHttpClient) {
+internal sealed class XtreamFailure : IOException() {
+    class Http(val status: Int) : XtreamFailure()
+    class SeriesMissing : XtreamFailure()
+}
+
+class XtreamApi(
+    source: PlaylistSource.Xtream,
+    private val http: OkHttpClient,
+    private val episodeTitle: (Int) -> String = { "Episode $it" },
+) {
     private val base = source.server.trim().trimEnd('/').let {
         if (it.startsWith("http://") || it.startsWith("https://")) it else "http://$it"
     }
@@ -25,7 +34,7 @@ class XtreamApi(source: PlaylistSource.Xtream, private val http: OkHttpClient) {
     private suspend fun call(params: String): JsonElement = withContext(Dispatchers.IO) {
         val url = "$base/player_api.php?username=${enc(user)}&password=${enc(pass)}$params"
         http.newCall(Request.Builder().url(url).build()).execute().use { response ->
-            if (!response.isSuccessful) throw IOException("Sunucu hatası: HTTP ${response.code}")
+            if (!response.isSuccessful) throw XtreamFailure.Http(response.code)
             json.parseToJsonElement(response.body?.string().orEmpty().ifBlank { "null" })
         }
     }
@@ -116,7 +125,7 @@ class XtreamApi(source: PlaylistSource.Xtream, private val http: OkHttpClient) {
 
     suspend fun seriesInfo(seriesId: String): SeriesInfo {
         val root = call("&action=get_series_info&series_id=${enc(seriesId)}") as? JsonObject
-            ?: throw IOException("Dizi bulunamadı")
+            ?: throw XtreamFailure.SeriesMissing()
         val raw = mutableListOf<JsonObject>()
         // Panels return episodes either as {"1": [...]} or as nested arrays.
         fun collect(element: JsonElement?) {
@@ -132,7 +141,7 @@ class XtreamApi(source: PlaylistSource.Xtream, private val http: OkHttpClient) {
             val number = o.str("episode_num")?.toIntOrNull() ?: 0
             val ext = o.str("container_extension").blankToNull() ?: "mp4"
             Episode(
-                id, o.str("title").blankToNull() ?: "Bölüm $number", o.str("season")?.toIntOrNull() ?: 1, number,
+                id, o.str("title").blankToNull() ?: episodeTitle(number), o.str("season")?.toIntOrNull() ?: 1, number,
                 "$base/series/$user/$pass/$id.$ext",
             )
         }.sortedWith(compareBy({ it.season }, { it.number }))

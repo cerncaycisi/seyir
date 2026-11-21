@@ -8,14 +8,11 @@ plugins {
     id("com.google.devtools.ksp")
 }
 
-// versionCode = number of git commits (falls back to 1 when git is unavailable).
-val gitCommitCount: Int = try {
-    val proc = ProcessBuilder("git", "rev-list", "--count", "HEAD")
-        .directory(rootDir).redirectErrorStream(true).start()
-    val out = proc.inputStream.bufferedReader().readText().trim()
-    if (proc.waitFor() == 0) out.toIntOrNull() ?: 1 else 1
-} catch (e: Exception) {
-    1
+// Bump this for each distributed release. Git availability/history must not change an APK's version.
+// CI or release builds may supply an explicit monotonically increasing -PappVersionCode=21.
+val releaseVersionCode = providers.gradleProperty("appVersionCode").orElse("20").get().let { value ->
+    value.toIntOrNull()?.takeIf { it in 1..2_100_000_000 }
+        ?: throw GradleException("appVersionCode must be an integer between 1 and 2100000000 (received '$value').")
 }
 
 // Release signing: keystore.properties (gitignored) -- see keystore.properties.example.
@@ -37,8 +34,9 @@ android {
         applicationId = "dev.iptv.player"
         minSdk = 24
         targetSdk = 35
-        versionCode = gitCommitCount.coerceAtLeast(1)
+        versionCode = releaseVersionCode
         versionName = "0.2.0"
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         // OpenSubtitles (optional; empty key hides the feature). Values come from local.properties, never committed.
         buildConfigField("String", "OPENSUBTITLES_API_KEY", "\"${localProp("opensubtitles.apiKey")}\"")
         buildConfigField("String", "OPENSUBTITLES_USERNAME", "\"${localProp("opensubtitles.username")}\"")
@@ -81,6 +79,12 @@ android {
     }
     testOptions {
         unitTests.isReturnDefaultValues = true
+    }
+    bundle {
+        // Both languages must remain installed when the user changes the app language offline.
+        language {
+            enableSplit = false
+        }
     }
     buildFeatures {
         compose = true
@@ -127,4 +131,6 @@ dependencies {
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0")
     // Pure-JVM XmlPullParser so the XMLTV parser can be unit tested.
     testImplementation("net.sf.kxml:kxml2:2.3.0")
+    androidTestImplementation("androidx.test:runner:1.6.2")
+    androidTestImplementation("androidx.test.ext:junit:1.2.1")
 }

@@ -1,5 +1,9 @@
 package dev.iptv.player.player
 
+import androidx.compose.ui.res.stringResource
+
+import dev.iptv.player.R
+
 import androidx.activity.compose.BackHandler
 import androidx.annotation.OptIn
 import androidx.compose.foundation.BorderStroke
@@ -128,12 +132,12 @@ private fun MultiViewContent(cfg: PlayerConfig, channels: List<Stream>, start: I
                         p.trackSelectionParameters = p.trackSelectionParameters.buildUpon().setMaxVideoSize(426, 240).build()
                         p.prepare()
                     } else if (decoder) {
-                        errors[i] = "Çözücü yetersiz: bu TV aynı anda bu kadar yayını çözemiyor"
+                        errors[i] = context.getString(R.string.play_decoder_limit)
                     } else if (retries[i] < 3) {
                         retries[i]++
                         scope.launch { delay(3_000); p.prepare() }
                     } else {
-                        errors[i] = "Yayın açılamadı"
+                        errors[i] = context.getString(R.string.play_no_stream)
                     }
                 }
 
@@ -212,7 +216,8 @@ private fun MultiViewContent(cfg: PlayerConfig, channels: List<Stream>, start: I
             },
     ) {
         val cols = MultiViewLayout.columns(count)
-        Column(Modifier.fillMaxSize().padding(6.dp)) {
+        // Reserve a footer so the remote-control hint cannot cover the lower channel labels.
+        Column(Modifier.fillMaxSize().padding(start = 6.dp, top = 6.dp, end = 6.dp, bottom = 36.dp)) {
             for (r in 0 until MultiViewLayout.rows(count)) {
                 Row(Modifier.weight(1f).fillMaxSize()) {
                     for (cIdx in 0 until cols) {
@@ -227,14 +232,14 @@ private fun MultiViewContent(cfg: PlayerConfig, channels: List<Stream>, start: I
 
         if (showWarning) {
             Text(
-                "Bazı TV'ler aynı anda yalnızca 1-2 HD yayını çözebilir; görüntü donarsa kanal sayısını azaltın.",
+                context.getString(R.string.play_multi_warning),
                 modifier = Modifier.align(Alignment.TopCenter).padding(top = 14.dp).clip(RoundedCornerShape(10.dp)).background(Color(0xE6111620)).padding(horizontal = 18.dp, vertical = 8.dp),
                 style = MaterialTheme.typography.labelLarge,
                 color = Palette.Gold,
             )
         } else {
             Text(
-                "Yön tuşları: odak (ses)   ·   OK: kanalı değiştir   ·   Geri: çık",
+                context.getString(R.string.play_multi_controls),
                 modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 10.dp).clip(RoundedCornerShape(10.dp)).background(Color(0x99000000)).padding(horizontal = 16.dp, vertical = 6.dp),
                 style = MaterialTheme.typography.labelMedium,
                 color = Palette.TextMuted,
@@ -266,14 +271,9 @@ private fun Tile(player: ExoPlayer, name: String, focused: Boolean, error: Strin
     ) {
         AndroidView(
             factory = { ctx ->
-                PlayerView(ctx).apply {
+                createPlayerView(ctx).apply {
                     this.player = player
-                    useController = false
-                    keepScreenOn = true
                     resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
-                    setShowBuffering(PlayerView.SHOW_BUFFERING_ALWAYS)
-                    isFocusable = false
-                    descendantFocusability = android.view.ViewGroup.FOCUS_BLOCK_DESCENDANTS
                 }
             },
             modifier = Modifier.fillMaxSize(),

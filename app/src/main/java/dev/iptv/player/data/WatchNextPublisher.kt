@@ -1,8 +1,12 @@
 package dev.iptv.player.data
 
+import android.annotation.SuppressLint
 import android.content.Context
+import android.media.tv.TvContract
 import android.net.Uri
 import android.os.Build
+import android.provider.BaseColumns
+import androidx.annotation.RequiresApi
 import androidx.tvprovider.media.tv.TvContractCompat
 import androidx.tvprovider.media.tv.WatchNextProgram
 
@@ -31,16 +35,18 @@ class WatchNextPublisher(private val context: Context) {
         runCatching { doSync(continueWatching(entries).take(MAX_ITEMS)) }
     }
 
+    @RequiresApi(Build.VERSION_CODES.O)
     private fun doSync(wanted: List<HistoryEntry>) {
         val resolver = context.contentResolver
         val existing = HashMap<String, Long>() // internalProviderId -> program id
         resolver.query(
             TvContractCompat.WatchNextPrograms.CONTENT_URI,
-            WatchNextProgram.PROJECTION, null, null, null,
+            arrayOf(BaseColumns._ID, TvContract.WatchNextPrograms.COLUMN_INTERNAL_PROVIDER_ID), null, null, null,
         )?.use { c ->
+            val idColumn = c.getColumnIndexOrThrow(BaseColumns._ID)
+            val keyColumn = c.getColumnIndexOrThrow(TvContract.WatchNextPrograms.COLUMN_INTERNAL_PROVIDER_ID)
             while (c.moveToNext()) {
-                val p = WatchNextProgram.fromCursor(c)
-                p.internalProviderId?.let { existing[it] = p.id }
+                c.getString(keyColumn)?.let { existing[it] = c.getLong(idColumn) }
             }
         }
         val wantedKeys = wanted.map { it.key }.toSet()
@@ -58,6 +64,10 @@ class WatchNextPublisher(private val context: Context) {
         }
     }
 
+    // Android's Watch Next guide documents these builder calls. tvprovider 1.0.0 inherits
+    // RestrictedApi annotations from its base builders; keep this exception local to metadata creation.
+    // https://developer.android.com/training/tv/discovery/watch-next-add-programs
+    @SuppressLint("RestrictedApi")
     private fun build(e: HistoryEntry): WatchNextProgram {
         val seriesId = e.seriesId
         val link = if (seriesId != null) DeepLinks.series(e.playlistId, seriesId) else DeepLinks.movie(e.playlistId, e.id)

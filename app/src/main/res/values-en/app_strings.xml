@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_refresh_failed">Refresh failed</string>
+    <string name="app_loading">Loading…</string>
+    <string name="app_content_unavailable">This content is unavailable, hidden or locked for this profile.</string>
+    <string name="epg_no_url">This playlist has no guide URL. Enter an XMLTV URL in Settings.</string>
+    <string name="epg_download_failed">Guide download failed: HTTP %1$d</string>
+    <string name="epg_empty_response">The guide response is empty</string>
+    <string name="epg_empty_file">The guide file is empty or could not be read</string>
+    <string name="epg_notification_channel">Programme reminders</string>
+    <string name="epg_notification_starting">%1$s is starting now</string>
+</resources>

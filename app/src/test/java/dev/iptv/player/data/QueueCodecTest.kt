@@ -6,6 +6,11 @@ import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Test
 import javax.crypto.KeyGenerator
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
 
 class QueueCodecTest {
     private val codec = AesGcmCodec(KeyGenerator.getInstance("AES").apply { init(256) }.generateKey())
@@ -30,6 +35,30 @@ class QueueCodecTest {
         val (_, restored, index) = QueueCodec.decode(QueueCodec.encode(playlist, items, 4000, codec), codec)!!
         assertEquals(QueueCodec.MAX_ITEMS, restored.size)
         assertEquals("4000", restored[index].id)
+    }
+
+    @Test
+    fun processRestoreRetainsCatchupAndEpisodeSeriesIdentity() {
+        val live = stream(0).copy(catchup = "xc", catchupDays = 7, archiveDays = 7)
+        val episode = stream(1).copy(type = ContentType.MOVIE, seriesId = "series-42")
+        val (_, restored, index) = QueueCodec.decode(QueueCodec.encode(playlist, listOf(live, episode), 1, codec), codec)!!
+        assertEquals(7, restored[0].archiveDays)
+        assertEquals("xc", restored[0].catchup)
+        assertEquals("series-42", restored[index].seriesId)
+        assertEquals(listOf(live, episode), restored)
+    }
+
+    @Test
+    fun olderSnapshotsWithoutNewFieldsRemainReadable() {
+        val encoded = QueueCodec.encode(playlist, listOf(stream(0)), 0, codec)
+        val snapshot = Json.parseToJsonElement(codec.decrypt(encoded)).jsonObject
+        val oldItems = snapshot.getValue("items").jsonArray.map { item ->
+            JsonObject(item.jsonObject.filterKeys { it != "archiveDays" && it != "seriesId" })
+        }
+        val oldSnapshot = JsonObject(snapshot + ("items" to JsonArray(oldItems)))
+        val (_, restored, _) = QueueCodec.decode(codec.encrypt(oldSnapshot.toString()), codec)!!
+        assertEquals(0, restored.single().archiveDays)
+        assertNull(restored.single().seriesId)
     }
 
     @Test

@@ -1,5 +1,10 @@
 package dev.iptv.player.player
 
+import androidx.compose.ui.res.stringResource
+
+import dev.iptv.player.R
+
+import android.content.Context
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -43,6 +48,7 @@ import dev.iptv.player.ui.Palette
 import dev.iptv.player.ui.Pill
 import dev.iptv.player.ui.ProgressBar
 import dev.iptv.player.ui.formatClock
+import dev.iptv.player.ui.pointerClick
 import kotlinx.coroutines.android.awaitFrame
 
 @Composable
@@ -54,7 +60,7 @@ internal fun LiveOverlay(number: Int, stream: Stream, epg: List<EpgEntry>) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Pill("$number", color = Color(0x33FFFFFF), contentColor = Color.White)
                 Text(stream.name, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = Color.White, maxLines = 1)
-                Pill("CANLI", color = Palette.Live, contentColor = Color.White)
+                Pill(stringResource(R.string.play_live), color = Palette.Live, contentColor = Color.White)
             }
             val now = epg.firstOrNull()
             if (now != null) {
@@ -71,14 +77,14 @@ internal fun LiveOverlay(number: Int, stream: Stream, epg: List<EpgEntry>) {
                 }
                 epg.getOrNull(1)?.let { next ->
                     Spacer(Modifier.height(10.dp))
-                    Text("Sonra  ${formatClock(next.start)}  ${next.title}", style = MaterialTheme.typography.bodyMedium, color = Palette.TextMuted, maxLines = 1)
+                    Text(stringResource(R.string.play_next_programme, formatClock(next.start), next.title), style = MaterialTheme.typography.bodyMedium, color = Palette.TextMuted, maxLines = 1)
                 }
             }
         }
     }
     Spacer(Modifier.height(20.dp))
     Text(
-        "▲ ▼  kanal    ·    ◀  liste    ·    ▶  ayarlar    ·    0-9  numara    ·    OK  bilgi    ·    Geri  çıkış",
+        stringResource(R.string.play_live_controls),
         style = MaterialTheme.typography.labelMedium,
         color = Palette.TextFaint,
     )
@@ -97,11 +103,11 @@ internal fun VodOverlay(title: String, position: Long, duration: Long, playing: 
         Spacer(Modifier.width(16.dp))
         Text("${time(position)} / ${time(duration)}", style = MaterialTheme.typography.titleMedium, color = Color.White)
         Spacer(Modifier.weight(1f))
-        Text("◀ ▶  10 sn    ·    ▲  ayarlar    ·    OK  oynat / duraklat", style = MaterialTheme.typography.labelMedium, color = Palette.TextFaint)
+        Text(stringResource(R.string.play_vod_controls), style = MaterialTheme.typography.labelMedium, color = Palette.TextFaint)
     }
 }
 
-/** Countdown card shown near the end of a series episode; "Şimdi oynat" is focused, BACK cancels. */
+/** Countdown card shown near the end of a series episode; stringResource(R.string.play_now) is focused, BACK cancels. */
 @Composable
 internal fun NextEpisodeCard(nextTitle: String, seconds: Int, onPlayNow: () -> Unit, onCancel: () -> Unit, modifier: Modifier = Modifier) {
     BackHandler { onCancel() }
@@ -113,12 +119,12 @@ internal fun NextEpisodeCard(nextTitle: String, seconds: Int, onPlayNow: () -> U
     Column(
         modifier.widthIn(max = 420.dp).clip(RoundedCornerShape(16.dp)).background(Color(0xF2111620)).padding(20.dp),
     ) {
-        Text("Sonraki bölüm $seconds sn içinde", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Color.White)
+        Text(stringResource(R.string.play_next_countdown, seconds), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Color.White)
         Text(nextTitle, style = MaterialTheme.typography.bodyMedium, color = Palette.TextMuted, maxLines = 2, modifier = Modifier.padding(top = 4.dp))
         Spacer(Modifier.height(16.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            CardButton("Şimdi oynat", onPlayNow, Modifier.focusRequester(focus))
-            CardButton("İptal", onCancel)
+            CardButton(stringResource(R.string.play_now), onPlayNow, Modifier.focusRequester(focus))
+            CardButton(stringResource(R.string.play_cancel), onCancel)
         }
     }
 }
@@ -128,7 +134,7 @@ private fun CardButton(text: String, onClick: () -> Unit, modifier: Modifier = M
     val shape = RoundedCornerShape(10.dp)
     Surface(
         onClick = onClick,
-        modifier = modifier.height(44.dp),
+        modifier = modifier.height(44.dp).pointerClick(onClick),
         shape = ClickableSurfaceDefaults.shape(shape),
         colors = ClickableSurfaceDefaults.colors(
             containerColor = Palette.SurfaceHigh,
@@ -145,19 +151,19 @@ private fun CardButton(text: String, onClick: () -> Unit, modifier: Modifier = M
     }
 }
 
-internal fun describe(e: PlaybackException): String {
+internal fun describe(context: Context, e: PlaybackException): String {
     val reason = when (e.errorCode) {
-        PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS -> "Sunucu yayını vermedi"
+        PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS -> context.getString(R.string.play_error_server)
         PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED,
-        PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT -> "Sunucuya bağlanılamadı"
-        PlaybackException.ERROR_CODE_IO_FILE_NOT_FOUND -> "Yayın bulunamadı"
+        PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT -> context.getString(R.string.play_error_connect)
+        PlaybackException.ERROR_CODE_IO_FILE_NOT_FOUND -> context.getString(R.string.play_error_missing)
         PlaybackException.ERROR_CODE_PARSING_CONTAINER_MALFORMED,
         PlaybackException.ERROR_CODE_PARSING_MANIFEST_MALFORMED,
-        PlaybackException.ERROR_CODE_PARSING_CONTAINER_UNSUPPORTED -> "Yayın verisi okunamadı"
+        PlaybackException.ERROR_CODE_PARSING_CONTAINER_UNSUPPORTED -> context.getString(R.string.play_error_parse)
         PlaybackException.ERROR_CODE_DECODER_INIT_FAILED,
         PlaybackException.ERROR_CODE_DECODING_FORMAT_UNSUPPORTED,
-        PlaybackException.ERROR_CODE_DECODING_FORMAT_EXCEEDS_CAPABILITIES -> "Bu yayın biçimi cihazda desteklenmiyor"
-        else -> "Beklenmeyen bir hata oluştu"
+        PlaybackException.ERROR_CODE_DECODING_FORMAT_EXCEEDS_CAPABILITIES -> context.getString(R.string.play_error_format)
+        else -> context.getString(R.string.play_error_unknown)
     }
     return "$reason\n${e.errorCodeName}"
 }

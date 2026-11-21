@@ -10,6 +10,7 @@ import androidx.room.PrimaryKey
 import androidx.room.Query
 import androidx.room.Room
 import androidx.room.RoomDatabase
+import androidx.room.Update
 import kotlinx.coroutines.flow.Flow
 
 object RecStatus {
@@ -52,6 +53,10 @@ interface RecordingDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun put(r: Recording)
+
+    /** Updates only an existing row: a service finishing after deletion must not recreate it. */
+    @Update
+    suspend fun update(r: Recording): Int
 
     @Query("DELETE FROM recording WHERE id = :id")
     suspend fun delete(id: String)
