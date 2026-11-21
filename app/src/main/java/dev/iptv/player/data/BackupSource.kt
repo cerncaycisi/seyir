@@ -4,8 +4,7 @@ package dev.iptv.player.data
  * Seam between the phone-facing backup page and the real backup implementation (BackupManager,
  * owned by the data workstream). Calls happen on a background thread.
  *
- * TODO(merger): at app start set `BackupSource.current = object : BackupSource { ... }` delegating to
- * BackupManager.exportJson()/importJson(); wrap suspend functions with runBlocking if needed.
+ * Installed by [Repository] on creation (delegates to BackupManager).
  */
 interface BackupSource {
     fun exportJson(): String

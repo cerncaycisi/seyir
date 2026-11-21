@@ -90,8 +90,7 @@ private enum class Panel { None, Settings, Channels }
 private const val MAX_RECONNECTS = 10
 private const val NEXT_EPISODE_WINDOW_MS = 10_000L
 
-// wired to Stream.headers after merge
-private fun requestHeadersFor(stream: Stream): Map<String, String> = emptyMap()
+private fun requestHeadersFor(stream: Stream): Map<String, String> = stream.headers
 
 private class ViewHolder { var view: PlayerView? = null }
 
@@ -130,7 +129,12 @@ fun PlayerScreen(repo: Repository, onBack: () -> Unit) {
 
 /** Opens [stream] in the app named by the ExternalPlayer setting; false when unset or not installed. */
 private fun launchExternalPlayer(context: Context, setting: String, stream: Stream): Boolean {
-    val pkg = setting.trim()
+    // The Settings screen stores "", "vlc" or "mx"; a full package name is accepted too.
+    val pkg = when (val v = setting.trim()) {
+        "vlc" -> "org.videolan.vlc"
+        "mx" -> "com.mxtech.videoplayer.ad"
+        else -> v
+    }
     if (pkg.isEmpty() || !pkg.contains('.')) return false
     val intent = Intent(Intent.ACTION_VIEW).apply {
         setDataAndType(Uri.parse(stream.url), "video/*")
@@ -300,7 +304,9 @@ private fun PlayerContent(repo: Repository, cfg: PlayerConfig, onBack: () -> Uni
     }
 
     LaunchedEffect(index) {
-        // Hook point: persist PlayerQueue.index here (data layer).
+        // Every index change (zap, channel panel, number keys, next episode) lands here: keep the restorable queue current.
+        PlayerQueue.index = index
+        PlayerQueue.save(context)
         error = null
         epg = emptyList()
         reconnectJob?.cancel()

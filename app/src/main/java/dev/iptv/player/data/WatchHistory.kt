@@ -9,6 +9,7 @@ import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
@@ -63,15 +64,18 @@ class WatchHistory(context: Context, private val scope: CoroutineScope) {
     private val entriesKey = stringPreferencesKey("entries")
     private val watchNext = WatchNextPublisher(appContext)
 
-    /** Profile engineer: set this (e.g. "profileId:") to separate histories; every key goes through [scoped]. */
-    @Volatile
-    var keyPrefix: String = ""
+    /** Per-profile key namespace ("" for the default profile); follows [ProfileStore.activeIdFlow]. */
+    private val prefix = kotlinx.coroutines.flow.MutableStateFlow(ProfileStore.profileScopedKey(""))
+    var keyPrefix: String
+        get() = prefix.value
+        set(v) { prefix.value = v }
 
     fun scoped(favKey: String) = keyPrefix + favKey
 
     /** Newest first, for the current key prefix. */
-    val entries: Flow<List<HistoryEntry>> = store.data.map { prefs ->
-        decode(prefs[entriesKey]).filter { it.key.startsWith(keyPrefix) }.sortedByDescending { it.updatedAt }
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    val entries: Flow<List<HistoryEntry>> = prefix.flatMapLatest { p ->
+        store.data.map { prefs -> decode(prefs[entriesKey]).filter { it.key.startsWith(p) }.sortedByDescending { it.updatedAt } }
     }
 
     suspend fun entry(playlist: Playlist, stream: Stream): HistoryEntry? {

@@ -34,22 +34,17 @@ import java.util.zip.GZIPInputStream
 
 object EpgSources {
     /** EpgUrlOverride if set, else the playlist's own guide. */
-    fun url(playlist: Playlist, override: String): String? {
+    suspend fun url(playlist: Playlist, override: String, repo: dev.iptv.player.data.Repository? = null): String? {
         override.trim().takeIf { it.isNotEmpty() }?.let { return it }
         return when (val s = playlist.source) {
             is PlaylistSource.Xtream -> {
                 val base = s.server.trim().trimEnd('/').let { if (it.startsWith("http://") || it.startsWith("https://")) it else "http://$it" }
                 "$base/xmltv.php?username=${URLEncoder.encode(s.username.trim(), "UTF-8")}&password=${URLEncoder.encode(s.password.trim(), "UTF-8")}"
             }
-            is PlaylistSource.M3u -> m3uTvgUrl(playlist)
+            is PlaylistSource.M3u -> repo?.epgUrl(playlist)
         }
     }
 
-    /**
-     * HOOK (M3U guide): another engineer adds `Repository.epgUrl(playlist)` that reads `url-tvg` from the
-     * #EXTM3U header. Once merged, return that here instead of null.
-     */
-    fun m3uTvgUrl(playlist: Playlist): String? = null // TODO(merge): Repository.epgUrl(playlist)
 }
 
 /**
@@ -109,7 +104,7 @@ class EpgService private constructor(context: Context) {
     /** Refresh in the background when the data is missing, stale (12h) or came from a different source. */
     fun requestFresh(playlist: Playlist) {
         scope.launch {
-            val url = EpgSources.url(playlist, settings.get(Setting.EpgUrlOverride)) ?: return@launch
+            val url = EpgSources.url(playlist, settings.get(Setting.EpgUrlOverride), (appContext as? dev.iptv.player.App)?.repository) ?: return@launch
             val now = nowSec()
             val stale = dao.meta("source") != url || now - (dao.meta("updated")?.toLongOrNull() ?: 0L) > 12 * 3600
             val last = lastAttempt[url]
@@ -124,7 +119,7 @@ class EpgService private constructor(context: Context) {
     suspend fun refresh(playlist: Playlist): Boolean {
         if (!ingestLock.tryLock()) return false
         try {
-            val url = EpgSources.url(playlist, settings.get(Setting.EpgUrlOverride))
+            val url = EpgSources.url(playlist, settings.get(Setting.EpgUrlOverride), (appContext as? dev.iptv.player.App)?.repository)
             if (url == null) {
                 status.value = EpgStatus.Error("Bu playlist için EPG adresi yok. Ayarlardan bir XMLTV adresi girin.")
                 return false

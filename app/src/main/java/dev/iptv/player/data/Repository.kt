@@ -36,6 +36,17 @@ class Repository(context: Context) {
     val history = WatchHistory(context, scope)
     val tmdb = Tmdb(context, settings)
 
+    init {
+        // Watch history is per profile: keep its key prefix in step with the active profile.
+        scope.launch { ProfileStore.activeIdFlow.collect { history.keyPrefix = ProfileStore.profileScopedKey("", it) } }
+        // Phone-facing backup page (RemoteServer) delegates to BackupManager.
+        val backup = BackupManager(store, settings)
+        BackupSource.current = object : BackupSource {
+            override fun exportJson(): String = kotlinx.coroutines.runBlocking { backup.exportJson() }
+            override fun importJson(json: String) { kotlinx.coroutines.runBlocking { backup.importJson(json) } }
+        }
+    }
+
     private val http = OkHttpClient.Builder()
         .connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(60, TimeUnit.SECONDS)

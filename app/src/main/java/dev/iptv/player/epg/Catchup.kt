@@ -15,19 +15,15 @@ import java.util.TimeZone
 data class CatchupSpec(val mode: String, val source: String?)
 
 object Catchup {
-    /**
-     * HOOK (M3U catch-up): the data engineer parses `catchup`, `catchup-source` and `catchup-days`
-     * from #EXTINF. Map whatever fields they add onto Stream here, e.g.
-     *   stream.catchupMode?.let { CatchupSpec(it, stream.catchupSource) }
-     * Until then M3U channels have no catch-up, and Xtream channels use [Stream.archiveDays].
-     */
-    fun specOf(stream: Stream): CatchupSpec? = null // TODO(merge): wire to Stream.catchup* fields
+    /** M3U catch-up (`catchup` / `catchup-source` attributes). Xtream channels ("xc") use [Stream.archiveDays] instead. */
+    fun specOf(stream: Stream): CatchupSpec? =
+        stream.catchup?.takeIf { it.isNotBlank() && !it.equals("xc", ignoreCase = true) }?.let { CatchupSpec(it, stream.catchupSource) }
 
     fun available(playlist: Playlist, stream: Stream): Boolean =
         stream.archiveDays > 0 && playlist.source is PlaylistSource.Xtream || specOf(stream) != null
 
     /** Days of archive for [stream]; M3U feeds with a spec but no day count default to 1. */
-    fun days(stream: Stream): Int = if (stream.archiveDays > 0) stream.archiveDays else if (specOf(stream) != null) 1 else 0
+    fun days(stream: Stream): Int = if (stream.archiveDays > 0) stream.archiveDays else if (specOf(stream) != null) stream.catchupDays.coerceAtLeast(1) else 0
 
     /** Can [p] be replayed now? It must be over (or nearly so) and still inside the archive window. */
     fun playable(playlist: Playlist, stream: Stream, p: Programme, nowSec: Long): Boolean =
