@@ -230,6 +230,8 @@
     <string name="ui_clear_confirm">Clear</string>
     <string name="ui_add_watch_later">Watch later</string>
     <string name="ui_remove_watch_later">Remove from list</string>
+    <string name="ui_exit_title">Exit the app?</string>
+    <string name="ui_exit_confirm">Exit</string>
     <string name="ui_remove_favorites">Remove from favorites</string>
     <string name="ui_category_empty">Nothing in this category</string>
     <string name="ui_category_empty_hint">Pick another category</string>

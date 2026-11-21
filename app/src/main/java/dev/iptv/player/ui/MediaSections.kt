@@ -17,6 +17,7 @@ import androidx.compose.material.icons.rounded.DeleteSweep
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.focus.focusProperties
+import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -72,6 +73,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -202,6 +204,9 @@ private fun VodBrowser(
     val catState = rememberLazyListState(initialFirstVisibleItemIndex = (categories.indexOfFirst { it.key == selected.key } - 3).coerceAtLeast(0))
     val selectedReq = remember { FocusRequester() }
     val firstItemReq = remember { FocusRequester() }
+    // OK on a category moves focus into its grid (top-left poster), like Netflix's category rail.
+    var gridFocusIndex by remember { mutableIntStateOf(-1) }
+    var jumpToGrid by remember { mutableIntStateOf(0) }
     val restore = actions.restore
     val restoreIndex = restore.itemId?.let { id -> shown.indexOfFirst { it.id == id } } ?: -1
     var focused by remember { mutableStateOf<Stream?>(null) }
@@ -215,6 +220,15 @@ private fun VodBrowser(
             runCatching { selectedReq.requestFocus() }
         }
         if (restore.itemId != null || restore.initial) restore.done()
+    }
+    LaunchedEffect(jumpToGrid) {
+        if (jumpToGrid == 0) return@LaunchedEffect
+        gridFocusIndex = 0
+        withFrameNanos { }
+        if (shown.isEmpty()) return@LaunchedEffect
+        gridState.scrollToItem(0)
+        withFrameNanos { }
+        runCatching { firstItemReq.requestFocus() }
     }
 
     Row(Modifier.fillMaxSize()) {
@@ -237,7 +251,7 @@ private fun VodBrowser(
                         selected = c.key == selected.key,
                         locked = pid != null && pid != OTHER_CATEGORY && rules.isCategoryMarkedLocked(playlist, type, pid),
                         onClick = {
-                            val select = { selectedKey = c.key; genre = null; focused = null }
+                            val select = { selectedKey = c.key; genre = null; focused = null; jumpToGrid += 1; Unit }
                             if (pid != null && pid != OTHER_CATEGORY && rules.isCategoryLocked(playlist, type, pid)) actions.requireUnlock(select) else select()
                         },
                         onLongClick = if (pid != null && pid != OTHER_CATEGORY) ({ actions.categoryLongPress(type, pid, c.name) }) else null,
@@ -278,7 +292,7 @@ private fun VodBrowser(
                     actions = actions,
                     columns = columns,
                     state = gridState,
-                    focusIndex = restoreIndex,
+                    focusIndex = if (gridFocusIndex >= 0) gridFocusIndex else restoreIndex,
                     focusRequester = firstItemReq,
                     categoryName = selPid?.let { selected.name },
                     onFocused = { focused = it },
@@ -330,6 +344,7 @@ internal fun HeaderButton(label: String, icon: ImageVector, onClick: () -> Unit)
 }
 
 /** Vertical poster grid; scrolls by finger or D-pad. [focusIndex] (>= 0) attaches [focusRequester] to that cell. */
+@OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
 @Composable
 internal fun PosterGrid(
     items: List<Stream>,
@@ -345,7 +360,8 @@ internal fun PosterGrid(
 ) {
     LazyVerticalGrid(
         GridCells.Fixed(columns),
-        modifier.fillMaxWidth(),
+        // Coming back from the category list returns to the last focused poster.
+        modifier.fillMaxWidth().focusRestorer(),
         state = state,
         contentPadding = PaddingValues(start = 6.dp, end = 6.dp, top = 8.dp, bottom = 32.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
@@ -387,7 +403,8 @@ fun MediaRows(
         verticalArrangement = Arrangement.spacedBy(8.dp),
         contentPadding = PaddingValues(bottom = 48.dp),
     ) {
-        itemsIndexed(rows, key = { i, row -> "$i|${row.title}" }) { r, row ->
+        // Keyed by title: a row appearing above (e.g. favourites loading) must not recreate the focused row.
+        itemsIndexed(rows, key = { _, row -> row.title }) { r, row ->
             val target = when (r) {
                 restoreRow -> row.items.indexOfFirst { it.id == restore.itemId }
                 initialRow -> 0
@@ -402,11 +419,17 @@ fun MediaRows(
 private fun MediaRowView(row: MediaRow, playlist: Playlist, actions: HomeActions, target: Int, onFocused: (Stream) -> Unit) {
     val rowState = rememberLazyListState()
     val requester = remember { FocusRequester() }
+    var targetFocused by remember { mutableStateOf(false) }
     LaunchedEffect(target) {
         if (target >= 0) {
             rowState.scrollToItem(target)
-            withFrameNanos { }
-            runCatching { requester.requestFocus() }
+            // The card may attach a frame or two late (rows/images still settling); retry briefly.
+            targetFocused = false
+            for (attempt in 0 until 12) {
+                withFrameNanos { }
+                if (targetFocused) break
+                runCatching { requester.requestFocus() }
+            }
             actions.restore.done()
         }
     }
@@ -422,9 +445,9 @@ private fun MediaRowView(row: MediaRow, playlist: Playlist, actions: HomeActions
                 val open = { if (row.direct) actions.resume(s) else actions.open(row.items, i) }
                 val toggle = { actions.longPress(s, row.categoryName) }
                 if (s.type == ContentType.LIVE) {
-                    ChannelCard(s, open, toggle, { onFocused(s) }, mod)
+                    ChannelCard(s, open, toggle, { if (i == target) targetFocused = true; onFocused(s) }, mod)
                 } else {
-                    PosterCard(s, favoriteKey(playlist, s) in actions.favorites, open, toggle, { onFocused(s) }, mod, progress = actions.progress[favoriteKey(playlist, s)], badge = actions.badges[favoriteKey(playlist, s)])
+                    PosterCard(s, favoriteKey(playlist, s) in actions.favorites, open, toggle, { if (i == target) targetFocused = true; onFocused(s) }, mod, progress = actions.progress[favoriteKey(playlist, s)], badge = actions.badges[favoriteKey(playlist, s)])
                 }
             }
         }

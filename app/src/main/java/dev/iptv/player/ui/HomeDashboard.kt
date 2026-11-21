@@ -14,6 +14,8 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import dev.iptv.player.data.ContentType
 import dev.iptv.player.data.Content
@@ -48,15 +50,18 @@ fun HomeSection(repo: Repository, playlist: Playlist, actions: HomeActions) {
             HomeData(results.mapValues { it.value.getOrDefault(Content(emptyList(), emptyList())) })
         }
     }
-    val history by repo.history.entries.collectAsState(initial = emptyList())
+    // null until the first read: building rows from an empty history first and reshuffling them a moment later
+    // dropped the focus that was being restored after returning from a detail page.
+    val historyOrNull by repo.history.entries.collectAsState(initial = null)
 
-    when (val s = state) {
+    val history = historyOrNull
+    when (val s = if (history == null) Load.Loading else state) {
         Load.Loading -> LoadingState()
         is Load.Err -> ErrorState(s.message)
         is Load.Ok -> {
             val data = s.value
             val rows = remember(uiContext, data, history, actions.favorites, actions.watchLater, actions.rules) {
-                buildHomeRows(uiContext, playlist, data, history.filter { it.playlistId == playlist.id }, actions.favorites, actions.watchLater, actions.rules)
+                buildHomeRows(uiContext, playlist, data, history.orEmpty().filter { it.playlistId == playlist.id }, actions.favorites, actions.watchLater, actions.rules)
             }
             if (rows.isEmpty()) {
                 EmptyState(Icons.Rounded.Home, uiContext.getString(R.string.ui_content_empty), uiContext.getString(R.string.ui_content_empty_hint))
@@ -66,9 +71,13 @@ fun HomeSection(repo: Repository, playlist: Playlist, actions: HomeActions) {
                 rows.firstOrNull { it.direct }?.items?.firstOrNull()?.let { Featured(it, true) }
                     ?: rows.firstOrNull { it.items.firstOrNull()?.type in setOf(ContentType.MOVIE, ContentType.SERIES) }?.items?.firstOrNull()?.let { Featured(it, false) }
             }
+            // Netflix-style: the hero follows the focused card (channels keep the last title shown).
+            var focusedVod by remember { mutableStateOf<Stream?>(null) }
+            val resumeIds = remember(rows) { rows.filter { it.direct }.flatMap { r -> r.items.map { it.id } }.toSet() }
+            val shown = focusedVod?.let { Featured(it, it.id in resumeIds) } ?: featured
             Column(Modifier.fillMaxSize()) {
-                featured?.let { FeaturedHero(repo, playlist, it) }
-                MediaRows(rows, playlist, actions, onFocused = {}, modifier = Modifier.weight(1f))
+                shown?.let { FeaturedHero(repo, playlist, it) }
+                MediaRows(rows, playlist, actions, onFocused = { if (it.type != ContentType.LIVE) focusedVod = it }, modifier = Modifier.weight(1f))
             }
         }
     }
@@ -109,6 +118,8 @@ private fun FeaturedHero(repo: Repository, playlist: Playlist, featured: Feature
     // Lint misses the direct ProduceStateScope.value assignment in this producer.
     @SuppressLint("ProduceStateDoesNotAssignValue")
     val info by produceState<VodInfo?>(null, stream.id) {
+        // Short pause so scrolling along a row does not fetch details for every poster passed.
+        if (stream.type == ContentType.MOVIE) kotlinx.coroutines.delay(300)
         value = if (stream.type == ContentType.MOVIE) runCatching { repo.movieDetails(playlist, stream) }.getOrNull() else null
     }
     Hero(

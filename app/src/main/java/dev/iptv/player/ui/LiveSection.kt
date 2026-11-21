@@ -14,6 +14,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.focus.focusProperties
+import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.unit.Dp
 import androidx.tv.material3.Border
 import androidx.tv.material3.ClickableSurfaceDefaults
@@ -43,6 +44,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -138,6 +141,18 @@ private fun LiveBrowser(
     val catState = rememberLazyListState()
     val itemFocus = remember { FocusRequester() }
     val categoryFocus = remember { FocusRequester() }
+    val firstVisibleFocus = remember { FocusRequester() }
+    val firstVisible by remember { derivedStateOf { listState.firstVisibleItemIndex } }
+    // OK on a category moves focus into its channel list (like pressing Right), starting at the top.
+    var jumpToList by remember { mutableIntStateOf(0) }
+    LaunchedEffect(jumpToList) {
+        if (jumpToList == 0) return@LaunchedEffect
+        withFrameNanos { }
+        if (items.isEmpty()) return@LaunchedEffect
+        listState.scrollToItem(0)
+        withFrameNanos { }
+        runCatching { firstVisibleFocus.requestFocus() }
+    }
     var focused by remember { mutableStateOf<Stream?>(null) }
     var epg by remember { mutableStateOf<List<EpgEntry>>(emptyList()) }
     val epgSvc = rememberEpg()
@@ -205,9 +220,10 @@ private fun LiveBrowser(
                         locked = !special && rules.isCategoryMarkedLocked(playlist, ContentType.LIVE, c.id),
                         onClick = {
                             if (!special && rules.isCategoryLocked(playlist, ContentType.LIVE, c.id)) {
-                                actions.requireUnlock { selected = c.id }
+                                actions.requireUnlock { selected = c.id; jumpToList += 1 }
                             } else {
                                 selected = c.id
+                                jumpToList++
                             }
                         },
                         onLongClick = if (special) null else ({ actions.categoryLongPress(ContentType.LIVE, c.id, c.name) }),
@@ -235,6 +251,9 @@ private fun LiveBrowser(
                 EmptyState(Icons.Rounded.Tv, uiContext.getString(R.string.ui_channels_empty), hint)
             } else {
                 LazyColumn(
+                    // Re-entering the list returns to the last focused channel, else the top visible one
+                    // (not whichever row happens to be level with the category).
+                    Modifier.focusRestorer { firstVisibleFocus },
                     state = listState,
                     verticalArrangement = Arrangement.spacedBy(4.dp),
                     contentPadding = PaddingValues(top = 4.dp, bottom = 48.dp, start = 4.dp, end = 4.dp),
@@ -253,7 +272,9 @@ private fun LiveBrowser(
                             onFocused = { focused = s },
                             nowTitle = nowProg?.title,
                             progress = nowProg?.let { (nowSec - it.start).toFloat() / (it.stop - it.start).coerceAtLeast(1) },
-                            modifier = if (i == restoreIndex) Modifier.focusRequester(itemFocus) else Modifier,
+                            modifier = Modifier
+                                .then(if (i == restoreIndex) Modifier.focusRequester(itemFocus) else Modifier)
+                                .then(if (i == firstVisible) Modifier.focusRequester(firstVisibleFocus) else Modifier),
                         )
                     }
                 }

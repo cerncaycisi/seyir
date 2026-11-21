@@ -32,7 +32,13 @@ object DeepLinks {
 class WatchNextPublisher(private val context: Context) {
     fun sync(entries: List<HistoryEntry>) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
-        runCatching { doSync(continueWatching(entries).take(MAX_ITEMS)) }
+        // One card per title: several episodes of a series (or old and new history keys of the same movie)
+        // otherwise showed up as duplicates in the row.
+        val unique = continueWatching(entries)
+            .sortedByDescending { it.updatedAt }
+            .distinctBy { it.playlistId to (it.seriesId ?: it.id) }
+            .take(MAX_ITEMS)
+        runCatching { doSync(unique) }
     }
 
     @RequiresApi(Build.VERSION_CODES.O)

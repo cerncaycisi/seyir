@@ -51,6 +51,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.focus.FocusDirection
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.activity.compose.BackHandler
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -193,6 +198,48 @@ fun HomeScreen(
         requireUnlock = { a -> if (rules.unlocked || hasPin.isEmpty()) a() else pendingUnlock = a },
     )
 
+    // OK on a menu entry moves focus into that section (its own first-focus logic runs again);
+    // picking the section already shown just steps right into it.
+    val focusManager = LocalFocusManager.current
+    var stepIntoContent by remember { mutableIntStateOf(0) }
+    fun selectSection(s: Section) {
+        if (s == section) {
+            stepIntoContent++
+        } else {
+            restoreId = null
+            initialFocus = true
+            section = s
+        }
+    }
+    LaunchedEffect(stepIntoContent) {
+        if (stepIntoContent > 0) focusManager.moveFocus(FocusDirection.Right)
+    }
+    // Back walks outwards like other TV apps: content → menu → Home → "exit?" instead of closing the app at once.
+    // Registered before the sections compose, so their own Back handlers (dialogs, edits) win.
+    var drawerFocused by remember { mutableStateOf(false) }
+    var confirmExit by remember { mutableStateOf(false) }
+    BackHandler {
+        when {
+            !drawerFocused -> runCatching { navFocus[section.ordinal].requestFocus() }
+            section != Section.HOME -> {
+                section = Section.HOME
+                restoreId = null
+                initialFocus = false
+                runCatching { navFocus[Section.HOME.ordinal].requestFocus() }
+            }
+            else -> confirmExit = true
+        }
+    }
+    if (confirmExit) {
+        ConfirmDialog(
+            title = context.getString(R.string.ui_exit_title),
+            message = playlist.name,
+            confirmLabel = context.getString(R.string.ui_exit_confirm),
+            onConfirm = { context.findActivity()?.finish() },
+            onDismiss = { confirmExit = false },
+        )
+    }
+
     ModalNavigationDrawer(
         scrimBrush = Brush.horizontalGradient(listOf(Palette.Background.copy(alpha = 0.92f), Color.Transparent)),
         drawerContent = { value ->
@@ -207,7 +254,8 @@ fun HomeScreen(
                     .padding(horizontal = 8.dp, vertical = 8.dp)
                     .verticalScroll(rememberScrollState())
                     // Entering the menu lands on the current section instead of the nearest item.
-                    .focusProperties { enter = { navFocus[section.ordinal] } },
+                    .focusProperties { enter = { navFocus[section.ordinal] } }
+                    .onFocusChanged { drawerFocused = it.hasFocus },
                 verticalArrangement = Arrangement.spacedBy(2.dp),
             ) {
                 Row(Modifier.padding(start = 8.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -230,9 +278,9 @@ fun HomeScreen(
                 Section.entries.forEach { s ->
                     NavigationDrawerItem(
                         selected = s == section,
-                        onClick = { section = s },
+                        onClick = { selectSection(s) },
                         leadingContent = { Icon(s.icon, contentDescription = null) },
-                        modifier = Modifier.height(42.dp).focusRequester(navFocus[s.ordinal]).pointerClick({ section = s }),
+                        modifier = Modifier.height(42.dp).focusRequester(navFocus[s.ordinal]).pointerClick({ selectSection(s) }),
                     ) { Text(s.label) }
                 }
                 Spacer(Modifier.weight(1f))
@@ -378,4 +426,10 @@ fun ScreenTitle(title: String, subtitle: String? = null) {
         subtitle?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = Palette.TextMuted) }
         Spacer(Modifier.height(12.dp))
     }
+}
+
+private tailrec fun android.content.Context.findActivity(): android.app.Activity? = when (this) {
+    is android.app.Activity -> this
+    is android.content.ContextWrapper -> baseContext.findActivity()
+    else -> null
 }

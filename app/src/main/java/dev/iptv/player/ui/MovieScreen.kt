@@ -169,15 +169,15 @@ private fun MovieDetail(
                     modifier = Modifier.padding(top = 12.dp).widthIn(max = 560.dp),
                     style = MaterialTheme.typography.bodyMedium,
                     color = Palette.TextMuted,
-                    maxLines = 4,
+                    maxLines = 3,
                     overflow = TextOverflow.Ellipsis,
                 )
             }
             info?.director?.let { CreditLine(uiContext.getString(R.string.ui_director), it) }
             info?.cast?.let { CreditLine(uiContext.getString(R.string.ui_cast), it) }
 
-            // Primary action on its own row, secondary actions below (all labelled, no long-press needed).
-            Column(Modifier.padding(top = 18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            // One row of labelled actions, primary first (Netflix-like); no long-press needed.
+            Row(Modifier.padding(top = 18.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 if (data.resumeMs > 0) {
                     ActionButton(
                         uiContext.getString(R.string.ui_resume_position, formatPosition(data.resumeMs)),
@@ -189,25 +189,23 @@ private fun MovieDetail(
                 } else {
                     ActionButton(uiContext.getString(R.string.ui_play), Icons.Rounded.PlayArrow, primary = true, onClick = { onPlay(listOf(stream), 0) }, modifier = Modifier.focusRequester(primary))
                 }
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    if (data.resumeMs > 0) {
-                        ActionButton(uiContext.getString(R.string.ui_restart), Icons.Rounded.Replay) {
-                            scope.launch {
-                                repo.store.savePosition(key, 0)
-                                onPlay(listOf(stream), 0)
-                            }
+                if (data.resumeMs > 0) {
+                    ActionButton(uiContext.getString(R.string.ui_restart), Icons.Rounded.Replay) {
+                        scope.launch {
+                            repo.store.savePosition(key, 0)
+                            onPlay(listOf(stream), 0)
                         }
                     }
-                    ActionButton(
-                        if (isLater) uiContext.getString(R.string.ui_remove_watch_later) else uiContext.getString(R.string.ui_add_watch_later),
-                        if (isLater) Icons.Rounded.Check else Icons.Rounded.WatchLater,
-                    ) { scope.launch { repo.store.toggleWatchLater(key) } }
-                    ActionButton(
-                        if (isFavorite) uiContext.getString(R.string.ui_remove_favorites) else uiContext.getString(R.string.ui_add_favorites),
-                        if (isFavorite) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
-                    ) { scope.launch { repo.store.toggleFavorite(key) } }
-                    info?.trailer?.let { id -> ActionButton(uiContext.getString(R.string.ui_trailer), Icons.Rounded.Theaters) { openTrailer(context, id) } }
                 }
+                ActionButton(
+                    if (isLater) uiContext.getString(R.string.ui_remove_watch_later) else uiContext.getString(R.string.ui_add_watch_later),
+                    if (isLater) Icons.Rounded.Check else Icons.Rounded.WatchLater,
+                ) { scope.launch { repo.store.toggleWatchLater(key) } }
+                ActionButton(
+                    if (isFavorite) uiContext.getString(R.string.ui_remove_favorites) else uiContext.getString(R.string.ui_add_favorites),
+                    if (isFavorite) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
+                ) { scope.launch { repo.store.toggleFavorite(key) } }
+                info?.trailer?.let { id -> ActionButton(uiContext.getString(R.string.ui_trailer), Icons.Rounded.Theaters) { openTrailer(context, id) } }
             }
 
             if (data.similar.isNotEmpty()) {
