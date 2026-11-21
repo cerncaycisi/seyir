@@ -97,6 +97,8 @@ private class ViewHolder { var view: PlayerView? = null }
 
 @Composable
 fun PlayerScreen(repo: Repository, onBack: () -> Unit) {
+    // Process death: the in-memory queue is gone, rebuild it from disk (saved by PlayerQueue.save).
+    if (PlayerQueue.items.isEmpty()) PlayerQueue.restore(LocalContext.current)
     val items = PlayerQueue.items
     val playlist = PlayerQueue.playlist
     if (items.isEmpty() || playlist == null) {

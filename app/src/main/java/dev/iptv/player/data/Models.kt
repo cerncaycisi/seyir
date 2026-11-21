@@ -38,6 +38,13 @@ data class Stream(
     val added: Long? = null,
     /** Set on episode streams so history and deep links can find their series. */
     val seriesId: String? = null,
+    /** Extra HTTP request headers (User-Agent, Referer…) the player should send for this stream. */
+    val headers: Map<String, String> = emptyMap(),
+    /** Catch-up mode as given by the playlist ("default", "append", "shift", "flussonic", "xc"…), null when unsupported. */
+    val catchup: String? = null,
+    val catchupDays: Int = 0,
+    /** Catch-up URL template (M3U `catchup-source`), null when the mode implies a default. */
+    val catchupSource: String? = null,
 )
 
 data class Content(val categories: List<Category>, val items: List<Stream>)
@@ -70,6 +77,15 @@ data class VodInfo(
     val durationSecs: Int? = null,
     /** True when some fields were filled in from TMDB. */
     val fromTmdb: Boolean = false,
+)
+
+/** Xtream `user_info` subset. [expiresAt] is epoch seconds, null for unlimited accounts. */
+data class AccountInfo(
+    val status: String?,
+    val expiresAt: Long?,
+    val maxConnections: Int?,
+    val activeConnections: Int?,
+    val trial: Boolean = false,
 )
 
 data class EpgEntry(val title: String, val start: Long, val end: Long)

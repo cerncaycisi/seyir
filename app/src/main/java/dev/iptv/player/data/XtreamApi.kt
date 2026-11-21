@@ -30,7 +30,14 @@ class XtreamApi(source: PlaylistSource.Xtream, private val http: OkHttpClient) {
         }
     }
 
-    suspend fun login(): Boolean = (call("") as? JsonObject)?.obj("user_info")?.str("auth") == "1"
+    /** Standard Xtream XMLTV guide endpoint for this account. */
+    fun xmltvUrl(): String = "$base/xmltv.php?username=${enc(user)}&password=${enc(pass)}"
+
+    suspend fun login(): Boolean = userInfo()?.str("auth").let { it == "1" || it == "true" }
+
+    private suspend fun userInfo(): JsonObject? = (call("") as? JsonObject)?.obj("user_info")
+
+    suspend fun accountInfo(): AccountInfo? = userInfo()?.let(::parseAccountInfo)
 
     suspend fun categories(type: ContentType): List<Category> {
         val action = when (type) {
@@ -50,6 +57,8 @@ class XtreamApi(source: PlaylistSource.Xtream, private val http: OkHttpClient) {
             Stream(
                 id, o.str("name").orEmpty(), o.str("stream_icon").blankToNull(), "$base/live/$user/$pass/$id.ts",
                 o.str("category_id").orEmpty(), type, o.str("epg_channel_id").blankToNull(),
+                catchup = if (o.str("tv_archive") == "1") "xc" else null,
+                catchupDays = if (o.str("tv_archive") == "1") o.str("tv_archive_duration")?.toIntOrNull() ?: 0 else 0,
             )
         }
         ContentType.MOVIE -> call("&action=get_vod_streams").objects().mapNotNull { o ->
@@ -177,3 +186,11 @@ internal fun youtubeId(value: String): String? {
     Regex("""(?:v=|youtu\.be/|embed/)([A-Za-z0-9_-]{6,})""").find(v)?.let { return it.groupValues[1] }
     return v.takeIf { Regex("[A-Za-z0-9_-]{6,20}").matches(it) }
 }
+
+internal fun parseAccountInfo(info: JsonObject) = AccountInfo(
+    status = info.str("status").blankToNull(),
+    expiresAt = info.str("exp_date")?.trim()?.toLongOrNull()?.takeIf { it > 0 },
+    maxConnections = info.str("max_connections")?.trim()?.toIntOrNull(),
+    activeConnections = info.str("active_cons")?.trim()?.toIntOrNull(),
+    trial = info.str("is_trial").let { it == "1" || it == "true" },
+)

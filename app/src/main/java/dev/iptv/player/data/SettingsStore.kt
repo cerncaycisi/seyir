@@ -67,6 +67,16 @@ class SettingsStore(context: Context) {
 
     suspend fun <T> get(setting: Setting<T>): T = flow(setting).first()
 
+    /** All stored preferences in backup form (raw keys, so settings added later are included automatically). */
+    suspend fun exportAll(): List<BackupSetting> = BackupManager.settingsToBackup(store.data.first())
+
+    /** Merges backup entries over the current settings; returns how many were applied. */
+    suspend fun importAll(items: List<BackupSetting>): Int {
+        var applied = 0
+        store.edit { applied = BackupManager.applySettings(it, items) }
+        return applied
+    }
+
     suspend fun <T> set(setting: Setting<T>, value: T) {
         store.edit { it[setting.key] = value }
     }

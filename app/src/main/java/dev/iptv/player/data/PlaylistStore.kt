@@ -17,7 +17,14 @@ import kotlinx.serialization.json.Json
 
 private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "iptv")
 
-class PlaylistStore(context: Context) {
+/** Everything this store holds, with credentials in clear text (used by backup/restore). */
+data class StoreSnapshot(
+    val playlists: List<Playlist>,
+    val favorites: Set<String>,
+    val positions: Map<String, Long>,
+)
+
+class PlaylistStore(context: Context, private val codec: Codec = SecretBox) {
     private val store = context.applicationContext.dataStore
     private val json = Json { ignoreUnknownKeys = true }
 
@@ -26,15 +33,23 @@ class PlaylistStore(context: Context) {
     private fun favoritesKey(profileId: String = ProfileStore.activeProfileId) =
         stringSetPreferencesKey(ProfileStore.profileScopedKey("favorites", profileId))
 
-    val playlists: Flow<List<Playlist>> = store.data.map { decode(it[playlistsKey]) }
+    /** Playlists with credentials decrypted. They are encrypted at rest (Xtream password, M3U URL). */
+    val playlists: Flow<List<Playlist>> = store.data.map { prefs -> decode(prefs[playlistsKey]).map(::open) }
     val activeId: Flow<String?> = store.data.map { it[activeKey] }
     @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
     val favorites: Flow<Set<String>> = ProfileStore.activeIdFlow.flatMapLatest { id -> store.data.map { it[favoritesKey(id)].orEmpty() } }
 
     suspend fun add(playlist: Playlist) {
         store.edit {
-            it[playlistsKey] = json.encodeToString(decode(it[playlistsKey]) + playlist)
+            it[playlistsKey] = json.encodeToString(decode(it[playlistsKey]) + seal(playlist))
             it[activeKey] = playlist.id
+        }
+    }
+
+    /** Replaces the playlist with the same id (name / credentials edit). Does nothing if it does not exist. */
+    suspend fun update(playlist: Playlist) {
+        store.edit {
+            it[playlistsKey] = json.encodeToString(decode(it[playlistsKey]).map { p -> if (p.id == playlist.id) seal(playlist) else p })
         }
     }
 
@@ -72,6 +87,49 @@ class PlaylistStore(context: Context) {
         }
     }
 
+    /** Rewrites legacy plain-text credentials in encrypted form. Safe to call on every start. */
+    suspend fun migrateCredentials() {
+        store.edit {
+            val raw = it[playlistsKey] ?: return@edit
+            val sealed = json.encodeToString(decode(raw).map(::seal))
+            if (sealed != raw) it[playlistsKey] = sealed
+        }
+    }
+
+    suspend fun snapshot(): StoreSnapshot {
+        val prefs = store.data.first()
+        val scoped = ProfileStore.profileScopedKey(POSITION_PREFIX)
+        val positions = prefs.asMap().mapNotNull { (key, value) ->
+            if (key.name.startsWith(scoped) && value is Long) key.name.removePrefix(scoped) to value else null
+        }.toMap()
+        return StoreSnapshot(decode(prefs[playlistsKey]).map(::open), prefs[favoritesKey()].orEmpty(), positions)
+    }
+
+    /** Merges [data] into the store in one atomic edit; see [BackupManager.mergePlaylists] for the rules. */
+    suspend fun merge(data: StoreSnapshot) {
+        store.edit { prefs ->
+            val current = decode(prefs[playlistsKey]).map(::open)
+            prefs[playlistsKey] = json.encodeToString(BackupManager.mergePlaylists(current, data.playlists).map(::seal))
+            prefs[favoritesKey()] = prefs[favoritesKey()].orEmpty() + data.favorites
+            data.positions.forEach { (key, ms) ->
+                val k = longPreferencesKey(ProfileStore.profileScopedKey("$POSITION_PREFIX$key"))
+                if (ms > (prefs[k] ?: 0L)) prefs[k] = ms
+            }
+        }
+    }
+
     private fun decode(raw: String?): List<Playlist> =
         raw?.let { runCatching { json.decodeFromString<List<Playlist>>(it) }.getOrNull() }.orEmpty()
+
+    private fun seal(p: Playlist) = p.mapSecrets(codec::encrypt)
+    private fun open(p: Playlist) = p.mapSecrets(codec::decrypt)
+
+    private fun Playlist.mapSecrets(f: (String) -> String): Playlist = when (val s = source) {
+        is PlaylistSource.M3u -> copy(source = s.copy(url = f(s.url)))
+        is PlaylistSource.Xtream -> copy(source = s.copy(password = f(s.password)))
+    }
+
+    private companion object {
+        const val POSITION_PREFIX = "pos:"
+    }
 }
