@@ -17,7 +17,9 @@ import dev.iptv.player.data.Playlist
 import dev.iptv.player.data.Repository
 import dev.iptv.player.data.Stream
 import dev.iptv.player.player.PlayerScreen
+import dev.iptv.player.ui.AboutScreen
 import dev.iptv.player.ui.AddPlaylistScreen
+import dev.iptv.player.ui.OnboardingScreen
 import dev.iptv.player.ui.HomeScreen
 import dev.iptv.player.ui.IptvTheme
 import dev.iptv.player.ui.PlaylistsScreen
@@ -30,17 +32,20 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val repository = (application as App).repository
-        setContent { IptvTheme { AppNav(repository) } }
+        val prefs = (application as App).releasePrefs
+        setContent { IptvTheme { AppNav(repository, prefs) } }
     }
 }
 
 @Composable
-private fun AppNav(repo: Repository) {
+private fun AppNav(repo: Repository, prefs: dev.iptv.player.data.ReleasePrefs) {
     val nav = rememberNavController()
     val scope = rememberCoroutineScope()
     val playlists by repo.store.playlists.collectAsState(initial = null)
     val activeId by repo.store.activeId.collectAsState(initial = null)
+    val accepted by prefs.onboardingAccepted.collectAsState(initial = null)
     val all = playlists ?: return
+    val onboarded = accepted ?: return
     val active = all.firstOrNull { it.id == activeId } ?: all.firstOrNull()
 
     fun play(playlist: Playlist, items: List<Stream>, index: Int) {
@@ -50,7 +55,16 @@ private fun AppNav(repo: Repository) {
         nav.navigate("player")
     }
 
-    NavHost(nav, startDestination = if (active == null) "playlists" else "home") {
+    NavHost(nav, startDestination = if (!onboarded) "onboarding" else if (active == null) "playlists" else "home") {
+        composable("onboarding") {
+            OnboardingScreen(onAccept = {
+                scope.launch {
+                    prefs.acceptOnboarding()
+                    nav.navigate(if (active == null) "playlists" else "home") { popUpTo(0) }
+                }
+            })
+        }
+        composable("about") { AboutScreen(onBack = { nav.popBackStack() }) }
         composable("playlists") {
             PlaylistsScreen(
                 playlists = all,

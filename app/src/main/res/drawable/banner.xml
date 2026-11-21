@@ -1,6 +1,32 @@
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
     android:width="320dp" android:height="180dp"
     android:viewportWidth="320" android:viewportHeight="180">
-    <path android:fillColor="#0B0F14" android:pathData="M0,0h320v180h-320z" />
-    <path android:fillColor="#4FC3F7" android:pathData="M135,55L190,90L135,125Z" />
+    <path android:pathData="M0,0h320v180h-320z">
+        <aapt:attr name="android:fillColor">
+            <gradient android:startX="0" android:startY="0" android:endX="320" android:endY="180"
+                android:startColor="#141B2E" android:endColor="#080B10" />
+        </aapt:attr>
+    </path>
+    <!-- soft colour washes -->
+    <path android:fillColor="#225B8CFF" android:pathData="M320,0 L320,110 Q250,80 200,0 Z" />
+    <path android:fillColor="#1634D1BF" android:pathData="M0,180 L0,110 Q70,120 120,180 Z" />
+    <!-- signal arcs -->
+    <path android:strokeColor="#335B8CFF" android:strokeWidth="2" android:strokeLineCap="round"
+        android:pathData="M215,62 Q235,90 215,118" />
+    <path android:strokeColor="#225B8CFF" android:strokeWidth="2" android:strokeLineCap="round"
+        android:pathData="M232,50 Q260,90 232,130" />
+    <path android:strokeColor="#335B8CFF" android:strokeWidth="2" android:strokeLineCap="round"
+        android:pathData="M105,62 Q85,90 105,118" />
+    <path android:strokeColor="#225B8CFF" android:strokeWidth="2" android:strokeLineCap="round"
+        android:pathData="M88,50 Q60,90 88,130" />
+    <!-- centre badge: rounded square + play triangle -->
+    <path android:pathData="M132,58 L188,58 Q200,58 200,70 L200,110 Q200,122 188,122 L132,122 Q120,122 120,110 L120,70 Q120,58 132,58 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient android:startX="120" android:startY="58" android:endX="200" android:endY="122"
+                android:startColor="#5B8CFF" android:endColor="#34D1BF" />
+        </aapt:attr>
+    </path>
+    <path android:fillColor="#FFFFFF"
+        android:pathData="M150,76 Q150,72 153.5,74 L181,88 Q184,90 181,92 L153.5,106 Q150,108 150,104 Z" />
 </vector>
