@@ -18,6 +18,8 @@ import java.util.concurrent.TimeUnit
 class Repository(context: Context) {
     val store = PlaylistStore(context)
     val settings = SettingsStore(context)
+    val prefs = ContentPrefs(settings)
+    val profiles = ProfileRepository(settings)
     val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     val history = WatchHistory(context, scope)
     val tmdb = Tmdb(context, settings)

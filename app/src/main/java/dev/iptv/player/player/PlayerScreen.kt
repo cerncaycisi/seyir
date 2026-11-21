@@ -315,6 +315,8 @@ private fun PlayerContent(repo: Repository, cfg: PlayerConfig, onBack: () -> Uni
         player.play()
         showOverlay()
         if (live) repo.history.record(playlist, current)
+        // UX hook: remember the last live channel for "Açılışta son kanal".
+        if (live) repo.scope.launch { repo.settings.set(dev.iptv.player.data.Setting.LastChannel, dev.iptv.player.data.LastChannel.encode(playlist.id, current.id)) }
         if (live) epg = runCatching { repo.shortEpg(playlist, current) }.getOrDefault(emptyList())
     }
 

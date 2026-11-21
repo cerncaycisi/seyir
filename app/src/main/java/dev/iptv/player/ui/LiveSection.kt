@@ -66,12 +66,20 @@ fun LiveSection(repo: Repository, playlist: Playlist, actions: HomeActions) {
 @Composable
 private fun LiveBrowser(repo: Repository, playlist: Playlist, content: Content, actions: HomeActions) {
     var selected by rememberSaveable { mutableStateOf(ALL) }
-    val counts = remember(content) { content.items.groupingBy { it.categoryId }.eachCount() }
-    val categories = remember(content) {
-        listOf(Category(ALL, "Tümü")) + content.categories.filter { (counts[it.id] ?: 0) > 0 }
+    val rules = actions.rules
+    // Hidden channels/categories and adult names are removed; locked categories stay listed (with a lock).
+    val base = remember(content, rules.hiddenChannels, rules.hiddenCategories, rules.hideAdult) {
+        rules.filterBase(playlist, ContentType.LIVE, content)
     }
-    val items = remember(content, selected) {
-        if (selected == ALL) content.items else content.items.filter { it.categoryId == selected }
+    val counts = remember(base) { base.items.groupingBy { it.categoryId }.eachCount() }
+    val categories = remember(base) {
+        listOf(Category(ALL, "Tümü")) + base.categories.filter { (counts[it.id] ?: 0) > 0 }
+    }
+    if (selected != ALL && categories.none { it.id == selected }) selected = ALL
+    val lockedSelected = selected != ALL && rules.isCategoryLocked(playlist, ContentType.LIVE, selected)
+    if (lockedSelected) selected = ALL
+    val items = remember(base, selected, rules.lockedCategories, rules.unlocked) {
+        if (selected == ALL) rules.unlockedItems(playlist, ContentType.LIVE, base.items) else base.items.filter { it.categoryId == selected }
     }
     val categoryName = categories.firstOrNull { it.id == selected }?.name ?: "Tümü"
     val listState = rememberLazyListState()
@@ -107,9 +115,17 @@ private fun LiveBrowser(repo: Repository, playlist: Playlist, content: Content, 
                 itemsIndexed(categories) { i, c ->
                     CategoryItem(
                         name = c.name,
-                        count = if (c.id == ALL) content.items.size else counts[c.id],
+                        count = if (c.id == ALL) base.items.size else counts[c.id],
                         selected = c.id == selected,
-                        onClick = { selected = c.id },
+                        locked = c.id != ALL && rules.isCategoryMarkedLocked(playlist, ContentType.LIVE, c.id),
+                        onClick = {
+                            if (c.id != ALL && rules.isCategoryLocked(playlist, ContentType.LIVE, c.id)) {
+                                actions.requireUnlock { selected = c.id }
+                            } else {
+                                selected = c.id
+                            }
+                        },
+                        onLongClick = if (c.id == ALL) null else ({ actions.categoryLongPress(ContentType.LIVE, c.id, c.name) }),
                         modifier = if (i == 0) Modifier.focusRequester(categoryFocus) else Modifier,
                     )
                 }
@@ -134,7 +150,7 @@ private fun LiveBrowser(repo: Repository, playlist: Playlist, content: Content, 
                             stream = s,
                             favorite = favoriteKey(playlist, s) in actions.favorites,
                             onClick = { actions.open(items, i) },
-                            onLongClick = { actions.toggleFavorite(s) },
+                            onLongClick = { actions.longPress(s, categories.firstOrNull { it.id == s.categoryId }?.name) },
                             onFocused = { focused = s },
                             modifier = if (i == restoreIndex) Modifier.focusRequester(itemFocus) else Modifier,
                         )
@@ -177,7 +193,7 @@ private fun ChannelPreview(stream: Stream?, epg: List<EpgEntry>, modifier: Modif
                 }
             }
             Spacer(Modifier.weight(1f))
-            Text("OK  izle   ·   Basılı tut  favori", style = MaterialTheme.typography.labelMedium, color = Palette.TextFaint)
+            Text("OK  izle   ·   Basılı tut  seçenekler", style = MaterialTheme.typography.labelMedium, color = Palette.TextFaint)
         }
     }
 }

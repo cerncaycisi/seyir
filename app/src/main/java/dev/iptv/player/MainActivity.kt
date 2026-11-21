@@ -3,6 +3,19 @@ package dev.iptv.player
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.runtime.produceState
+import dev.iptv.player.data.LastChannel
+import dev.iptv.player.data.Profile
+import dev.iptv.player.data.ProfileStore
+import dev.iptv.player.data.Setting
+import dev.iptv.player.data.ContentType
+import dev.iptv.player.ui.ProfilePicker
+import dev.iptv.player.ui.SettingsScreen
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.runtime.Composable
@@ -38,6 +51,7 @@ class MainActivity : ComponentActivity() {
     private val deepLink = mutableStateOf<Uri?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        installSplashScreen()
         super.onCreate(savedInstanceState)
         val repository = (application as App).repository
         val prefs = (application as App).releasePrefs
@@ -61,6 +75,13 @@ private fun AppNav(repo: Repository, prefs: dev.iptv.player.data.ReleasePrefs, d
     val accepted by prefs.onboardingAccepted.collectAsState(initial = null)
     val all = playlists ?: return
     val onboarded = accepted ?: return
+    val startup by produceState<Startup?>(null) {
+        val s = repo.settings
+        val profiles = repo.profiles.list()
+        val last = s.get(Setting.StartWithLastChannel)
+        value = Startup(profiles, s.get(Setting.DefaultSection), if (last) s.get(Setting.LastChannel) else "")
+    }
+    val st = startup ?: return
     val active = all.firstOrNull { it.id == activeId } ?: all.firstOrNull()
 
     fun play(playlist: Playlist, items: List<Stream>, index: Int) {
@@ -70,7 +91,15 @@ private fun AppNav(repo: Repository, prefs: dev.iptv.player.data.ReleasePrefs, d
         nav.navigate("player")
     }
 
-    NavHost(nav, startDestination = if (!onboarded) "onboarding" else if (active == null) "playlists" else "home") {
+    val needPicker = st.profiles.size > 1 && !ProfileStore.pickedThisLaunch
+    NavHost(
+        nav,
+        startDestination = if (!onboarded) "onboarding" else if (active == null) "playlists" else if (needPicker) "profiles" else "home",
+        enterTransition = { fadeIn(tween(220)) + scaleIn(tween(220), initialScale = 0.97f) },
+        exitTransition = { fadeOut(tween(150)) },
+        popEnterTransition = { fadeIn(tween(220)) },
+        popExitTransition = { fadeOut(tween(150)) },
+    ) {
         composable("onboarding") {
             OnboardingScreen(onAccept = {
                 scope.launch {
@@ -80,6 +109,12 @@ private fun AppNav(repo: Repository, prefs: dev.iptv.player.data.ReleasePrefs, d
             })
         }
         composable("about") { AboutScreen(onBack = { nav.popBackStack() }) }
+        composable("profiles") {
+            ProfilePicker(st.profiles, onPicked = { nav.goHome() })
+        }
+        composable("settings") {
+            SettingsScreen(repo, onProfileSwitched = { nav.goHome() })
+        }
         composable("playlists") {
             PlaylistsScreen(
                 playlists = all,
@@ -103,6 +138,16 @@ private fun AppNav(repo: Repository, prefs: dev.iptv.player.data.ReleasePrefs, d
                     if (repo.store.playlists.first().isEmpty()) nav.navigate("playlists") { popUpTo(0) }
                 }
             } else {
+                LaunchedEffect(active.id) {
+                    if (!Startup.handled) {
+                        Startup.handled = true
+                        val (pid, sid) = LastChannel.decode(st.lastChannel) ?: return@LaunchedEffect
+                        if (pid != active.id) return@LaunchedEffect
+                        val items = runCatching { repo.content(active, ContentType.LIVE).items }.getOrNull().orEmpty()
+                        val i = items.indexOfFirst { it.id == sid }
+                        if (i >= 0) play(active, items, i)
+                    }
+                }
                 HomeScreen(
                     repo = repo,
                     playlist = active,
@@ -110,6 +155,8 @@ private fun AppNav(repo: Repository, prefs: dev.iptv.player.data.ReleasePrefs, d
                     onSeries = { s -> nav.navigate("series/${Uri.encode(s.id)}") },
                     onMovie = { s -> nav.navigate("movie/${Uri.encode(s.id)}") },
                     onPlaylists = { nav.navigate("playlists") },
+                    onSettings = { nav.navigate("settings") },
+                    initialSection = st.defaultSection,
                 )
             }
         }
@@ -150,3 +197,10 @@ private fun AppNav(repo: Repository, prefs: dev.iptv.player.data.ReleasePrefs, d
 }
 
 private fun NavHostController.goHome() = navigate("home") { popUpTo(0) }
+
+private class Startup(val profiles: List<Profile>, val defaultSection: String, val lastChannel: String) {
+    companion object {
+        /** Last-channel auto launch runs once per process. */
+        @Volatile var handled = false
+    }
+}

@@ -48,6 +48,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.ErrorOutline
+import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Star
 import androidx.tv.material3.Border
@@ -164,7 +165,7 @@ fun PosterCard(
     Card(
         onClick = onClick,
         onLongClick = onLongClick,
-        modifier = modifier.width(width).aspectRatio(2f / 3f).onFocusChanged { if (it.isFocused || it.hasFocus) onFocused() },
+        modifier = modifier.width(width).aspectRatio(2f / 3f).pointerClick(onClick, onLongClick).onFocusChanged { if (it.isFocused || it.hasFocus) onFocused() },
         shape = CardDefaults.shape(cardShape),
         scale = CardDefaults.scale(focusedScale = 1.08f),
         border = CardDefaults.border(focusedBorder = Border(BorderStroke(3.dp, Palette.Primary), shape = cardShape)),
@@ -209,7 +210,7 @@ fun PosterCard(
             if (favorite) {
                 Icon(
                     Icons.Rounded.Star,
-                    contentDescription = null,
+                    contentDescription = "Favori",
                     tint = Palette.Gold,
                     modifier = Modifier.align(Alignment.TopEnd).padding(6.dp).size(22.dp),
                 )
@@ -229,7 +230,7 @@ fun ChannelCard(
     Card(
         onClick = onClick,
         onLongClick = onLongClick,
-        modifier = modifier.width(168.dp).aspectRatio(16f / 10f).onFocusChanged { if (it.isFocused || it.hasFocus) onFocused() },
+        modifier = modifier.width(168.dp).aspectRatio(16f / 10f).pointerClick(onClick, onLongClick).onFocusChanged { if (it.isFocused || it.hasFocus) onFocused() },
         shape = CardDefaults.shape(cardShape),
         scale = CardDefaults.scale(focusedScale = 1.06f),
         border = CardDefaults.border(focusedBorder = Border(BorderStroke(3.dp, Palette.Primary), shape = cardShape)),
@@ -261,7 +262,7 @@ fun ChannelRow(
     Surface(
         onClick = onClick,
         onLongClick = onLongClick,
-        modifier = modifier.fillMaxWidth().height(56.dp).onFocusChanged { if (it.isFocused || it.hasFocus) onFocused() },
+        modifier = modifier.fillMaxWidth().height(56.dp).pointerClick(onClick, onLongClick).onFocusChanged { if (it.isFocused || it.hasFocus) onFocused() },
         shape = ClickableSurfaceDefaults.shape(cardShape),
         colors = ClickableSurfaceDefaults.colors(
             containerColor = Color.Transparent,
@@ -290,16 +291,25 @@ fun ChannelRow(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
-            if (favorite) Icon(Icons.Rounded.Star, contentDescription = null, tint = Palette.Gold, modifier = Modifier.size(20.dp))
+            if (favorite) Icon(Icons.Rounded.Star, contentDescription = "Favori", tint = Palette.Gold, modifier = Modifier.size(20.dp))
         }
     }
 }
 
 @Composable
-fun CategoryItem(name: String, count: Int?, selected: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
+fun CategoryItem(
+    name: String,
+    count: Int?,
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    onLongClick: (() -> Unit)? = null,
+    locked: Boolean = false,
+) {
     Surface(
         onClick = onClick,
-        modifier = modifier.fillMaxWidth().height(42.dp),
+        onLongClick = onLongClick,
+        modifier = modifier.fillMaxWidth().height(42.dp).pointerClick(onClick, onLongClick),
         shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(10.dp)),
         colors = ClickableSurfaceDefaults.colors(
             containerColor = if (selected) Palette.Surface else Color.Transparent,
@@ -323,6 +333,7 @@ fun CategoryItem(name: String, count: Int?, selected: Boolean, onClick: () -> Un
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
+            if (locked) Icon(Icons.Rounded.Lock, contentDescription = "Kilitli", modifier = Modifier.size(16.dp))
             count?.let { Text("$it", style = MaterialTheme.typography.labelMedium) }
         }
     }

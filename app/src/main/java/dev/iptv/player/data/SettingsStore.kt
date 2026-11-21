@@ -50,6 +50,14 @@ sealed class Setting<T>(val key: Preferences.Key<T>, val default: T) {
 
     // Metadata
     data object TmdbEnabled : Setting<Boolean>(booleanPreferencesKey("tmdb_enabled"), true)
+
+    // --- UX workstream (append-only) ---
+    /** JSON list of profiles (see ProfileStore). Empty = only the implicit default profile. */
+    data object Profiles : Setting<String>(stringPreferencesKey("profiles_json"), "")
+    /** "profileId|playlistId|streamId" of the last watched live channel (see LastChannel). */
+    data object LastChannel : Setting<String>(stringPreferencesKey("last_channel"), "")
+    /** JSON map key -> display label for hidden channels/categories and locked categories. */
+    data object HiddenLabels : Setting<String>(stringPreferencesKey("hidden_labels"), "{}")
 }
 
 class SettingsStore(context: Context) {

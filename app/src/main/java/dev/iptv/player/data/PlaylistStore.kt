@@ -10,6 +10,7 @@ import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -22,11 +23,13 @@ class PlaylistStore(context: Context) {
 
     private val playlistsKey = stringPreferencesKey("playlists")
     private val activeKey = stringPreferencesKey("active")
-    private val favoritesKey = stringSetPreferencesKey("favorites")
+    private fun favoritesKey(profileId: String = ProfileStore.activeProfileId) =
+        stringSetPreferencesKey(ProfileStore.profileScopedKey("favorites", profileId))
 
     val playlists: Flow<List<Playlist>> = store.data.map { decode(it[playlistsKey]) }
     val activeId: Flow<String?> = store.data.map { it[activeKey] }
-    val favorites: Flow<Set<String>> = store.data.map { it[favoritesKey].orEmpty() }
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    val favorites: Flow<Set<String>> = ProfileStore.activeIdFlow.flatMapLatest { id -> store.data.map { it[favoritesKey(id)].orEmpty() } }
 
     suspend fun add(playlist: Playlist) {
         store.edit {
@@ -39,7 +42,12 @@ class PlaylistStore(context: Context) {
         store.edit {
             it[playlistsKey] = json.encodeToString(decode(it[playlistsKey]).filterNot { p -> p.id == id })
             if (it[activeKey] == id) it.remove(activeKey)
-            it[favoritesKey] = it[favoritesKey].orEmpty().filterNot { key -> key.startsWith("$id|") }.toSet()
+            // Favorites of every profile (default: "favorites", others: "profile.<id>.favorites").
+            for (k in it.asMap().keys.filter { k -> k.name == "favorites" || k.name.endsWith(".favorites") }) {
+                @Suppress("UNCHECKED_CAST")
+                val fk = k as Preferences.Key<Set<String>>
+                it[fk] = it[fk].orEmpty().filterNot { key -> key.startsWith("$id|") }.toSet()
+            }
         }
     }
 
@@ -49,16 +57,17 @@ class PlaylistStore(context: Context) {
 
     suspend fun toggleFavorite(key: String) {
         store.edit {
-            val current = it[favoritesKey].orEmpty()
-            it[favoritesKey] = if (key in current) current - key else current + key
+            val fk = favoritesKey()
+            val current = it[fk].orEmpty()
+            it[fk] = if (key in current) current - key else current + key
         }
     }
 
-    suspend fun position(key: String): Long = store.data.first()[longPreferencesKey("pos:$key")] ?: 0L
+    suspend fun position(key: String): Long = store.data.first()[longPreferencesKey(ProfileStore.profileScopedKey("pos:$key"))] ?: 0L
 
     suspend fun savePosition(key: String, positionMs: Long) {
         store.edit {
-            val k = longPreferencesKey("pos:$key")
+            val k = longPreferencesKey(ProfileStore.profileScopedKey("pos:$key"))
             if (positionMs > 0) it[k] = positionMs else it.remove(k)
         }
     }

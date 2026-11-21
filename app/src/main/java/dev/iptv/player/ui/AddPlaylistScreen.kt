@@ -26,7 +26,10 @@ import androidx.compose.material.icons.rounded.Label
 import androidx.compose.material.icons.rounded.Link
 import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.Person
+import androidx.compose.material.icons.rounded.PhoneAndroid
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
+import dev.iptv.player.data.PhoneMode
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.rememberCoroutineScope
@@ -64,6 +67,7 @@ fun AddPlaylistScreen(repo: Repository, onSaved: () -> Unit) {
     var url by rememberSaveable { mutableStateOf("") }
     var busy by rememberSaveable { mutableStateOf(false) }
     var error by rememberSaveable { mutableStateOf<String?>(null) }
+    var phone by remember { mutableStateOf(false) }
 
     fun save() {
         val source = if (xtream) PlaylistSource.Xtream(server, username, password) else PlaylistSource.M3u(url)
@@ -88,6 +92,7 @@ fun AddPlaylistScreen(repo: Repository, onSaved: () -> Unit) {
         }
     }
 
+    if (phone) PhoneConnectDialog(repo, PhoneMode.ADD, onDismiss = { phone = false }, onAdded = { phone = false; onSaved() })
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
         Column(
             Modifier.widthIn(max = 640.dp).fillMaxWidth().verticalScroll(rememberScrollState()).padding(vertical = 32.dp, horizontal = 24.dp),
@@ -123,6 +128,7 @@ fun AddPlaylistScreen(repo: Repository, onSaved: () -> Unit) {
             Button(onClick = { if (!busy) save() }, contentPadding = PaddingValues(horizontal = 28.dp, vertical = 12.dp)) {
                 Text(if (busy) "Kontrol ediliyor…" else "Kaydet ve bağlan")
             }
+            TvButton("Telefondan ekle", { phone = true }, icon = Icons.Rounded.PhoneAndroid)
         }
     }
 }
