@@ -32,7 +32,7 @@ import dev.iptv.player.R
 
 /** Public documents; update if the repository location changes. */
 object Links {
-    const val REPO = "https://github.com/OWNER/seyir"
+    const val REPO = "https://github.com/cerncaycisi/seyir"
     const val PRIVACY = "$REPO/blob/main/docs/PRIVACY.md"
     const val DISCLAIMER = "$REPO/blob/main/docs/DISCLAIMER.md"
 }
