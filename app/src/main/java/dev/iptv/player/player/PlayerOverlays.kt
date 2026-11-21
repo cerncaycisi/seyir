@@ -82,12 +82,6 @@ internal fun LiveOverlay(number: Int, stream: Stream, epg: List<EpgEntry>) {
             }
         }
     }
-    Spacer(Modifier.height(20.dp))
-    Text(
-        stringResource(R.string.play_live_controls),
-        style = MaterialTheme.typography.labelMedium,
-        color = Palette.TextFaint,
-    )
 }
 
 @Composable
@@ -97,13 +91,9 @@ internal fun VodOverlay(title: String, position: Long, duration: Long, playing: 
     ProgressBar(if (duration > 0) position.toFloat() / duration else 0f)
     Spacer(Modifier.height(14.dp))
     Row(verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.size(44.dp).clip(CircleShape).background(Color.White), contentAlignment = Alignment.Center) {
-            Icon(if (playing) Icons.Rounded.Pause else Icons.Rounded.PlayArrow, contentDescription = null, tint = Color.Black)
-        }
-        Spacer(Modifier.width(16.dp))
         Text("${time(position)} / ${time(duration)}", style = MaterialTheme.typography.titleMedium, color = Color.White)
         Spacer(Modifier.weight(1f))
-        Text(stringResource(R.string.play_vod_controls), style = MaterialTheme.typography.labelMedium, color = Palette.TextFaint)
+        if (duration > 0) Text(stringResource(R.string.ux_remaining, time((duration - position).coerceAtLeast(0))), style = MaterialTheme.typography.labelMedium, color = Palette.TextMuted)
     }
 }
 

@@ -93,6 +93,8 @@ import dev.iptv.player.ui.Palette
 import dev.iptv.player.ui.Pill
 import dev.iptv.player.ui.formatClock
 import dev.iptv.player.ui.RecordingDurationDialog
+import dev.iptv.player.ui.PointerButton
+import dev.iptv.player.ui.pointerClick
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -183,9 +185,13 @@ private fun PlayerContent(repo: Repository, cfg: PlayerConfig, onBack: () -> Uni
     val viewHolder = remember { ViewHolder() }
 
     var error by remember { mutableStateOf<String?>(null) }
-    var playing by remember { mutableStateOf(true) }
+    var playing by remember { mutableStateOf(false) }
+    var playRequested by remember { mutableStateOf(true) }
     var overlayTick by remember { mutableIntStateOf(0) }
     var overlay by remember { mutableStateOf(true) }
+    var controlsActive by remember { mutableStateOf(false) }
+    var settingsPage by remember { mutableStateOf(PlayerPage.Main) }
+    var buffering by remember { mutableStateOf(false) }
     var epg by remember { mutableStateOf<List<EpgEntry>>(emptyList()) }
     var position by remember { mutableLongStateOf(0L) }
     var duration by remember { mutableLongStateOf(0L) }
@@ -214,7 +220,7 @@ private fun PlayerContent(repo: Repository, cfg: PlayerConfig, onBack: () -> Uni
         PipState.autoEnter = live
         onDispose { PipState.autoEnter = false }
     }
-    LaunchedEffect(inPip) { if (inPip) { panel = Panel.None; overlay = false } }
+    LaunchedEffect(inPip) { if (inPip) { panel = Panel.None; controlsActive = false; overlay = false } }
 
     // Recording (DVR) state for the current channel.
     val recordings by remember { RecordingDb.get(context).dao().observeAll() }.collectAsState(initial = emptyList())
@@ -229,6 +235,7 @@ private fun PlayerContent(repo: Repository, cfg: PlayerConfig, onBack: () -> Uni
     val canReturnToLive = live && (shiftStartSec != null || behindSec >= Timeshift.BEHIND_LIVE_SHOW_SEC)
 
     fun showOverlay() { overlayTick++ }
+    fun openSettings(page: PlayerPage = PlayerPage.Main) { settingsPage = page; panel = Panel.Settings }
     fun toast(message: String) = android.widget.Toast.makeText(context, message, android.widget.Toast.LENGTH_SHORT).show()
     fun returnToLive() {
         pausedAtMs = 0
@@ -311,6 +318,7 @@ private fun PlayerContent(repo: Repository, cfg: PlayerConfig, onBack: () -> Uni
             }
 
             override fun onPlaybackStateChanged(state: Int) {
+                buffering = state == Player.STATE_BUFFERING
                 if (state == Player.STATE_READY) {
                     error = null
                     reconnectAttempt = 0
@@ -332,6 +340,7 @@ private fun PlayerContent(repo: Repository, cfg: PlayerConfig, onBack: () -> Uni
             }
 
             override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
+                playRequested = playWhenReady
                 val cur = items[index]
                 if (cur.type != ContentType.LIVE || holdPause[0]) return
                 if (!playWhenReady) {
@@ -421,9 +430,11 @@ private fun PlayerContent(repo: Repository, cfg: PlayerConfig, onBack: () -> Uni
         if (live) epg = runCatching { repo.shortEpg(playlist, current) }.getOrDefault(emptyList())
     }
 
-    LaunchedEffect(overlayTick) {
+    LaunchedEffect(overlayTick, playing, panel) {
         overlay = true
-        delay(5_000)
+        if (!playing || panel != Panel.None) return@LaunchedEffect
+        delay(if (controlsActive) 8_000 else 5_000)
+        controlsActive = false
         overlay = false
     }
 
@@ -481,13 +492,18 @@ private fun PlayerContent(repo: Repository, cfg: PlayerConfig, onBack: () -> Uni
     }
 
     BackHandler {
-        saveProgress()
-        onBack()
+        if (controlsActive) {
+            controlsActive = false
+            overlay = false
+        } else {
+            saveProgress()
+            onBack()
+        }
     }
 
     val focus = remember { FocusRequester() }
-    LaunchedEffect(panel, nextVisible) {
-        if (panel == Panel.None && !nextVisible) runCatching { focus.requestFocus() }
+    LaunchedEffect(panel, nextVisible, controlsActive) {
+        if (panel == Panel.None && !nextVisible && !controlsActive) runCatching { focus.requestFocus() }
     }
 
     val blocking = panel != Panel.None || nextVisible || recordingTarget != null
@@ -535,8 +551,13 @@ private fun PlayerContent(repo: Repository, cfg: PlayerConfig, onBack: () -> Uni
                     return@onPreviewKeyEvent false
                 }
                 if (code == KeyEvent.KEYCODE_MENU || code == KeyEvent.KEYCODE_SETTINGS || code == KeyEvent.KEYCODE_CAPTIONS) {
-                    panel = Panel.Settings
+                    openSettings(if (code == KeyEvent.KEYCODE_CAPTIONS) PlayerPage.Subtitle else PlayerPage.Main)
                     return@onPreviewKeyEvent true
+                }
+                if (controlsActive && event.key in listOf(Key.DirectionLeft, Key.DirectionRight, Key.DirectionUp,
+                        Key.DirectionDown, Key.DirectionCenter, Key.Enter, Key.NumPadEnter)) {
+                    showOverlay()
+                    return@onPreviewKeyEvent false
                 }
                 if (live) {
                     val digit = when (code) {
@@ -563,25 +584,25 @@ private fun PlayerContent(repo: Repository, cfg: PlayerConfig, onBack: () -> Uni
                         Key.DirectionUp, Key.ChannelUp -> { zapTo((index + 1) % items.size); true }
                         Key.DirectionDown, Key.ChannelDown -> { zapTo((index - 1 + items.size) % items.size); true }
                         Key.DirectionLeft -> { panel = Panel.Channels; true }
-                        Key.DirectionRight -> { panel = Panel.Settings; true }
+                        Key.DirectionRight -> { openSettings(); true }
                         Key.DirectionCenter, Key.Enter, Key.NumPadEnter -> {
-                            if (digits.isNotEmpty()) commitDigits() else if (overlay) overlay = false else showOverlay()
+                            if (digits.isNotEmpty()) commitDigits() else { controlsActive = true; showOverlay() }
                             true
                         }
-                        Key.MediaPlayPause -> { if (player.isPlaying) player.pause() else player.play(); showOverlay(); true }
+                        Key.MediaPlayPause -> { if (player.playWhenReady) player.pause() else player.play(); showOverlay(); true }
                         Key.MediaFastForward, Key.MediaSkipForward -> if (canReturnToLive) { returnToLive(); true } else false
                         else -> false
                     }
                 } else {
                     when (event.key) {
-                        Key.DirectionCenter, Key.Enter, Key.NumPadEnter, Key.MediaPlayPause, Key.Spacebar -> {
-                            if (player.isPlaying) player.pause() else player.play()
+                        Key.DirectionCenter, Key.Enter, Key.NumPadEnter -> { controlsActive = true; showOverlay(); true }
+                        Key.MediaPlayPause, Key.Spacebar -> {
+                            if (player.playWhenReady) player.pause() else player.play()
                             showOverlay(); true
                         }
                         Key.DirectionLeft, Key.MediaRewind -> { player.seekBack(); showOverlay(); true }
                         Key.DirectionRight, Key.MediaFastForward -> { player.seekForward(); showOverlay(); true }
-                        Key.DirectionUp -> { panel = Panel.Settings; true }
-                        Key.DirectionDown -> { showOverlay(); true }
+                        Key.DirectionUp, Key.DirectionDown -> { controlsActive = true; showOverlay(); true }
                         else -> false
                     }
                 }
@@ -590,6 +611,8 @@ private fun PlayerContent(repo: Repository, cfg: PlayerConfig, onBack: () -> Uni
         AndroidView(
             factory = { ctx ->
                 createPlayerView(ctx).apply {
+                    // The Compose indicator also respects paused playback while buffering.
+                    setShowBuffering(PlayerView.SHOW_BUFFERING_NEVER)
                     this.player = player
                     viewHolder.view = this
                 }
@@ -602,7 +625,8 @@ private fun PlayerContent(repo: Repository, cfg: PlayerConfig, onBack: () -> Uni
                 }
                 v.subtitleView?.setFractionalTextSize(SubtitleView.DEFAULT_TEXT_SIZE_FRACTION * subtitleScale / 100f)
             },
-            modifier = aspectMode.ratio?.let { Modifier.align(Alignment.Center).aspectRatio(it) } ?: Modifier.fillMaxSize(),
+            modifier = (aspectMode.ratio?.let { Modifier.align(Alignment.Center).aspectRatio(it) } ?: Modifier.fillMaxSize())
+                .pointerClick({ controlsActive = true; showOverlay() }),
         )
 
         if (error == null && reconnectAttempt > 0 && !inPip) {
@@ -629,7 +653,15 @@ private fun PlayerContent(repo: Repository, cfg: PlayerConfig, onBack: () -> Uni
                     Spacer(Modifier.height(16.dp))
                     Text(context.getString(R.string.play_channel_hint), style = MaterialTheme.typography.bodyMedium, color = Palette.TextMuted)
                 }
+                Spacer(Modifier.height(16.dp))
+                PointerButton(onClick = { error = null; reconnectAttempt = 0; player.prepare(); player.play(); showOverlay() }) {
+                    Text(stringResource(R.string.ux_retry))
+                }
             }
+        }
+
+        if (buffering && playRequested && error == null && reconnectAttempt == 0 && !inPip) {
+            dev.iptv.player.ui.LoadingState(Modifier.align(Alignment.Center).size(56.dp))
         }
 
         if (digits.isNotEmpty() && !inPip) {
@@ -673,9 +705,9 @@ private fun PlayerContent(repo: Repository, cfg: PlayerConfig, onBack: () -> Uni
                     .background(Brush.verticalGradient(listOf(Color.Transparent, Color(0xCC000000), Color(0xF2000000))))
                     .padding(start = 40.dp, end = 40.dp, top = 56.dp, bottom = 28.dp),
             ) {
-                if (live && (!playing || canReturnToLive)) {
+                if (live && (!playRequested || canReturnToLive)) {
                     Row(Modifier.padding(bottom = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                        if (!playing) Pill(context.getString(R.string.play_paused), color = Color(0x33FFFFFF), contentColor = Color.White)
+                        if (!playRequested) Pill(context.getString(R.string.play_paused), color = Color(0x33FFFFFF), contentColor = Color.White)
                         if (canReturnToLive) {
                             Spacer(Modifier.size(10.dp))
                             Pill(if (behindSec < 60) stringResource(R.string.play_behind_seconds, behindSec) else stringResource(R.string.play_behind_minutes, behindSec / 60, behindSec % 60), color = Palette.Gold, contentColor = Color.Black)
@@ -684,6 +716,21 @@ private fun PlayerContent(repo: Repository, cfg: PlayerConfig, onBack: () -> Uni
                     }
                 }
                 if (live) LiveOverlay(index + 1, current, epg) else VodOverlay(current.name, position, duration, playing)
+                Spacer(Modifier.height(12.dp))
+                PlayerControlsBar(
+                    live = live, playing = playRequested, active = controlsActive,
+                    onToggle = { if (player.playWhenReady) player.pause() else player.play(); showOverlay() },
+                    onSeekBack = { player.seekBack(); showOverlay() },
+                    onSeekForward = { player.seekForward(); showOverlay() },
+                    onChannels = { panel = Panel.Channels },
+                    onSettings = ::openSettings,
+                    onRecord = ::toggleRecording,
+                    recording = activeRecording != null,
+                    canReturnToLive = canReturnToLive,
+                    onReturnToLive = { returnToLive(); showOverlay() },
+                )
+                Text(stringResource(if (controlsActive) R.string.ux_close_controls else if (live) R.string.ux_player_hint else R.string.ux_vod_hint),
+                    style = MaterialTheme.typography.labelSmall, color = Palette.TextMuted, modifier = Modifier.padding(top = 8.dp))
             }
         }
 
@@ -706,6 +753,12 @@ private fun PlayerContent(repo: Repository, cfg: PlayerConfig, onBack: () -> Uni
                 modifier = Modifier.align(Alignment.CenterStart),
             )
             Panel.Settings -> PlayerSettingsPanel(
+                initialPage = settingsPage,
+                streamInfo = listOfNotNull(
+                    player.videoFormat?.let { f -> "${f.width} × ${f.height}" + if (f.frameRate > 0) " · ${f.frameRate.toInt()} fps" else "" },
+                    player.videoFormat?.sampleMimeType,
+                    player.audioFormat?.let { f -> listOfNotNull(f.sampleMimeType, f.language, f.sampleRate.takeIf { it > 0 }?.let { "$it Hz" }).joinToString(" · ") },
+                ).joinToString("\n\n"),
                 live = live,
                 aspect = aspectMode,
                 onAspect = { m ->

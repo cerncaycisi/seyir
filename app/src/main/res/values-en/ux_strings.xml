@@ -1,0 +1,18 @@
+<resources>
+    <string name="ux_refresh">Refresh playlist</string>
+    <string name="ux_refreshing">Refreshing…</string>
+    <string name="ux_refresh_done">Playlist updated</string>
+    <string name="ux_refresh_failed">Could not refresh. Check your connection and try again.</string>
+    <string name="ux_play">Play</string>
+    <string name="ux_pause">Pause</string>
+    <string name="ux_back_ten">Back 10 sec</string>
+    <string name="ux_forward_ten">Forward 10 sec</string>
+    <string name="ux_more">More</string>
+    <string name="ux_player_hint">OK controls · ↑↓ change channel · ← channel list</string>
+    <string name="ux_vod_hint">OK controls · ←→ seek 10 sec · Menu settings</string>
+    <string name="ux_remaining">%1$s remaining</string>
+    <string name="ux_retry">Retry</string>
+    <string name="ux_info">Stream info</string>
+    <string name="ux_info_unknown">Information is not available yet</string>
+    <string name="ux_close_controls">Back: hide controls</string>
+</resources>

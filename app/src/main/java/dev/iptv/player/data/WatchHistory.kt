@@ -77,7 +77,7 @@ class WatchHistory(context: Context, private val scope: CoroutineScope) {
     /** Newest first, for the current key prefix. */
     @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
     val entries: Flow<List<HistoryEntry>> = prefix.flatMapLatest { p ->
-        store.data.map { prefs -> decode(prefs[entriesKey]).filter { it.key.startsWith(p) }.sortedByDescending { it.updatedAt } }
+        store.data.map { prefs -> decode(prefs[entriesKey]).filter { historyBelongsTo(it.key, p) }.sortedByDescending { it.updatedAt } }
     }
 
     suspend fun entry(playlist: Playlist, stream: Stream): HistoryEntry? {
@@ -112,12 +112,15 @@ class WatchHistory(context: Context, private val scope: CoroutineScope) {
                 snapshot = trim(all)
                 prefs[entriesKey] = json.encodeToString(snapshot)
             }
-            watchNext.sync(snapshot.filter { it.key.startsWith(keyPrefix) })
+            watchNext.sync(snapshot.filter { historyBelongsTo(it.key, keyPrefix) })
         }
     }
 
     suspend fun clear() {
-        store.edit { it.remove(entriesKey) }
+        val p = keyPrefix
+        store.edit { prefs ->
+            prefs[entriesKey] = json.encodeToString(decode(prefs[entriesKey]).filterNot { historyBelongsTo(it.key, p) })
+        }
         watchNext.sync(emptyList())
     }
 
@@ -126,22 +129,19 @@ class WatchHistory(context: Context, private val scope: CoroutineScope) {
         val p = keyPrefix
         var snapshot: List<HistoryEntry> = emptyList()
         store.edit { prefs ->
-            snapshot = decode(prefs[entriesKey]).filterNot { it.key.startsWith(p) && it.type == type }
+            snapshot = historyWithoutType(decode(prefs[entriesKey]), p, type)
             prefs[entriesKey] = json.encodeToString(snapshot)
         }
-        watchNext.sync(snapshot.filter { it.key.startsWith(p) })
+        watchNext.sync(snapshot.filter { historyBelongsTo(it.key, p) })
     }
 
     /** Removes one movie / channel, or every episode of a series, from the active profile's history. */
     suspend fun remove(playlist: Playlist, stream: Stream) {
         val p = keyPrefix
-        val fav = scoped(favoriteKey(playlist, stream))
         store.edit { prefs ->
-            prefs[entriesKey] = json.encodeToString(decode(prefs[entriesKey]).filterNot {
-                it.key == fav || (it.key.startsWith(p) && stream.type == ContentType.SERIES && it.playlistId == playlist.id && it.seriesId == stream.id)
-            })
+            prefs[entriesKey] = json.encodeToString(historyWithoutItem(decode(prefs[entriesKey]), p, playlist, stream))
         }
-        watchNext.sync(decode(store.data.first()[entriesKey]).filter { it.key.startsWith(p) })
+        watchNext.sync(decode(store.data.first()[entriesKey]).filter { historyBelongsTo(it.key, p) })
     }
 
     suspend fun removePlaylist(playlistId: String) {
@@ -165,6 +165,24 @@ class WatchHistory(context: Context, private val scope: CoroutineScope) {
         const val MAX_VOD = 300
     }
 }
+
+/** Default-profile keys have no prefix; an empty startsWith check would match every profile. */
+internal fun historyBelongsTo(key: String, prefix: String): Boolean =
+    if (prefix.isEmpty()) !key.startsWith("profile.") else key.startsWith(prefix)
+
+internal fun historyWithoutType(entries: List<HistoryEntry>, prefix: String, type: ContentType) =
+    entries.filterNot { historyBelongsTo(it.key, prefix) && it.type == type }
+
+internal fun historyWithoutItem(entries: List<HistoryEntry>, prefix: String, playlist: Playlist, stream: Stream): List<HistoryEntry> {
+    val key = prefix + favoriteKey(playlist, stream)
+    return entries.filterNot {
+        historyBelongsTo(it.key, prefix) && (it.key == key ||
+            (stream.type == ContentType.SERIES && it.playlistId == playlist.id && it.seriesId == stream.id))
+    }
+}
+
+internal fun watchNextItems(entries: List<HistoryEntry>, limit: Int): List<HistoryEntry> =
+    continueWatching(entries).distinctBy { Triple(it.playlistId, it.type, it.seriesId ?: it.id) }.take(limit)
 
 /** Latest resumable movie / episode per series, newest first; the rule behind the continue-watching row. */
 fun continueWatching(entries: List<HistoryEntry>): List<HistoryEntry> {

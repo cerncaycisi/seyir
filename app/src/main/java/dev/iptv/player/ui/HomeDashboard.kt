@@ -7,6 +7,22 @@ import androidx.compose.ui.platform.LocalContext
 
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.material.icons.rounded.Refresh
+import androidx.tv.material3.Text
+import androidx.tv.material3.Icon
+import androidx.tv.material3.MaterialTheme
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.CancellationException
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Home
 import androidx.compose.runtime.Composable
@@ -39,9 +55,13 @@ private class Featured(val stream: Stream, val resuming: Boolean)
 @Composable
 fun HomeSection(repo: Repository, playlist: Playlist, actions: HomeActions) {
     val uiContext = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var refreshTick by remember { mutableIntStateOf(0) }
+    var refreshing by remember { mutableStateOf(false) }
+    var refreshMessage by remember { mutableStateOf<String?>(null) }
     // Lint misses the direct ProduceStateScope.value assignment in this producer.
     @SuppressLint("ProduceStateDoesNotAssignValue")
-    val state by produceState<Load<HomeData>>(Load.Loading, playlist.id) {
+    val state by produceState<Load<HomeData>>(Load.Loading, playlist.id, refreshTick) {
         value = loadCatching {
             suspend fun items(type: ContentType) = runCatching { repo.content(playlist, type) }
             val results = ContentType.entries.associateWith { items(it) }
@@ -55,34 +75,64 @@ fun HomeSection(repo: Repository, playlist: Playlist, actions: HomeActions) {
     val historyOrNull by repo.history.entries.collectAsState(initial = null)
 
     val history = historyOrNull
-    when (val s = if (history == null) Load.Loading else state) {
-        Load.Loading -> LoadingState()
-        is Load.Err -> ErrorState(s.message)
-        is Load.Ok -> {
-            val data = s.value
-            // Built off the main thread: it scans every movie, series and channel of the playlist.
-            val rows = rememberBackground(data, history, actions.favorites, actions.watchLater, actions.rules) {
-                buildHomeRows(uiContext, playlist, data, history.orEmpty().filter { it.playlistId == playlist.id }, actions.favorites, actions.watchLater, actions.rules)
+    Column(Modifier.fillMaxSize()) {
+        Row(Modifier.fillMaxWidth().padding(bottom = 8.dp), verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Column(Modifier.weight(1f)) {
+                Text(playlist.name, style = MaterialTheme.typography.titleMedium, color = Palette.Text,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis)
+                refreshMessage?.let { Text(it, style = MaterialTheme.typography.labelMedium, color = Palette.TextMuted) }
             }
-            if (rows == null) {
-                LoadingState()
-                return
+            PointerOutlinedButton(enabled = !refreshing, onClick = {
+                refreshing = true
+                refreshMessage = null
+                scope.launch {
+                    try {
+                        repo.reload(playlist)
+                        refreshTick++
+                        refreshMessage = uiContext.getString(R.string.ux_refresh_done)
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (_: Exception) {
+                        refreshMessage = uiContext.getString(R.string.ux_refresh_failed)
+                    } finally {
+                        refreshing = false
+                    }
+                }
+            }) {
+                Icon(Icons.Rounded.Refresh, contentDescription = null, modifier = Modifier.size(20.dp))
+                Text(uiContext.getString(if (refreshing) R.string.ux_refreshing else R.string.ux_refresh), Modifier.padding(start = 8.dp))
             }
-            if (rows.isEmpty()) {
-                EmptyState(Icons.Rounded.Home, uiContext.getString(R.string.ui_content_empty), uiContext.getString(R.string.ui_content_empty_hint))
-                return
-            }
-            val featured = remember(rows) {
-                rows.firstOrNull { it.direct }?.items?.firstOrNull()?.let { Featured(it, true) }
-                    ?: rows.firstOrNull { it.items.firstOrNull()?.type in setOf(ContentType.MOVIE, ContentType.SERIES) }?.items?.firstOrNull()?.let { Featured(it, false) }
-            }
-            // Netflix-style: the hero follows the focused card (channels keep the last title shown).
-            var focusedVod by remember { mutableStateOf<Stream?>(null) }
-            val resumeIds = remember(rows) { rows.filter { it.direct }.flatMap { r -> r.items.map { it.id } }.toSet() }
-            val shown = focusedVod?.let { Featured(it, it.id in resumeIds) } ?: featured
-            Column(Modifier.fillMaxSize()) {
-                shown?.let { FeaturedHero(repo, playlist, it) }
-                MediaRows(rows, playlist, actions, onFocused = { if (it.type != ContentType.LIVE) focusedVod = it }, modifier = Modifier.weight(1f))
+        }
+        when (val s = if (history == null) Load.Loading else state) {
+            Load.Loading -> LoadingState()
+            is Load.Err -> ErrorState(s.message)
+            is Load.Ok -> {
+                val data = s.value
+                // Built off the main thread: it scans every movie, series and channel of the playlist.
+                val rows = rememberBackground(uiContext, data, history, actions.favorites, actions.watchLater, actions.rules) {
+                    buildHomeRows(uiContext, playlist, data, history.orEmpty().filter { it.playlistId == playlist.id }, actions.favorites, actions.watchLater, actions.rules)
+                }
+                if (rows == null) {
+                    LoadingState()
+                    return@Column
+                }
+                if (rows.isEmpty()) {
+                    EmptyState(Icons.Rounded.Home, uiContext.getString(R.string.ui_content_empty), uiContext.getString(R.string.ui_content_empty_hint))
+                    return@Column
+                }
+                val featured = remember(rows) {
+                    rows.firstOrNull { it.direct }?.items?.firstOrNull()?.let { Featured(it, true) }
+                        ?: rows.firstOrNull { it.items.firstOrNull()?.type in setOf(ContentType.MOVIE, ContentType.SERIES) }?.items?.firstOrNull()?.let { Featured(it, false) }
+                }
+                // Netflix-style: the hero follows the focused card (channels keep the last title shown).
+                var focusedVod by remember { mutableStateOf<Stream?>(null) }
+                val resumeIds = remember(rows) { rows.filter { it.direct }.flatMap { r -> r.items.map { it.id } }.toSet() }
+                val shown = focusedVod?.let { Featured(it, it.id in resumeIds) } ?: featured
+                Column(Modifier.fillMaxSize()) {
+                    shown?.let { FeaturedHero(repo, playlist, it) }
+                    MediaRows(rows, playlist, actions, onFocused = { if (it.type != ContentType.LIVE) focusedVod = it }, modifier = Modifier.weight(1f))
+                }
             }
         }
     }
@@ -103,16 +153,17 @@ private fun buildHomeRows(
     val favLive = visible[ContentType.LIVE].orEmpty().filter { favoriteKey(playlist, it) in favorites }.take(40)
     val vod = visible[ContentType.MOVIE].orEmpty() + visible[ContentType.SERIES].orEmpty()
     val resume = recentStreams(continueWatching(history), vod, playlist.id)
-    val watched = recentStreams(history.filter { it.type != ContentType.LIVE }, vod, playlist.id).take(40)
-    val later = vod.filter { favoriteKey(playlist, it) in watchLater }.take(40)
+    val resumeKeys = resume.mapTo(HashSet()) { favoriteKey(playlist, it) }
+    val later = vod.filter { favoriteKey(playlist, it) in watchLater && favoriteKey(playlist, it) !in resumeKeys }.take(20)
+    val live = (recentLive + favLive + visible[ContentType.LIVE].orEmpty())
+        .filterNot { it.name.trimStart().startsWith("∞∞") }
+        .distinctBy { it.id }.take(12)
     return listOf(
         MediaRow(uiContext.getString(R.string.ui_continue_watching), resume, direct = true),
-        MediaRow(uiContext.getString(R.string.ui_cat_recent), watched),
+        MediaRow(uiContext.getString(R.string.ui_live_tv), live),
         MediaRow(uiContext.getString(R.string.ui_cat_watch_later), later),
         MediaRow(uiContext.getString(R.string.ui_recent_movies), latestOf(visible[ContentType.MOVIE].orEmpty(), 30)),
         MediaRow(uiContext.getString(R.string.ui_recent_series), latestOf(visible[ContentType.SERIES].orEmpty(), 30)),
-        MediaRow(uiContext.getString(R.string.ui_recent_channels), recentLive),
-        MediaRow(uiContext.getString(R.string.ui_favorite_channels), favLive),
     ).filter { it.items.isNotEmpty() }
 }
 
@@ -137,5 +188,6 @@ private fun FeaturedHero(repo: Repository, playlist: Playlist, featured: Feature
             info?.genre ?: stream.genre,
         ),
         plot = info?.plot ?: stream.plot,
+        compact = true,
     )
 }

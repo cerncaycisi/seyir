@@ -267,6 +267,7 @@ private fun LiveBrowser(
                     contentPadding = PaddingValues(top = 4.dp, bottom = 48.dp, start = 4.dp, end = 4.dp),
                 ) {
                     itemsIndexed(items) { i, s ->
+                        val rowFocus = remember(s.id) { FocusRequester() }
                         // Lint misses the direct ProduceStateScope.value assignment in this producer.
                         @SuppressLint("ProduceStateDoesNotAssignValue")
                         val nowProg by produceState<Programme?>(null, s.id, gen, nowSec / 60) { value = epgSvc.nowPlaying(playlist.id, s, nowSec) }
@@ -275,12 +276,18 @@ private fun LiveBrowser(
                             stream = s,
                             favorite = favoriteKey(playlist, s) in actions.favorites,
                             // First OK starts the channel in the preview; OK on the one already playing goes fullscreen.
-                            onClick = { if (preview?.channel?.id == s.id) openFullscreen(i) else preview?.play(s) ?: openFullscreen(i) },
+                            onClick = {
+                                runCatching { rowFocus.requestFocus() }
+                                focused = s
+                                lastFocusedIndex = i
+                                if (preview?.channel?.id == s.id) openFullscreen(i) else preview?.play(s) ?: openFullscreen(i)
+                            },
                             onLongClick = { actions.longPress(s, categories.firstOrNull { it.id == s.categoryId }?.name) },
                             onFocused = { focused = s; lastFocusedIndex = i },
                             nowTitle = nowProg?.title,
                             progress = nowProg?.let { (nowSec - it.start).toFloat() / (it.stop - it.start).coerceAtLeast(1) },
                             modifier = Modifier
+                                .focusRequester(rowFocus)
                                 .then(if (i == restoreIndex) Modifier.focusRequester(itemFocus) else Modifier)
                                 .then(if (i == firstVisible) Modifier.focusRequester(firstVisibleFocus) else Modifier),
                         )

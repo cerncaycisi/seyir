@@ -1,0 +1,18 @@
+<resources>
+    <string name="ux_refresh">Playlisti yenile</string>
+    <string name="ux_refreshing">Yenileniyor…</string>
+    <string name="ux_refresh_done">Playlist güncellendi</string>
+    <string name="ux_refresh_failed">Yenilenemedi. Bağlantını kontrol edip tekrar dene.</string>
+    <string name="ux_play">Oynat</string>
+    <string name="ux_pause">Duraklat</string>
+    <string name="ux_back_ten">10 sn geri</string>
+    <string name="ux_forward_ten">10 sn ileri</string>
+    <string name="ux_more">Diğer</string>
+    <string name="ux_player_hint">OK kontroller · ↑↓ kanal değiştir · ← kanal listesi</string>
+    <string name="ux_vod_hint">OK kontroller · ←→ 10 sn sar · Menü ayarlar</string>
+    <string name="ux_remaining">%1$s kaldı</string>
+    <string name="ux_retry">Tekrar dene</string>
+    <string name="ux_info">Yayın bilgisi</string>
+    <string name="ux_info_unknown">Bilgi henüz hazır değil</string>
+    <string name="ux_close_controls">Geri: kontrolleri gizle</string>
+</resources>

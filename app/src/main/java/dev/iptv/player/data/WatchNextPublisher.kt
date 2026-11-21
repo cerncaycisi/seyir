@@ -34,10 +34,7 @@ class WatchNextPublisher(private val context: Context) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
         // One card per title: several episodes of a series (or old and new history keys of the same movie)
         // otherwise showed up as duplicates in the row.
-        val unique = continueWatching(entries)
-            .sortedByDescending { it.updatedAt }
-            .distinctBy { it.playlistId to (it.seriesId ?: it.id) }
-            .take(MAX_ITEMS)
+        val unique = watchNextItems(entries, MAX_ITEMS)
         runCatching { doSync(unique) }
     }
 

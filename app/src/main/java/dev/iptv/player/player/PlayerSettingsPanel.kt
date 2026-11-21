@@ -77,7 +77,7 @@ fun speedLabel(s: Float) = if (s == 1f) stringResource(R.string.play_speed_norma
 @Composable
 private fun sleepLabel(m: Int) = if (m == 0) stringResource(R.string.play_off) else stringResource(R.string.play_minutes, m)
 
-private enum class Page(val title: Int) {
+enum class PlayerPage(val title: Int) {
     Main(R.string.play_panel_title),
     Aspect(R.string.play_aspect),
     Speed(R.string.play_speed),
@@ -87,6 +87,7 @@ private enum class Page(val title: Int) {
     SubSize(R.string.play_sub_size),
     Sleep(R.string.play_sleep),
     Online(R.string.play_online_subtitles),
+    Info(R.string.ux_info),
 }
 
 private class RowSpec(val label: String, val value: String? = null, val checked: Boolean = false, val onClick: () -> Unit)
@@ -119,11 +120,13 @@ fun PlayerSettingsPanel(
     onRecordToggle: (() -> Unit)? = null,
     onMultiView: ((Int) -> Unit)? = null,
     onPip: (() -> Unit)? = null,
+    initialPage: PlayerPage = PlayerPage.Main,
+    streamInfo: String = "",
 ) {
-    var page by remember { mutableStateOf(Page.Main) }
+    var page by remember(initialPage) { mutableStateOf(initialPage) }
     var mainFocus by remember { mutableIntStateOf(0) }
-    fun back() { page = Page.Main }
-    BackHandler { if (page == Page.Main) onClose() else back() }
+    fun back() { if (initialPage == PlayerPage.Main) page = PlayerPage.Main else onClose() }
+    BackHandler { if (page == PlayerPage.Main) onClose() else back() }
 
     val offOrAuto = { o: List<TrackOption> -> o.firstOrNull { it.selected }?.label ?: "—" }
 
@@ -139,9 +142,9 @@ fun PlayerSettingsPanel(
 
         key(page) {
             when (page) {
-                Page.Main -> {
+                PlayerPage.Main -> {
                     val rows = ArrayList<RowSpec>()
-                    fun add(label: String, value: String?, target: Page) {
+                    fun add(label: String, value: String?, target: PlayerPage) {
                         val i = rows.size
                         rows += RowSpec(label, value) { mainFocus = i; page = target }
                     }
@@ -154,36 +157,38 @@ fun PlayerSettingsPanel(
                         rows += RowSpec(stringResource(R.string.play_multiview), stringResource(R.string.play_four_channels)) { onMultiView(4) }
                     }
                     if (onPip != null) rows += RowSpec(stringResource(R.string.play_pip)) { onPip() }
-                    add(stringResource(R.string.play_aspect), aspect.label, Page.Aspect)
-                    if (!live) add(stringResource(R.string.play_speed), speedLabel(speed), Page.Speed)
-                    add(stringResource(R.string.play_quality), if (quality.isEmpty()) stringResource(R.string.play_auto) else offOrAuto(quality), Page.Quality)
-                    add(stringResource(R.string.play_audio), audio.firstOrNull { it.selected }?.label ?: if (audio.isEmpty()) stringResource(R.string.play_none) else "—", Page.Audio)
-                    add(stringResource(R.string.play_subtitles), subtitles.firstOrNull { it.selected }?.label ?: stringResource(R.string.play_off), Page.Subtitle)
-                    add(stringResource(R.string.play_sub_size), "%$subtitleScale", Page.SubSize)
-                    add(stringResource(R.string.play_sleep), sleepLabel(sleepMinutes), Page.Sleep)
-                    if (subtitleSearch != null) add(stringResource(R.string.play_online_subtitles), null, Page.Online)
+                    add(stringResource(R.string.play_aspect), aspect.label, PlayerPage.Aspect)
+                    if (!live) add(stringResource(R.string.play_speed), speedLabel(speed), PlayerPage.Speed)
+                    add(stringResource(R.string.play_quality), if (quality.isEmpty()) stringResource(R.string.play_auto) else offOrAuto(quality), PlayerPage.Quality)
+                    add(stringResource(R.string.play_audio), audio.firstOrNull { it.selected }?.label ?: if (audio.isEmpty()) stringResource(R.string.play_none) else "—", PlayerPage.Audio)
+                    add(stringResource(R.string.play_subtitles), subtitles.firstOrNull { it.selected }?.label ?: stringResource(R.string.play_off), PlayerPage.Subtitle)
+                    add(stringResource(R.string.play_sub_size), "%$subtitleScale", PlayerPage.SubSize)
+                    add(stringResource(R.string.play_sleep), sleepLabel(sleepMinutes), PlayerPage.Sleep)
+                    if (subtitleSearch != null) add(stringResource(R.string.play_online_subtitles), null, PlayerPage.Online)
+                    add(stringResource(R.string.ux_info), null, PlayerPage.Info)
                     PanelList(rows, mainFocus.coerceIn(0, rows.lastIndex))
                 }
-                Page.Aspect -> {
+                PlayerPage.Aspect -> {
                     val rows = AspectMode.entries.map { m -> RowSpec(m.label, checked = m == aspect) { onAspect(m); back() } }
                     PanelList(rows, aspect.ordinal)
                 }
-                Page.Speed -> {
+                PlayerPage.Speed -> {
                     val rows = PlaybackSpeeds.map { s -> RowSpec(speedLabel(s), checked = s == speed) { onSpeed(s); back() } }
                     PanelList(rows, PlaybackSpeeds.indexOf(speed).coerceAtLeast(0))
                 }
-                Page.Quality -> TrackPage(quality, stringResource(R.string.play_auto), onQuality, ::back)
-                Page.Audio -> TrackPage(audio, stringResource(R.string.play_no_audio), onAudio, ::back)
-                Page.Subtitle -> TrackPage(subtitles, stringResource(R.string.play_no_subtitles), onSubtitle, ::back)
-                Page.SubSize -> {
+                PlayerPage.Quality -> TrackPage(quality, stringResource(R.string.play_auto), onQuality, ::back)
+                PlayerPage.Audio -> TrackPage(audio, stringResource(R.string.play_no_audio), onAudio, ::back)
+                PlayerPage.Subtitle -> TrackPage(subtitles, stringResource(R.string.play_no_subtitles), onSubtitle, ::back)
+                PlayerPage.SubSize -> {
                     val rows = SubtitleScales.map { s -> RowSpec("%$s", checked = s == subtitleScale) { onSubtitleScale(s); back() } }
                     PanelList(rows, SubtitleScales.indexOf(subtitleScale).coerceAtLeast(1))
                 }
-                Page.Sleep -> {
+                PlayerPage.Sleep -> {
                     val rows = SleepOptions.map { m -> RowSpec(sleepLabel(m), checked = m == sleepMinutes) { onSleep(m); back() } }
                     PanelList(rows, SleepOptions.indexOf(sleepMinutes).coerceAtLeast(0))
                 }
-                Page.Online -> if (subtitleSearch != null) OnlineSubtitlePage(subtitleSearch, onDone = onClose)
+                PlayerPage.Info -> Text(streamInfo.ifBlank { stringResource(R.string.ux_info_unknown) }, style = MaterialTheme.typography.bodyLarge, color = Color.White)
+                PlayerPage.Online -> if (subtitleSearch != null) OnlineSubtitlePage(subtitleSearch, onDone = onClose)
             }
         }
     }

@@ -371,8 +371,8 @@ fun CategoryItem(
 }
 
 @Composable
-fun Hero(title: String, image: String?, meta: List<String>, plot: String?, modifier: Modifier = Modifier) {
-    Box(modifier.fillMaxWidth().height(190.dp)) {
+fun Hero(title: String, image: String?, meta: List<String>, plot: String?, modifier: Modifier = Modifier, compact: Boolean = false) {
+    Box(modifier.fillMaxWidth().height(if (compact) 136.dp else 190.dp)) {
         if (image != null) {
             AsyncImage(
                 model = image,
@@ -403,7 +403,7 @@ fun Hero(title: String, image: String?, meta: List<String>, plot: String?, modif
             )
             if (meta.isNotEmpty()) {
                 Row(Modifier.padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    meta.forEach { Pill(it) }
+                    meta.take(if (compact) 3 else meta.size).forEach { Pill(it) }
                 }
             }
             plot?.let {
@@ -412,7 +412,7 @@ fun Hero(title: String, image: String?, meta: List<String>, plot: String?, modif
                     modifier = Modifier.padding(top = 10.dp),
                     style = MaterialTheme.typography.bodyMedium,
                     color = Palette.TextMuted,
-                    maxLines = 2,
+                    maxLines = if (compact) 1 else 2,
                     overflow = TextOverflow.Ellipsis,
                 )
             }

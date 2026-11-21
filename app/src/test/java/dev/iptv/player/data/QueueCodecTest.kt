@@ -40,7 +40,7 @@ class QueueCodecTest {
     @Test
     fun processRestoreRetainsCatchupAndEpisodeSeriesIdentity() {
         val live = stream(0).copy(catchup = "xc", catchupDays = 7, archiveDays = 7)
-        val episode = stream(1).copy(type = ContentType.MOVIE, seriesId = "series-42")
+        val episode = stream(1).copy(type = ContentType.SERIES, seriesId = "series-42", season = 2, episode = 5)
         val (_, restored, index) = QueueCodec.decode(QueueCodec.encode(playlist, listOf(live, episode), 1, codec), codec)!!
         assertEquals(7, restored[0].archiveDays)
         assertEquals("xc", restored[0].catchup)

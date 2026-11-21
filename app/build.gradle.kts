@@ -9,8 +9,8 @@ plugins {
 }
 
 // Bump this for each distributed release. Git availability/history must not change an APK's version.
-// CI or release builds may supply an explicit monotonically increasing -PappVersionCode=21.
-val releaseVersionCode = providers.gradleProperty("appVersionCode").orElse("20").get().let { value ->
+// CI or release builds may supply an explicit monotonically increasing -PappVersionCode=22.
+val releaseVersionCode = providers.gradleProperty("appVersionCode").orElse("21").get().let { value ->
     value.toIntOrNull()?.takeIf { it in 1..2_100_000_000 }
         ?: throw GradleException("appVersionCode must be an integer between 1 and 2100000000 (received '$value').")
 }
@@ -35,7 +35,7 @@ android {
         minSdk = 24
         targetSdk = 35
         versionCode = releaseVersionCode
-        versionName = "0.2.0"
+        versionName = "0.2.1"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         // OpenSubtitles (optional; empty key hides the feature). Values come from local.properties, never committed.
         buildConfigField("String", "OPENSUBTITLES_API_KEY", "\"${localProp("opensubtitles.apiKey")}\"")
