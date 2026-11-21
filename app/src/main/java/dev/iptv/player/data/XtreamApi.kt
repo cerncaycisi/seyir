@@ -165,7 +165,7 @@ class XtreamApi(
                 start = o.str("start_timestamp")?.toLongOrNull() ?: return@mapNotNull null,
                 end = o.str("stop_timestamp")?.toLongOrNull() ?: return@mapNotNull null,
             )
-        }
+        }.filterNot { DisplayText.isPlaceholderTitle(it.title) }
 
     private fun decodeBase64(value: String) =
         runCatching { String(Base64.decode(value, Base64.DEFAULT), Charsets.UTF_8) }.getOrDefault(value)

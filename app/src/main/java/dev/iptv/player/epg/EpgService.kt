@@ -248,7 +248,9 @@ class EpgService private constructor(context: Context) {
     /** All stored programmes for an XMLTV channel (offset applied), sorted by start. Cached. */
     suspend fun programmes(channelId: String): List<Programme> {
         cache.get(channelId)?.let { return it }
-        val list = dao.range(channelId, Long.MIN_VALUE / 2, Long.MAX_VALUE / 2).map(::shifted)
+        val list = dao.range(channelId, Long.MIN_VALUE / 2, Long.MAX_VALUE / 2)
+            .filterNot { dev.iptv.player.data.DisplayText.isPlaceholderTitle(it.title) }
+            .map(::shifted)
         cache.put(channelId, list)
         return list
     }
@@ -258,13 +260,15 @@ class EpgService private constructor(context: Context) {
 
     suspend fun nowPlaying(playlistId: String, stream: Stream, nowSec: Long = nowSec()): Programme? {
         val id = resolve(playlistId, stream) ?: return null
-        return dao.at(id, nowSec - offsetSec)?.let(::shifted)
+        return dao.at(id, nowSec - offsetSec)?.takeUnless { dev.iptv.player.data.DisplayText.isPlaceholderTitle(it.title) }?.let(::shifted)
     }
 
     /** The programme airing now followed by the next ones, [count] in total. */
     suspend fun nowAndNext(playlistId: String, stream: Stream, count: Int = 2, nowSec: Long = nowSec()): List<Programme> {
         val id = resolve(playlistId, stream) ?: return emptyList()
-        return dao.range(id, nowSec - offsetSec, nowSec - offsetSec + 12 * 3600).map(::shifted).filter { it.stop > nowSec }.take(count)
+        return dao.range(id, nowSec - offsetSec, nowSec - offsetSec + 12 * 3600)
+            .filterNot { dev.iptv.player.data.DisplayText.isPlaceholderTitle(it.title) }
+            .map(::shifted).filter { it.stop > nowSec }.take(count)
     }
 
     /** Finished programmes inside the archive window, newest first. */

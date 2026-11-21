@@ -71,6 +71,7 @@ import androidx.tv.material3.Text
 import coil.compose.AsyncImage
 import dev.iptv.player.data.ContentType
 import dev.iptv.player.data.Playlist
+import dev.iptv.player.data.DisplayText
 import dev.iptv.player.data.Repository
 import dev.iptv.player.data.SeriesInfo
 import dev.iptv.player.data.ContinueMode
@@ -102,7 +103,7 @@ private fun SeriesDetail(repo: Repository, playlist: Playlist, seriesId: String,
     // Every episode as a playable stream; ids and series id let history and deep links find them again.
     val all = remember(uiContext, info) {
         info.episodes.map { e ->
-            Stream(e.id, uiContext.getString(R.string.ui_episode_name, info.name, e.season, e.number, e.title), info.cover, e.url, "", ContentType.SERIES, seriesId = seriesId, season = e.season, episode = e.number)
+            Stream(e.id, uiContext.getString(R.string.ui_episode_name, info.name, e.season, e.number, DisplayText.episodeTitle(e.title, info.name).ifEmpty { uiContext.getString(R.string.ui_episode_number, e.number) }), info.cover, e.url, "", ContentType.SERIES, seriesId = seriesId, season = e.season, episode = e.number)
         }
     }
     val seriesStream = remember(info) { Stream(seriesId, info.name, info.cover, "", "", ContentType.SERIES) }
@@ -222,7 +223,7 @@ private fun SeriesDetail(repo: Repository, playlist: Playlist, seriesId: String,
                         val ep = seasons[season]?.getOrNull(i)
                         EpisodeRow(
                             number = ep?.number ?: (i + 1),
-                            title = ep?.title ?: e.name,
+                            title = DisplayText.episodeTitle(ep?.title, info.name).ifEmpty { uiContext.getString(R.string.ui_episode_number, ep?.number ?: (i + 1)) },
                             progress = progressById[e.id],
                             onClick = { if (resumeById[e.id] != null) pendingEpisode = i else onPlay(episodes, i) },
                         )

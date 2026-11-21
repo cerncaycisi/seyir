@@ -67,6 +67,7 @@ object XmltvParser {
             }
         }
         if (channel.isEmpty() || start == null) return null
+        if (dev.iptv.player.data.DisplayText.isPlaceholderTitle(title)) return null
         // Some feeds omit `stop`; assume a half-hour slot rather than dropping the entry.
         val end = stop ?: (start + 30 * 60)
         if (end <= start) return null
