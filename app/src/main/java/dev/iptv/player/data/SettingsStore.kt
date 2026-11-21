@@ -41,6 +41,7 @@ sealed class Setting<T>(val key: Preferences.Key<T>, val default: T) {
     data object AspectMode : Setting<String>(stringPreferencesKey("aspect_mode"), "FIT")
     data object PreferredAudioLanguage : Setting<String>(stringPreferencesKey("audio_lang"), "tr")
     data object PreferredSubtitleLanguage : Setting<String>(stringPreferencesKey("subtitle_lang"), "tr")
+    data object SubtitleStyle : Setting<String>(stringPreferencesKey("subtitle_style"), "clean")
     data object SubtitleScale : Setting<Int>(intPreferencesKey("subtitle_scale"), 100)
     data object BufferSeconds : Setting<Int>(intPreferencesKey("buffer_seconds"), 15)
     data object UserAgent : Setting<String>(stringPreferencesKey("user_agent"), "IPTVPlayer/0.1")

@@ -25,7 +25,6 @@
     <string name="ux_title_info">About this title</string>
     <string name="ux_info_loading">Loading information…</string>
     <string name="ux_tmdb_rating">TMDB rating</string>
-    <string name="ux_metadata_progress">TMDB details: %1$d / %2$d · Updating results</string>
     <string name="ux_tmdb_disabled">Enable online metadata in Settings for TMDB ratings.</string>
     <string name="ux_plot_english">Turkish description unavailable · English synopsis</string>
 </resources>

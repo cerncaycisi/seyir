@@ -185,6 +185,7 @@ private fun PlayerPage(repo: Repository) {
     val audio = rememberPref(repo, Setting.PreferredAudioLanguage)
     val sub = rememberPref(repo, Setting.PreferredSubtitleLanguage)
     val subScale = rememberPref(repo, Setting.SubtitleScale)
+    val subStyle = rememberPref(repo, Setting.SubtitleStyle)
     val buffer = rememberPref(repo, Setting.BufferSeconds)
     val ua = rememberPref(repo, Setting.UserAgent)
     val reconnect = rememberPref(repo, Setting.AutoReconnect)
@@ -194,6 +195,8 @@ private fun PlayerPage(repo: Repository) {
         item { PickerRow(uiContext.getString(R.string.ui_aspect), aspectOptions(uiContext), aspect.value, aspect.set) }
         item { PickerRow(uiContext.getString(R.string.ui_audio_language), audioLangOptions, audio.value, audio.set) }
         item { PickerRow(uiContext.getString(R.string.ui_subtitle_language), subtitleLangOptions(uiContext), sub.value, sub.set) }
+        item { PickerRow(uiContext.getString(R.string.sub_style_title), dev.iptv.player.player.SubtitleStyle.entries.map { it.key to uiContext.getString(it.labelRes) }, subStyle.value, subStyle.set) }
+        item { dev.iptv.player.player.SubtitlePreview(dev.iptv.player.player.SubtitleStyle.fromKey(subStyle.value), subScale.value) }
         item { StepperRow(uiContext.getString(R.string.ui_subtitle_size), subScale.value, 50..200, 10, { uiContext.getString(R.string.ui_percentage, it) }, subScale.set) }
         item { StepperRow(uiContext.getString(R.string.ui_buffer), buffer.value, 5..60, 5, { uiContext.getString(R.string.ui_seconds, it) }, buffer.set) }
         item { TextSettingRow("User-Agent", ua.value, "IPTVPlayer/0.1", ua.set) }

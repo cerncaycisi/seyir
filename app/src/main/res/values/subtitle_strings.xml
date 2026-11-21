@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="sub_style_title">Altyazı stili</string>
+    <string name="sub_style_clean">Sade beyaz</string>
+    <string name="sub_style_soft">Yumuşak gölge</string>
+    <string name="sub_style_yellow">Sinema sarısı</string>
+    <string name="sub_style_contrast">Koyu zemin</string>
+    <string name="sub_style_original">Kaynağın stili</string>
+    <string name="sub_style_preview">Her hikâye yeni bir yolculuk.</string>
+    <string name="sub_style_hint">Seçim anında uygulanır. Görüntü olarak gelen altyazıların stili değişmez.</string>
+</resources>

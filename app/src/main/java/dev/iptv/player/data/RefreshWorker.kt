@@ -8,16 +8,22 @@ import androidx.work.NetworkType
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
+import androidx.work.ExistingWorkPolicy
+import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.WorkInfo
+import androidx.work.workDataOf
 import dev.iptv.player.App
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import java.util.concurrent.TimeUnit
 
 /** Periodically re-downloads every playlist into the Room cache so the app opens with fresh data. */
 class RefreshWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
     override suspend fun doWork(): Result {
         val repo = (applicationContext as App).repository
-        val playlists = repo.store.playlists.first()
+        val requestedId = inputData.getString("playlist")
+        val playlists = repo.store.playlists.first().filter { requestedId == null || it.id == requestedId }
         var failed = 0
         for (playlist in playlists) {
             try {
@@ -28,11 +34,28 @@ class RefreshWorker(context: Context, params: WorkerParameters) : CoroutineWorke
                 failed++
             }
         }
-        return if (playlists.isNotEmpty() && failed == playlists.size) Result.retry() else Result.success()
+        val output = workDataOf("finished" to System.currentTimeMillis())
+        return if (playlists.isNotEmpty() && failed == playlists.size) {
+            if (requestedId != null) Result.failure(output) else Result.retry()
+        } else Result.success(output)
     }
 
     companion object {
         private const val UNIQUE_NAME = "content-refresh"
+
+        fun request(context: Context, playlistId: String) {
+            val request = OneTimeWorkRequestBuilder<RefreshWorker>()
+                .setInputData(workDataOf("playlist" to playlistId))
+                .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
+                .build()
+            WorkManager.getInstance(context).enqueueUniqueWork("playlist-refresh-$playlistId", ExistingWorkPolicy.KEEP, request)
+        }
+
+        fun observe(context: Context, playlistId: String) = WorkManager.getInstance(context)
+            .getWorkInfosForUniqueWorkFlow("playlist-refresh-$playlistId").map { jobs ->
+                jobs.firstOrNull { !it.state.isFinished }
+                    ?: jobs.maxByOrNull { it.outputData.getLong("finished", 0) }
+            }
 
         /** Schedules (or reschedules) the periodic refresh; [hours] <= 0 cancels it. Needs a network connection. */
         fun schedule(context: Context, hours: Int) {

@@ -84,6 +84,7 @@ enum class PlayerPage(val title: Int) {
     Quality(R.string.play_quality),
     Audio(R.string.play_audio),
     Subtitle(R.string.play_subtitles),
+    SubStyle(R.string.sub_style_title),
     SubSize(R.string.play_sub_size),
     Sleep(R.string.play_sleep),
     Online(R.string.play_online_subtitles),
@@ -106,6 +107,8 @@ fun PlayerSettingsPanel(
     onSubtitle: (TrackOption) -> Unit,
     quality: List<TrackOption>,
     onQuality: (TrackOption) -> Unit,
+    subtitleStyle: SubtitleStyle,
+    onSubtitleStyle: (SubtitleStyle) -> Unit,
     subtitleScale: Int,
     onSubtitleScale: (Int) -> Unit,
     sleepMinutes: Int,
@@ -162,6 +165,7 @@ fun PlayerSettingsPanel(
                     add(stringResource(R.string.play_quality), if (quality.isEmpty()) stringResource(R.string.play_auto) else offOrAuto(quality), PlayerPage.Quality)
                     add(stringResource(R.string.play_audio), audio.firstOrNull { it.selected }?.label ?: if (audio.isEmpty()) stringResource(R.string.play_none) else "—", PlayerPage.Audio)
                     add(stringResource(R.string.play_subtitles), subtitles.firstOrNull { it.selected }?.label ?: stringResource(R.string.play_off), PlayerPage.Subtitle)
+                    add(stringResource(R.string.sub_style_title), stringResource(subtitleStyle.labelRes), PlayerPage.SubStyle)
                     add(stringResource(R.string.play_sub_size), "%$subtitleScale", PlayerPage.SubSize)
                     add(stringResource(R.string.play_sleep), sleepLabel(sleepMinutes), PlayerPage.Sleep)
                     if (subtitleSearch != null) add(stringResource(R.string.play_online_subtitles), null, PlayerPage.Online)
@@ -178,7 +182,22 @@ fun PlayerSettingsPanel(
                 }
                 PlayerPage.Quality -> TrackPage(quality, stringResource(R.string.play_auto), onQuality, ::back)
                 PlayerPage.Audio -> TrackPage(audio, stringResource(R.string.play_no_audio), onAudio, ::back)
-                PlayerPage.Subtitle -> TrackPage(subtitles, stringResource(R.string.play_no_subtitles), onSubtitle, ::back)
+                PlayerPage.Subtitle -> {
+                    val rows = subtitles.map { o -> RowSpec(o.label, checked = o.selected) { onSubtitle(o); back() } } + listOf(
+                        RowSpec(stringResource(R.string.sub_style_title), stringResource(subtitleStyle.labelRes)) { page = PlayerPage.SubStyle },
+                        RowSpec(stringResource(R.string.play_sub_size), "%$subtitleScale") { page = PlayerPage.SubSize },
+                    )
+                    PanelList(rows, subtitles.indexOfFirst { it.selected }.coerceAtLeast(0))
+                }
+                PlayerPage.SubStyle -> {
+                    SubtitlePreview(subtitleStyle, subtitleScale)
+                    Spacer(Modifier.height(12.dp))
+                    Text(stringResource(R.string.sub_style_hint), style = MaterialTheme.typography.bodySmall, color = Palette.TextMuted)
+                    Spacer(Modifier.height(12.dp))
+                    PanelList(SubtitleStyle.entries.map { s ->
+                        RowSpec(stringResource(s.labelRes), checked = s == subtitleStyle) { onSubtitleStyle(s) }
+                    }, subtitleStyle.ordinal)
+                }
                 PlayerPage.SubSize -> {
                     val rows = SubtitleScales.map { s -> RowSpec("%$s", checked = s == subtitleScale) { onSubtitleScale(s); back() } }
                     PanelList(rows, SubtitleScales.indexOf(subtitleScale).coerceAtLeast(1))

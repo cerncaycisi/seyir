@@ -8,6 +8,8 @@ import dev.iptv.player.data.SettingsStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -44,8 +46,12 @@ data class TmdbInfo(
  * `tmdb.apiKey` in local.properties or the user switched [Setting.TmdbEnabled] off. Results, including
  * misses, are cached on disk so each title is searched once.
  */
+data class TmdbResolution(val info: TmdbInfo?, val completed: Boolean)
+
 class Tmdb(context: Context, private val settings: SettingsStore, private val apiKey: String = BuildConfig.TMDB_API_KEY) {
-    private val dir = File(context.applicationContext.cacheDir, "tmdb-v3").apply { mkdirs() }
+    private val oldDir = File(context.applicationContext.cacheDir, "tmdb-v3")
+    private val dir = File(context.applicationContext.filesDir, "tmdb-v3").apply { mkdirs() }
+    private val lookupLocks = java.util.concurrent.ConcurrentHashMap<String, Mutex>()
     private val memory = java.util.concurrent.ConcurrentHashMap<String, TmdbInfo>()
     private val json = Json { ignoreUnknownKeys = true }
     private val http = OkHttpClient.Builder()
@@ -62,28 +68,33 @@ class Tmdb(context: Context, private val settings: SettingsStore, private val ap
         catch (e: CancellationException) { throw e } catch (_: Exception) { emptyList() }
     }
 
-    suspend fun lookup(rawTitle: String, type: ContentType, yearHint: String? = null): TmdbInfo? = withContext(Dispatchers.IO) {
-        if (type == ContentType.LIVE || !available()) return@withContext null
+    suspend fun lookup(rawTitle: String, type: ContentType, yearHint: String? = null): TmdbInfo? = resolve(rawTitle, type, yearHint).info
+
+    suspend fun resolve(rawTitle: String, type: ContentType, yearHint: String? = null): TmdbResolution = withContext(Dispatchers.IO) {
+        if (type == ContentType.LIVE || !available()) return@withContext TmdbResolution(null, false)
         val cleaned = TitleCleaner.clean(rawTitle)
-        if (cleaned.title.length < 2) return@withContext null
+        if (cleaned.title.length < 2) return@withContext TmdbResolution(null, true)
         val year = cleaned.year ?: yearHint?.take(4)?.takeIf { it.length == 4 && it.all(Char::isDigit) }
         val file = File(dir, hash("$type|${cleaned.title.lowercase()}|$year") + ".json")
-        memory[file.name]?.let { return@withContext it.takeUnless { c -> c.isEmpty } }
-        readCache(file)?.let { memory[file.name] = it; return@withContext it.takeUnless { c -> c.isEmpty } }
-        val result = withContext(Dispatchers.IO) {
-            runCatching {
-                val tr = search(cleaned.title, year, type, "tr-TR")
-                if (tr == null) search(cleaned.title, year, type, "en-US")
-                else if (tr.plot == null) {
-                    val en = search(cleaned.title, year, type, "en-US")
-                    tr.copy(plot = en?.plot, plotLanguage = if (en?.plot != null) "en" else null)
-                } else tr
+        lookupLocks.getOrPut(file.name) { Mutex() }.withLock {
+            memory[file.name]?.let { return@withLock TmdbResolution(it.takeUnless { c -> c.isEmpty }, true) }
+            readCache(file)?.let { memory[file.name] = it; return@withLock TmdbResolution(it.takeUnless { c -> c.isEmpty }, true) }
+            val result = withContext(Dispatchers.IO) {
+                runCatching {
+                    val tr = search(cleaned.title, year, type, "tr-TR")
+                    if (tr == null) search(cleaned.title, year, type, "en-US")
+                    else if (tr.plot == null) {
+                        val en = search(cleaned.title, year, type, "en-US")
+                        tr.copy(plot = en?.plot, plotLanguage = if (en?.plot != null) "en" else null)
+                    } else tr
+                }
             }
+            // Only cache real answers; a network failure should be retried later.
+            result.exceptionOrNull()?.let { if (it is CancellationException) throw it }
+            result.getOrNull()?.let { runCatching { file.writeText(json.encodeToString(it)) }; memory[file.name] = it; return@withLock TmdbResolution(it, true) }
+            if (result.isSuccess) { runCatching { file.writeText(json.encodeToString(TmdbInfo())) }; memory[file.name] = TmdbInfo() }
+            TmdbResolution(null, result.isSuccess)
         }
-        // Only cache real answers; a network failure should be retried later.
-        result.getOrNull()?.let { runCatching { file.writeText(json.encodeToString(it)) }; memory[file.name] = it; return@withContext it }
-        if (result.isSuccess) { runCatching { file.writeText(json.encodeToString(TmdbInfo())) }; memory[file.name] = TmdbInfo() }
-        null
     }
 
     /** Credits are fetched only for a detail/pause panel, never for every catalog item. */
@@ -120,14 +131,24 @@ class Tmdb(context: Context, private val settings: SettingsStore, private val ap
     @Synchronized
     private fun genreNames(kind: String): Map<Int, String> = genreMaps.getOrPut(kind) {
         val file = File(dir, "genres-$kind.json")
+        migrate(file)
         val root = if (file.exists()) json.parseToJsonElement(file.readText()) as JsonObject
         else request("/genre/$kind/list", mapOf("language" to "tr-TR")).also { file.writeText(it.toString()) }
         (root["genres"] as? JsonArray).orEmpty().mapNotNull { it as? JsonObject }
             .mapNotNull { g -> g.str("id")?.toIntOrNull()?.let { id -> g.str("name")?.let { id to it } } }.toMap()
     }
 
-    private fun readCache(file: File): TmdbInfo? =
-        if (file.exists()) runCatching { json.decodeFromString<TmdbInfo>(file.readText()) }.getOrNull() else null
+    private fun migrate(file: File) {
+        if (!file.exists()) {
+            val old = File(oldDir, file.name)
+            if (old.exists()) runCatching { old.copyTo(file) }
+        }
+    }
+
+    private fun readCache(file: File): TmdbInfo? {
+        migrate(file)
+        return if (file.exists()) runCatching { json.decodeFromString<TmdbInfo>(file.readText()) }.getOrNull() else null
+    }
 
     private fun search(title: String, year: String?, type: ContentType, language: String): TmdbInfo? {
         val kind = if (type == ContentType.SERIES) "tv" else "movie"

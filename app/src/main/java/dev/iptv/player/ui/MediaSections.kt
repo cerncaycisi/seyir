@@ -92,13 +92,7 @@ import dev.iptv.player.data.Stream
 import dev.iptv.player.data.VodInfo
 import dev.iptv.player.data.favoriteKey
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 import dev.iptv.player.data.withCatalogMetadata
-import dev.iptv.player.data.tmdb.TmdbInfo
 import dev.iptv.player.data.Setting
 
 /** [direct] rows resume on click (continue watching) instead of opening the detail page. */
@@ -177,33 +171,9 @@ private fun VodBrowser(
     var confirmClear by remember { mutableStateOf(false) }
     val history by repo.history.entries.collectAsState(initial = null)
     val metadataEnabled by repo.settings.flow(Setting.TmdbEnabled).collectAsState(initial = true)
-    var metadata by remember(content) { mutableStateOf<Map<String, TmdbInfo?>>(emptyMap()) }
-    var metadataProgress by remember { mutableStateOf<Pair<Int, Int>?>(null) }
+    val metadata by remember(repo, playlist.id, type) { repo.metadata.observe(playlist.id, type) }.collectAsState(initial = emptyMap())
     var availableGenres by remember { mutableStateOf<List<String>>(emptyList()) }
     LaunchedEffect(type, metadataEnabled) { availableGenres = if (metadataEnabled) repo.tmdb.genres(type) else emptyList() }
-    // Fetch only a small opening batch normally. A genre/rating query completes its selected
-    // category progressively, with disk caching and four requests at a time; leaving cancels it.
-    LaunchedEffect(content, selectedKey, sort, genre, metadataEnabled, history == null, actions.favorites, actions.watchLater, rules) {
-        metadataProgress = null
-        if (history == null || !metadataEnabled || !repo.tmdb.available()) return@LaunchedEffect
-        val candidates = withContext(Dispatchers.Default) {
-            buildVodView(uiContext, playlist, type, content, rules, actions.favorites, actions.watchLater, history.orEmpty(), selectedKey, VodSort.DEFAULT, null).raw
-        }
-        val requested = if (sort == VodSort.RATING || genre != null) candidates else candidates.take(60)
-        val pending = requested.filter { !metadata.containsKey(it.id) }
-        var completed = requested.size - pending.size
-        try {
-            for (batch in pending.chunked(12)) {
-                metadataProgress = completed to requested.size
-                val results = batch.chunked(4).flatMap { chunk ->
-                    coroutineScope { chunk.map { stream -> async { stream.id to repo.tmdb.lookup(stream.name, type, stream.year) } }.awaitAll() }
-                        .also { delay(100) }
-                }
-                metadata = metadata + results
-                completed += batch.size
-            }
-        } finally { metadataProgress = null }
-    }
     // Filtering/sorting ~20k titles takes far longer than a frame: do it off the main thread and keep
     // showing the previous result meanwhile (this was the 1-2 s freeze when opening Movies/Series).
     val view = rememberBackground(content, rules, playlist.id, type, actions.favorites, actions.watchLater, history, selectedKey, sort, genre, metadata, metadataEnabled) {
@@ -306,7 +276,6 @@ private fun VodBrowser(
                 }
             }
             Spacer(Modifier.height(8.dp))
-            metadataProgress?.let { (done, total) -> Text(uiContext.getString(R.string.ux_metadata_progress, done, total), color = Palette.TextMuted, style = MaterialTheme.typography.labelSmall) }
             if (sort == VodSort.RATING && (!metadataEnabled || !repo.tmdb.configured)) {
                 Text(uiContext.getString(R.string.ux_tmdb_disabled), color = Palette.TextMuted, style = MaterialTheme.typography.labelSmall)
             }

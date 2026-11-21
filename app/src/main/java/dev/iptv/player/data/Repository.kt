@@ -17,6 +17,10 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.SerializationException
 import dev.iptv.player.data.tmdb.Tmdb
+import dev.iptv.player.data.tmdb.MetadataCatalog
+import dev.iptv.player.data.tmdb.MetadataWorker
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.IOException
@@ -40,10 +44,20 @@ class Repository(context: Context) {
     val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     val history = WatchHistory(context, scope)
     val tmdb = Tmdb(context, settings)
+    val metadata = MetadataCatalog(context)
+    private val metadataStarted = ConcurrentHashMap.newKeySet<String>()
+    private val metadataLocks = ConcurrentHashMap<String, Mutex>()
 
     init {
         // Watch history is per profile: keep its key prefix in step with the active profile.
         scope.launch { ProfileStore.activeIdFlow.collect { history.keyPrefix = ProfileStore.profileScopedKey("", it) } }
+        scope.launch {
+            settings.flow(Setting.TmdbEnabled).distinctUntilChanged().collect { enabled ->
+                if (enabled && tmdb.configured) metadata.dao.pendingCatalogs().forEach { catalog ->
+                    MetadataWorker.enqueue(appContext, catalog.playlistId, ContentType.valueOf(catalog.type))
+                }
+            }
+        }
     }
 
     private val http = OkHttpClient.Builder()
@@ -91,6 +105,7 @@ class Repository(context: Context) {
         if (!forced) {
             readDisk(playlist, type)?.let { cached ->
                 memory[key] = cached
+                prepareMetadata(playlist, type, cached.content)
                 if (isStale(cached.fetchedAt)) refreshInBackground(playlist, type)
                 return cached.content
             }
@@ -104,6 +119,7 @@ class Repository(context: Context) {
             val cached = if (forced) readDisk(playlist, type) else null
             if (cached == null) throw e
             memory[key] = cached
+            prepareMetadata(playlist, type, cached.content)
             return cached.content
         }
         return memory.getValue(key).content
@@ -167,13 +183,18 @@ class Repository(context: Context) {
 
     /** Deletes the playlist and everything cached for it. */
     suspend fun removePlaylist(playlistId: String) {
+        MetadataWorker.cancel(appContext, playlistId)
         store.remove(playlistId)
         runCatching { history.removePlaylist(playlistId) }
         ContentType.entries.forEach {
             val key = "$playlistId|$it"
-            memory.remove(key)
-            forceFresh -= key
+            metadataLocks.getOrPut(key) { Mutex() }.withLock {
+                memory.remove(key)
+                forceFresh -= key
+                metadataStarted -= key
+            }
         }
+        metadata.dao.deletePlaylist(playlistId)
         withContext(Dispatchers.IO) { runCatching { dao.clear(playlistId) } }
     }
 
@@ -262,6 +283,25 @@ class Repository(context: Context) {
         val key = key(playlist, type)
         memory[key] = Cached(content, now)
         forceFresh -= key
+        prepareMetadata(playlist, type, content, refreshed = true)
+    }
+
+    /** Reconcile once after disk load or refresh, entirely off the foreground playlist path. */
+    private fun prepareMetadata(playlist: Playlist, type: ContentType, content: Content, refreshed: Boolean = false) {
+        if (type == ContentType.LIVE) return
+        val id = key(playlist, type)
+        if (!metadataStarted.add(id) && !refreshed) return
+        scope.launch {
+            try {
+                metadataLocks.getOrPut(id) { Mutex() }.withLock {
+                    if (memory[id]?.content !== content || store.playlists.first().none { it.id == playlist.id }) return@withLock
+                    metadata.reconcile(playlist, type, content)
+                    if (tmdb.available() && metadata.dao.pending(playlist.id, type.name, 1).isNotEmpty()) {
+                        MetadataWorker.enqueue(appContext, playlist.id, type)
+                    }
+                }
+            } catch (e: CancellationException) { throw e } catch (_: Exception) { metadataStarted -= id }
+        }
     }
 
     private suspend fun providerMessage(resource: Int, vararg args: Any): ProviderMessage =

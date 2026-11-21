@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="sub_style_title">Subtitle style</string>
+    <string name="sub_style_clean">Clean white</string>
+    <string name="sub_style_soft">Soft shadow</string>
+    <string name="sub_style_yellow">Cinema yellow</string>
+    <string name="sub_style_contrast">Dark background</string>
+    <string name="sub_style_original">Source style</string>
+    <string name="sub_style_preview">Every story is a new journey.</string>
+    <string name="sub_style_hint">Changes apply immediately. Image-based subtitles keep their original appearance.</string>
+</resources>

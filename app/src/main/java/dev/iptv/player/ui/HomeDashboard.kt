@@ -19,10 +19,6 @@ import androidx.compose.material.icons.rounded.Refresh
 import androidx.tv.material3.Text
 import androidx.tv.material3.Icon
 import androidx.tv.material3.MaterialTheme
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.rememberCoroutineScope
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.CancellationException
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Home
 import androidx.compose.runtime.Composable
@@ -55,10 +51,16 @@ private class Featured(val stream: Stream, val resuming: Boolean)
 @Composable
 fun HomeSection(repo: Repository, playlist: Playlist, actions: HomeActions) {
     val uiContext = LocalContext.current
-    val scope = rememberCoroutineScope()
-    var refreshTick by remember { mutableIntStateOf(0) }
-    var refreshing by remember { mutableStateOf(false) }
-    var refreshMessage by remember { mutableStateOf<String?>(null) }
+    val refreshWork by remember(repo, playlist.id) {
+        dev.iptv.player.data.RefreshWorker.observe(repo.appContext, playlist.id)
+    }.collectAsState(initial = null)
+    val refreshing = refreshWork?.state?.isFinished == false
+    val refreshTick = refreshWork?.takeIf { it.state == androidx.work.WorkInfo.State.SUCCEEDED }?.id
+    val refreshMessage = when (refreshWork?.state) {
+        androidx.work.WorkInfo.State.SUCCEEDED -> uiContext.getString(R.string.ux_refresh_done)
+        androidx.work.WorkInfo.State.FAILED -> uiContext.getString(R.string.ux_refresh_failed)
+        else -> null
+    }
     // Lint misses the direct ProduceStateScope.value assignment in this producer.
     @SuppressLint("ProduceStateDoesNotAssignValue")
     val state by produceState<Load<HomeData>>(Load.Loading, playlist.id, refreshTick) {
@@ -84,21 +86,7 @@ fun HomeSection(repo: Repository, playlist: Playlist, actions: HomeActions) {
                 refreshMessage?.let { Text(it, style = MaterialTheme.typography.labelMedium, color = Palette.TextMuted) }
             }
             PointerOutlinedButton(enabled = !refreshing, onClick = {
-                refreshing = true
-                refreshMessage = null
-                scope.launch {
-                    try {
-                        repo.reload(playlist)
-                        refreshTick++
-                        refreshMessage = uiContext.getString(R.string.ux_refresh_done)
-                    } catch (e: CancellationException) {
-                        throw e
-                    } catch (_: Exception) {
-                        refreshMessage = uiContext.getString(R.string.ux_refresh_failed)
-                    } finally {
-                        refreshing = false
-                    }
-                }
+                dev.iptv.player.data.RefreshWorker.request(repo.appContext, playlist.id)
             }) {
                 Icon(Icons.Rounded.Refresh, contentDescription = null, modifier = Modifier.size(20.dp))
                 Text(uiContext.getString(if (refreshing) R.string.ux_refreshing else R.string.ux_refresh), Modifier.padding(start = 8.dp))

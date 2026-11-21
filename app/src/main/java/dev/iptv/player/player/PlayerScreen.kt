@@ -227,6 +227,7 @@ private fun PlayerContent(repo: Repository, cfg: PlayerConfig, onBack: () -> Uni
     var trackParams by remember { mutableStateOf<TrackSelectionParameters>(player.trackSelectionParameters) }
     var aspect by rememberSaveable { mutableStateOf(cfg.aspectMode) }
     var subtitleScale by rememberSaveable { mutableIntStateOf(cfg.subtitleScale) }
+    var subtitleStyleKey by rememberSaveable { mutableStateOf(cfg.subtitleStyle) }
     var speed by remember { mutableStateOf(1f) }
     var sleepMinutes by remember { mutableIntStateOf(0) }
     var digits by remember { mutableStateOf("") }
@@ -654,7 +655,7 @@ private fun PlayerContent(repo: Repository, cfg: PlayerConfig, onBack: () -> Uni
                     AspectMode.Zoom -> androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_ZOOM
                     else -> androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FILL
                 }
-                v.subtitleView?.setFractionalTextSize(SubtitleView.DEFAULT_TEXT_SIZE_FRACTION * subtitleScale / 100f)
+                v.subtitleView?.applySubtitleStyle(SubtitleStyle.fromKey(subtitleStyleKey), subtitleScale)
             },
             modifier = (aspectMode.ratio?.let { Modifier.align(Alignment.Center).aspectRatio(it) } ?: Modifier.fillMaxSize())
                 .pointerClick({ controlsActive = true; showOverlay() }),
@@ -812,6 +813,11 @@ private fun PlayerContent(repo: Repository, cfg: PlayerConfig, onBack: () -> Uni
                 onSubtitle = { player.selectTrack(C.TRACK_TYPE_TEXT, it) },
                 quality = trackOptions(context, tracks, trackParams, C.TRACK_TYPE_VIDEO, null),
                 onQuality = { player.selectTrack(C.TRACK_TYPE_VIDEO, it) },
+                subtitleStyle = SubtitleStyle.fromKey(subtitleStyleKey),
+                onSubtitleStyle = { style ->
+                    subtitleStyleKey = style.key
+                    repo.scope.launch { repo.settings.set(Setting.SubtitleStyle, style.key) }
+                },
                 subtitleScale = subtitleScale,
                 onSubtitleScale = { s ->
                     subtitleScale = s
