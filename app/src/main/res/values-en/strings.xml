@@ -21,7 +21,7 @@
     <string name="about_tmdb">This product uses the TMDB API but is not endorsed or certified by TMDB.</string>
     <string name="about_opensubtitles">Subtitle data provided by OpenSubtitles.com.</string>
     <string name="about_licenses">Open-source licenses</string>
-    <string name="about_license_notice">This app is licensed under the Apache License 2.0.</string>
+    <string name="about_license_notice">This app is licensed under the GNU General Public License v3.0 (or later).</string>
 
 
     <!-- Crash reporter (crash_) -->

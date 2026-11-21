@@ -24,7 +24,7 @@
     <string name="about_tmdb">Bu ürün TMDB API\'sini kullanır ancak TMDB tarafından onaylanmamış veya sertifikalandırılmamıştır.</string>
     <string name="about_opensubtitles">Altyazı verileri OpenSubtitles.com tarafından sağlanır.</string>
     <string name="about_licenses">Açık kaynak lisansları</string>
-    <string name="about_license_notice">Bu uygulama Apache License 2.0 ile lisanslanmıştır.</string>
+    <string name="about_license_notice">Bu uygulama GNU Genel Kamu Lisansı v3.0 (veya sonrası) ile lisanslanmıştır.</string>
 
 
     <!-- Crash reporter (crash_) -->

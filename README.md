@@ -87,6 +87,6 @@ This setting is also enabled in `gradle.properties` to retain the app and its da
 No content is provided. Only add content you are legally entitled to access; you are solely responsible for it. See [docs/DISCLAIMER.md](docs/DISCLAIMER.md) and [docs/PRIVACY.md](docs/PRIVACY.md).
 
 ## License
-Apache-2.0, see [LICENSE](LICENSE). Contributing: [CONTRIBUTING.md](CONTRIBUTING.md).
+GPL-3.0-or-later, see [LICENSE](LICENSE). The bundled FFmpeg audio decoder (Jellyfin `media3-ffmpeg-decoder`) is GPL-3.0, so the app as a whole is distributed under GPL-3.0. Contributing: [CONTRIBUTING.md](CONTRIBUTING.md).
 
 This product uses the TMDB API but is not endorsed or certified by TMDB. Subtitle data provided by OpenSubtitles.com.
