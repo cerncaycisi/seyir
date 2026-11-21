@@ -23,15 +23,20 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.CheckCircle
+import androidx.compose.material.icons.rounded.Favorite
+import androidx.compose.material.icons.rounded.FavoriteBorder
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.VideoLibrary
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
@@ -59,33 +64,64 @@ import dev.iptv.player.data.Playlist
 import dev.iptv.player.data.Repository
 import dev.iptv.player.data.SeriesInfo
 import dev.iptv.player.data.Stream
+import dev.iptv.player.data.favoriteKey
+import dev.iptv.player.data.seriesDetails
+import kotlinx.coroutines.launch
 
 @Composable
 fun SeriesScreen(repo: Repository, playlist: Playlist, seriesId: String, onPlay: (List<Stream>, Int) -> Unit) {
     val state by produceState<Load<SeriesInfo>>(Load.Loading, seriesId) {
-        value = loadCatching { repo.seriesInfo(playlist, seriesId) }
+        value = loadCatching { repo.seriesDetails(playlist, seriesId) }
     }
     when (val s = state) {
         Load.Loading -> LoadingState()
         is Load.Err -> ErrorState(s.message)
-        is Load.Ok -> SeriesDetail(s.value, onPlay)
+        is Load.Ok -> SeriesDetail(repo, playlist, seriesId, s.value, onPlay)
     }
 }
 
+private class ContinueTarget(val index: Int, val resuming: Boolean)
+
 @Composable
-private fun SeriesDetail(info: SeriesInfo, onPlay: (List<Stream>, Int) -> Unit) {
+private fun SeriesDetail(repo: Repository, playlist: Playlist, seriesId: String, info: SeriesInfo, onPlay: (List<Stream>, Int) -> Unit) {
+    val scope = rememberCoroutineScope()
     val seasons = remember(info) { info.episodes.groupBy { it.season }.toSortedMap() }
-    var season by rememberSaveable { mutableIntStateOf(seasons.keys.firstOrNull() ?: 1) }
-    var lastPlayed by rememberSaveable { mutableIntStateOf(0) }
-    val episodes = remember(info, season) {
-        seasons[season].orEmpty().map { e ->
-            Stream(e.id, "S${season}B${e.number} · ${e.title}", info.cover, e.url, "", ContentType.SERIES)
+    // Every episode as a playable stream; ids and series id let history and deep links find them again.
+    val all = remember(info) {
+        info.episodes.map { e ->
+            Stream(e.id, "${info.name} · S${e.season}B${e.number} · ${e.title}", info.cover, e.url, "", ContentType.SERIES, seriesId = seriesId)
         }
     }
-    val episodeFocus = remember { FocusRequester() }
-    LaunchedEffect(Unit) {
+    val seriesStream = remember(info) { Stream(seriesId, info.name, info.cover, "", "", ContentType.SERIES) }
+    val favKey = favoriteKey(playlist, seriesStream)
+    val favorites by repo.store.favorites.collectAsState(initial = emptySet())
+    val isFavorite = favKey in favorites
+    val history by repo.history.entries.collectAsState(initial = emptyList())
+    val progressById = remember(history) {
+        history.filter { it.seriesId == seriesId && it.playlistId == playlist.id }
+            .associate { it.id to (if (it.finished) 1f else it.fraction) }
+    }
+    val target = remember(history, all) {
+        val last = history.filter { it.seriesId == seriesId && it.playlistId == playlist.id }.maxByOrNull { it.updatedAt }
+        val idx = last?.let { l -> all.indexOfFirst { it.id == l.id } } ?: -1
+        when {
+            last == null || idx < 0 -> null
+            !last.finished -> ContinueTarget(idx, true)
+            idx < all.lastIndex -> ContinueTarget(idx + 1, false)
+            else -> null
+        }
+    }
+    var chosenSeason by rememberSaveable { mutableIntStateOf(-1) }
+    val season = when {
+        chosenSeason >= 0 -> chosenSeason
+        target != null -> info.episodes[target.index].season
+        else -> seasons.keys.firstOrNull() ?: 1
+    }
+    val episodes = remember(info, season) { all.filterIndexed { i, _ -> info.episodes[i].season == season } }
+    val primary = remember { FocusRequester() }
+    LaunchedEffect(seasons.isEmpty()) {
         withFrameNanos { }
-        runCatching { episodeFocus.requestFocus() }
+        runCatching { primary.requestFocus() }
     }
 
     Box(Modifier.fillMaxSize()) {
@@ -105,7 +141,7 @@ private fun SeriesDetail(info: SeriesInfo, onPlay: (List<Stream>, Int) -> Unit) 
         )
         Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0.35f to Color.Transparent, 0.75f to Palette.Background)))
 
-        Column(Modifier.fillMaxSize().padding(horizontal = 48.dp, vertical = 32.dp)) {
+        Column(Modifier.fillMaxSize().padding(horizontal = 48.dp, vertical = 24.dp)) {
             Text(
                 info.name,
                 style = MaterialTheme.typography.headlineLarge,
@@ -115,7 +151,7 @@ private fun SeriesDetail(info: SeriesInfo, onPlay: (List<Stream>, Int) -> Unit) 
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.widthIn(max = 640.dp),
             )
-            Row(Modifier.padding(top = 14.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(Modifier.padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 listOfNotNull(
                     info.year,
                     info.rating?.let { "★ $it" },
@@ -127,42 +163,68 @@ private fun SeriesDetail(info: SeriesInfo, onPlay: (List<Stream>, Int) -> Unit) 
             info.plot?.let {
                 Text(
                     it,
-                    modifier = Modifier.padding(top = 16.dp).widthIn(max = 560.dp),
+                    modifier = Modifier.padding(top = 12.dp).widthIn(max = 560.dp),
                     style = MaterialTheme.typography.bodyMedium,
                     color = Palette.TextMuted,
-                    maxLines = 3,
+                    maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
             }
-            Spacer(Modifier.height(18.dp))
+            Spacer(Modifier.height(14.dp))
             if (seasons.isEmpty()) {
                 EmptyState(Icons.Rounded.VideoLibrary, "Bu dizide bölüm bulunamadı")
                 return@Column
             }
-            LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp), contentPadding = PaddingValues(vertical = 6.dp, horizontal = 4.dp)) {
-                items(seasons.keys.toList()) { n -> SeasonChip("Sezon $n", n == season) { season = n } }
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.padding(start = 4.dp)) {
+                val label = when {
+                    target == null -> "Oynat"
+                    target.resuming -> "Kaldığın yerden devam et · ${episodeTag(info, target.index)}"
+                    else -> "Sıradaki bölüm · ${episodeTag(info, target.index)}"
+                }
+                ActionButton(
+                    label,
+                    Icons.Rounded.PlayArrow,
+                    primary = true,
+                    onClick = { onPlay(all, target?.index ?: 0) },
+                    modifier = Modifier.focusRequester(primary),
+                )
+                ActionButton(
+                    if (isFavorite) "Favorilerde" else "Favorilere ekle",
+                    if (isFavorite) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
+                ) { scope.launch { repo.store.toggleFavorite(favKey) } }
             }
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(8.dp))
+            LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp), contentPadding = PaddingValues(vertical = 6.dp, horizontal = 4.dp)) {
+                items(seasons.keys.toList()) { n -> SeasonChip("Sezon $n", n == season) { chosenSeason = n } }
+            }
+            Spacer(Modifier.height(8.dp))
             LazyColumn(
-                Modifier.widthIn(max = 640.dp),
+                Modifier.widthIn(max = 640.dp).weight(1f),
                 verticalArrangement = Arrangement.spacedBy(6.dp),
                 contentPadding = PaddingValues(vertical = 4.dp, horizontal = 4.dp),
             ) {
-                itemsIndexed(episodes) { i, e ->
+                itemsIndexed(episodes, key = { _, e -> e.id }) { i, e ->
+                    val ep = seasons[season]?.getOrNull(i)
                     EpisodeRow(
-                        number = seasons[season]?.getOrNull(i)?.number ?: (i + 1),
-                        title = seasons[season]?.getOrNull(i)?.title ?: e.name,
-                        onClick = {
-                            lastPlayed = i
-                            onPlay(episodes, i)
-                        },
-                        modifier = if (i == lastPlayed.coerceAtMost(episodes.lastIndex)) Modifier.focusRequester(episodeFocus) else Modifier,
+                        number = ep?.number ?: (i + 1),
+                        title = ep?.title ?: e.name,
+                        progress = progressById[e.id],
+                        onClick = { onPlay(episodes, i) },
                     )
                 }
+            }
+            if (repo.tmdb.configured) {
+                Text(
+                    "Bu ürün TMDB API'sini kullanır, ancak TMDB tarafından onaylanmamış veya sertifikalandırılmamıştır.",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = Palette.TextFaint,
+                )
             }
         }
     }
 }
+
+private fun episodeTag(info: SeriesInfo, index: Int) = info.episodes[index].let { "S${it.season}B${it.number}" }
 
 // One composable for both states so selecting a season does not drop focus.
 @Composable
@@ -188,7 +250,7 @@ private fun SeasonChip(label: String, selected: Boolean, onClick: () -> Unit) {
 }
 
 @Composable
-private fun EpisodeRow(number: Int, title: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
+private fun EpisodeRow(number: Int, title: String, progress: Float?, onClick: () -> Unit, modifier: Modifier = Modifier) {
     var focused by remember { mutableStateOf(false) }
     val shape = RoundedCornerShape(12.dp)
     Surface(
@@ -216,7 +278,15 @@ private fun EpisodeRow(number: Int, title: String, onClick: () -> Unit, modifier
                 }
             }
             Spacer(Modifier.width(16.dp))
-            Text(title, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(title, modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            if (progress != null) {
+                Spacer(Modifier.width(12.dp))
+                if (progress >= WATCHED_FRACTION) {
+                    Icon(Icons.Rounded.CheckCircle, contentDescription = "İzlendi", tint = Palette.Accent, modifier = Modifier.size(22.dp))
+                } else if (progress > 0.01f) {
+                    ProgressBar(progress, Modifier.width(64.dp))
+                }
+            }
         }
     }
 }

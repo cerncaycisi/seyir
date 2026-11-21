@@ -203,6 +203,7 @@ private fun PlayerContent(repo: Repository, cfg: PlayerConfig, onBack: () -> Uni
         val tail = minOf(60_000L, duration / 20)
         val ended = player.playbackState == Player.STATE_ENDED || (duration > 0 && pos > duration - tail)
         repo.scope.launch { repo.store.savePosition(key, if (ended) 0 else pos) }
+        repo.history.record(playlist, item, pos, duration)
     }
 
     fun buildItem(s: Stream): MediaItem = MediaItem.Builder()
@@ -313,6 +314,7 @@ private fun PlayerContent(repo: Repository, cfg: PlayerConfig, onBack: () -> Uni
         player.prepare()
         player.play()
         showOverlay()
+        if (live) repo.history.record(playlist, current)
         if (live) epg = runCatching { repo.shortEpg(playlist, current) }.getOrDefault(emptyList())
     }
 

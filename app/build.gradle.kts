@@ -42,6 +42,8 @@ android {
         buildConfigField("String", "OPENSUBTITLES_API_KEY", "\"${localProp("opensubtitles.apiKey")}\"")
         buildConfigField("String", "OPENSUBTITLES_USERNAME", "\"${localProp("opensubtitles.username")}\"")
         buildConfigField("String", "OPENSUBTITLES_PASSWORD", "\"${localProp("opensubtitles.password")}\"")
+        // TMDB key comes from local.properties (tmdb.apiKey); empty disables enrichment.
+        buildConfigField("String", "TMDB_API_KEY", "\"${localProp("tmdb.apiKey")}\"")
     }
 
 
@@ -104,6 +106,7 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
     implementation("io.coil-kt:coil-compose:2.7.0")
+    implementation("androidx.tvprovider:tvprovider:1.0.0")
 
     testImplementation("junit:junit:4.13.2")
 }

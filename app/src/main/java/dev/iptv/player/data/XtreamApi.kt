@@ -64,6 +64,7 @@ class XtreamApi(source: PlaylistSource.Xtream, private val http: OkHttpClient) {
                 type = type,
                 rating = o.str("rating").cleanRating(),
                 year = o.str("year").blankToNull(),
+                added = o.str("added")?.toLongOrNull(),
             )
         }
         ContentType.SERIES -> call("&action=get_series").objects().mapNotNull { o ->
@@ -80,6 +81,7 @@ class XtreamApi(source: PlaylistSource.Xtream, private val http: OkHttpClient) {
                 plot = o.str("plot").blankToNull(),
                 backdrop = o.firstStr("backdrop_path"),
                 genre = o.str("genre").blankToNull(),
+                added = o.str("last_modified")?.toLongOrNull(),
             )
         }
     }
@@ -94,6 +96,11 @@ class XtreamApi(source: PlaylistSource.Xtream, private val http: OkHttpClient) {
             duration = info.str("duration").blankToNull(),
             year = (info.str("releasedate") ?: info.str("release_date"))?.take(4).blankToNull(),
             rating = info.str("rating").cleanRating(),
+            cast = (info.str("cast") ?: info.str("actors")).blankToNull(),
+            director = info.str("director").blankToNull(),
+            trailer = info.str("youtube_trailer").blankToNull()?.let { youtubeId(it) },
+            poster = (info.str("movie_image") ?: info.str("cover_big")).blankToNull(),
+            durationSecs = info.str("duration_secs")?.toIntOrNull()?.takeIf { it > 0 },
         )
     }
 
@@ -162,4 +169,11 @@ private fun JsonObject.firstStr(key: String): String? = when (val e = this[key])
 private fun String?.cleanRating(): String? {
     val value = this?.trim()?.toDoubleOrNull() ?: return null
     return if (value > 0) String.format(java.util.Locale.US, "%.1f", value) else null
+}
+
+/** Panels send either a bare video id or a full YouTube URL. */
+internal fun youtubeId(value: String): String? {
+    val v = value.trim()
+    Regex("""(?:v=|youtu\.be/|embed/)([A-Za-z0-9_-]{6,})""").find(v)?.let { return it.groupValues[1] }
+    return v.takeIf { Regex("[A-Za-z0-9_-]{6,20}").matches(it) }
 }

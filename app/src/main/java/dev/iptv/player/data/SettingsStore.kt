@@ -21,7 +21,7 @@ sealed class Setting<T>(val key: Preferences.Key<T>, val default: T) {
     data object Language : Setting<String>(stringPreferencesKey("language"), "system")
     data object Clock24h : Setting<Boolean>(booleanPreferencesKey("clock_24h"), true)
     data object StartWithLastChannel : Setting<Boolean>(booleanPreferencesKey("start_last_channel"), false)
-    data object DefaultSection : Setting<String>(stringPreferencesKey("default_section"), "LIVE")
+    data object DefaultSection : Setting<String>(stringPreferencesKey("default_section"), "HOME")
     data object AutoRefreshHours : Setting<Int>(intPreferencesKey("auto_refresh_hours"), 24)
 
     // Parental control

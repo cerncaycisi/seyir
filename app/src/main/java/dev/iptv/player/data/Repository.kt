@@ -9,6 +9,7 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import dev.iptv.player.data.tmdb.Tmdb
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.IOException
@@ -18,6 +19,8 @@ class Repository(context: Context) {
     val store = PlaylistStore(context)
     val settings = SettingsStore(context)
     val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    val history = WatchHistory(context, scope)
+    val tmdb = Tmdb(context, settings)
 
     private val http = OkHttpClient.Builder()
         .connectTimeout(15, TimeUnit.SECONDS)
@@ -84,4 +87,52 @@ class Repository(context: Context) {
             M3uParser.parse(response.body?.string().orEmpty())
         }
     }
+}
+
+/**
+ * Everything the movie detail screen shows: the panel's own info with gaps (poster, plot, backdrop, year, rating)
+ * filled from TMDB. Never null so M3U playlists still get a page.
+ */
+suspend fun Repository.movieDetails(playlist: Playlist, stream: Stream): VodInfo {
+    val panel = runCatching { vodInfo(playlist, stream) }.getOrNull()
+    var info = VodInfo(
+        plot = panel?.plot ?: stream.plot,
+        backdrop = panel?.backdrop ?: stream.backdrop,
+        genre = panel?.genre ?: stream.genre,
+        duration = panel?.duration,
+        year = panel?.year ?: stream.year,
+        rating = panel?.rating ?: stream.rating,
+        cast = panel?.cast,
+        director = panel?.director,
+        trailer = panel?.trailer,
+        poster = panel?.poster ?: stream.logo,
+        durationSecs = panel?.durationSecs,
+    )
+    if (info.plot == null || info.backdrop == null || info.poster == null) {
+        tmdb.lookup(stream.name, ContentType.MOVIE, info.year)?.let { t ->
+            info = info.copy(
+                plot = info.plot ?: t.plot,
+                backdrop = info.backdrop ?: t.backdrop,
+                poster = info.poster ?: t.poster,
+                year = info.year ?: t.year,
+                rating = info.rating ?: t.rating,
+                fromTmdb = true,
+            )
+        }
+    }
+    return info
+}
+
+/** Series info with missing plot / cover / backdrop filled from TMDB. */
+suspend fun Repository.seriesDetails(playlist: Playlist, seriesId: String): SeriesInfo {
+    val info = seriesInfo(playlist, seriesId)
+    if (info.plot != null && info.backdrop != null && info.cover != null) return info
+    val t = tmdb.lookup(info.name, ContentType.SERIES, info.year) ?: return info
+    return info.copy(
+        plot = info.plot ?: t.plot,
+        backdrop = info.backdrop ?: t.backdrop,
+        cover = info.cover ?: t.poster,
+        year = info.year ?: t.year,
+        rating = info.rating ?: t.rating,
+    )
 }
