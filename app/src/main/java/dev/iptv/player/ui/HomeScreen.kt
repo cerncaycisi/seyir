@@ -163,12 +163,12 @@ fun HomeScreen(
                 Modifier
                     .fillMaxHeight()
                     .background(if (open) Palette.Surface else Palette.Background)
-                    .padding(horizontal = 8.dp, vertical = 16.dp)
+                    .padding(horizontal = 8.dp, vertical = 8.dp)
                     // Entering the menu lands on the current section instead of the nearest item.
                     .focusProperties { enter = { navFocus[section.ordinal] } },
-                verticalArrangement = Arrangement.spacedBy(6.dp),
+                verticalArrangement = Arrangement.spacedBy(2.dp),
             ) {
-                Row(Modifier.padding(start = 8.dp, bottom = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+                Row(Modifier.padding(start = 8.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                     BrandMark(32.dp)
                     if (open) {
                         Spacer(Modifier.width(12.dp))
