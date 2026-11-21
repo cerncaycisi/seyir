@@ -14,7 +14,6 @@
     <string name="ui_m3u_url">M3U URL (http://…)</string>
     <string name="ui_checking">Checking…</string>
     <string name="ui_save_connect">Save and connect</string>
-    <string name="ui_add_phone">Add from phone</string>
     <string name="ui_watched">Watched</string>
     <string name="ui_favorite">Favorite</string>
     <string name="ui_locked">Locked</string>
@@ -91,18 +90,6 @@
     <string name="ui_pin_repeat">Enter the PIN again</string>
     <string name="ui_pin_digits">A 4-digit number</string>
     <string name="ui_pin_mismatch">PINs did not match. Try again.</string>
-    <string name="ui_backup_exported">Backup downloaded to phone</string>
-    <string name="ui_backup_restored">Backup restored</string>
-    <string name="ui_qr_description">QR code to scan with your phone</string>
-    <string name="ui_phone_playlist">Add a playlist from your phone</string>
-    <string name="ui_phone_backup">Back up / restore using your phone</string>
-    <string name="ui_phone_step_one">1. Connect your phone to the same Wi-Fi network as your TV.</string>
-    <string name="ui_phone_step_two">2. Scan the QR code or enter the address in your browser:</string>
-    <string name="ui_network_missing">Local network address not found. Check your network connection.</string>
-    <string name="ui_preparing">Preparing…</string>
-    <string name="ui_address">Address</string>
-    <string name="ui_phone_scope">This address works only on the local network while this window is open.</string>
-    <string name="ui_phone_waiting">Waiting for your phone…</string>
     <string name="ui_playlists">Playlists</string>
     <string name="ui_playlist_intro">Add the M3U link or Xtream details from your IPTV provider.</string>
     <string name="ui_account_failed">Unable to get account details</string>
@@ -130,7 +117,6 @@
     <string name="ui_parental">Parental controls</string>
     <string name="ui_profiles">Profiles</string>
     <string name="ui_hidden">Hidden items</string>
-    <string name="ui_backup">Back up / Restore</string>
     <string name="ui_about">About</string>
     <string name="ui_settings">Settings</string>
     <string name="ui_system">System</string>
@@ -181,8 +167,6 @@
     <string name="ui_series_kind">Series</string>
     <string name="ui_hidden_empty">No hidden or locked items.</string>
     <string name="ui_show_all">Show all</string>
-    <string name="ui_backup_hint">Scan the QR code to download or upload a backup on your phone</string>
-    <string name="ui_backup_scope">Backups contain playlists, settings and favorites. The address works only on the local network while this window is open.</string>
     <string name="ui_content_disclaimer">This app does not provide or host any content. It plays only playlists you add and have the right to access.</string>
     <string name="ui_selected">Active</string>
     <string name="ui_add_profile">Add profile</string>
@@ -200,7 +184,6 @@
     <string name="ui_on">On</string>
     <string name="ui_channel_count">%1$d channels</string>
     <string name="ui_resume_position">Resume watching (%1$s)</string>
-    <string name="ui_phone_added">Added: %1$s</string>
     <string name="ui_pin_profile">PIN for %1$s</string>
     <string name="ui_season_count">%1$d seasons</string>
     <string name="ui_episode_count">%1$d episodes</string>

@@ -117,8 +117,6 @@ dependencies {
     implementation("androidx.tvprovider:tvprovider:1.0.0")
 
     implementation("androidx.core:core-splashscreen:1.0.1")
-    implementation("org.nanohttpd:nanohttpd:2.3.1")
-    implementation("com.google.zxing:core:3.5.3")
 
     implementation("androidx.room:room-runtime:2.6.1")
     implementation("androidx.room:room-ktx:2.6.1")

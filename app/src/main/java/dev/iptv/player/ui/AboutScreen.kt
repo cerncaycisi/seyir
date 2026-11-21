@@ -44,8 +44,6 @@ private val ossNotices = listOf(
     OssNotice("Kotlin stdlib, kotlinx.coroutines, kotlinx.serialization", "Apache-2.0"),
     OssNotice("AndroidX Room, WorkManager, TV Provider, SplashScreen", "Apache-2.0"),
     OssNotice("Jellyfin media3-ffmpeg-decoder (FFmpeg)", "GPL-3.0"),
-    OssNotice("ZXing core", "Apache-2.0"),
-    OssNotice("NanoHTTPD", "BSD-3-Clause"),
 )
 
 /** About / licenses. Route `about`; Settings links here. D-pad scrolls the license list. */

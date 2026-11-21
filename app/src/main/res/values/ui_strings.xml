@@ -14,7 +14,6 @@
     <string name="ui_m3u_url">M3U adresi (http://…)</string>
     <string name="ui_checking">Kontrol ediliyor…</string>
     <string name="ui_save_connect">Kaydet ve bağlan</string>
-    <string name="ui_add_phone">Telefondan ekle</string>
     <string name="ui_watched">İzlendi</string>
     <string name="ui_favorite">Favori</string>
     <string name="ui_locked">Kilitli</string>
@@ -91,18 +90,6 @@
     <string name="ui_pin_repeat">PIN\'i tekrar girin</string>
     <string name="ui_pin_digits">4 haneli bir sayı</string>
     <string name="ui_pin_mismatch">PIN\'ler eşleşmedi, tekrar deneyin</string>
-    <string name="ui_backup_exported">Yedek telefona indirildi</string>
-    <string name="ui_backup_restored">Yedek geri yüklendi</string>
-    <string name="ui_qr_description">Telefondan okutulacak QR kod</string>
-    <string name="ui_phone_playlist">Telefondan playlist ekle</string>
-    <string name="ui_phone_backup">Telefonla yedekle / geri yükle</string>
-    <string name="ui_phone_step_one">1. Telefonunuzu TV ile aynı Wi-Fi ağına bağlayın.</string>
-    <string name="ui_phone_step_two">2. QR kodu okutun veya adresi tarayıcıya yazın:</string>
-    <string name="ui_network_missing">Yerel ağ adresi bulunamadı. Ağ bağlantısını kontrol edin.</string>
-    <string name="ui_preparing">Hazırlanıyor…</string>
-    <string name="ui_address">Adres</string>
-    <string name="ui_phone_scope">Bu adres yalnızca bu pencere açıkken ve yerel ağda çalışır.</string>
-    <string name="ui_phone_waiting">Telefondan bekleniyor…</string>
     <string name="ui_playlists">Playlistler</string>
     <string name="ui_playlist_intro">Kendi IPTV sağlayıcınızın M3U bağlantısını veya Xtream bilgilerini ekleyin.</string>
     <string name="ui_account_failed">Hesap bilgisi alınamadı</string>
@@ -130,7 +117,6 @@
     <string name="ui_parental">Ebeveyn kontrolü</string>
     <string name="ui_profiles">Profiller</string>
     <string name="ui_hidden">Gizlenenler</string>
-    <string name="ui_backup">Yedekle / Geri yükle</string>
     <string name="ui_about">Hakkında</string>
     <string name="ui_settings">Ayarlar</string>
     <string name="ui_system">Sistem</string>
@@ -181,8 +167,6 @@
     <string name="ui_series_kind">Dizi</string>
     <string name="ui_hidden_empty">Gizlenmiş veya kilitlenmiş öğe yok.</string>
     <string name="ui_show_all">Tümünü göster</string>
-    <string name="ui_backup_hint">QR kodu okutun; telefondan yedek dosyası indirin veya yükleyin</string>
-    <string name="ui_backup_scope">Yedek; playlistleri, ayarları ve favorileri içerir. Adres yalnızca pencere açıkken ve yerel ağda çalışır.</string>
     <string name="ui_content_disclaimer">Bu uygulama hiçbir içerik sağlamaz veya barındırmaz. Yalnızca kendi eklediğiniz, yasal olarak erişim hakkınız olan playlist\'leri oynatır.</string>
     <string name="ui_selected">Etkin</string>
     <string name="ui_add_profile">Profil ekle</string>
@@ -200,7 +184,6 @@
     <string name="ui_on">Açık</string>
     <string name="ui_channel_count">%1$d kanal</string>
     <string name="ui_resume_position">Kaldığın yerden devam et (%1$s)</string>
-    <string name="ui_phone_added">Eklendi: %1$s</string>
     <string name="ui_pin_profile">%1$s için PIN</string>
     <string name="ui_season_count">%1$d sezon</string>
     <string name="ui_episode_count">%1$d bölüm</string>

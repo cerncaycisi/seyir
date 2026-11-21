@@ -30,7 +30,6 @@ import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.LockOpen
-import androidx.compose.material.icons.rounded.PhoneAndroid
 import androidx.compose.material.icons.rounded.Visibility
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -58,7 +57,6 @@ import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import dev.iptv.player.data.ContentPrefs
 import dev.iptv.player.data.ParentalSession
-import dev.iptv.player.data.PhoneMode
 import dev.iptv.player.data.Profile
 import dev.iptv.player.data.ProfileStore
 import dev.iptv.player.data.Repository
@@ -72,7 +70,6 @@ private enum class Page(val labelRes: Int) {
     PARENTAL(R.string.ui_parental),
     PROFILES(R.string.ui_profiles),
     HIDDEN(R.string.ui_hidden),
-    BACKUP(R.string.ui_backup),
     ABOUT(R.string.ui_about),
 }
 
@@ -126,7 +123,6 @@ fun SettingsScreen(repo: Repository, onProfileSwitched: () -> Unit) {
                 Page.PARENTAL -> ParentalPage(repo)
                 Page.PROFILES -> ProfilesPage(repo, onProfileSwitched)
                 Page.HIDDEN -> HiddenPage(repo)
-                Page.BACKUP -> BackupPage(repo)
                 Page.ABOUT -> AboutPage()
             }
         }
@@ -360,28 +356,6 @@ private fun HiddenPage(repo: Repository) {
 
 // ---- Backup / About ------------------------------------------------------------------------------
 
-@Composable
-private fun BackupPage(repo: Repository) {
-    val uiContext = LocalContext.current
-    var show by remember { mutableStateOf(false) }
-    PageList {
-        item {
-            SettingRow(
-                uiContext.getString(R.string.ui_phone_backup),
-                subtitle = uiContext.getString(R.string.ui_backup_hint),
-                icon = Icons.Rounded.PhoneAndroid,
-                onClick = { show = true },
-            )
-        }
-        item {
-            Text(
-                uiContext.getString(R.string.ui_backup_scope),
-                style = MaterialTheme.typography.bodySmall, color = Palette.TextFaint, modifier = Modifier.padding(8.dp),
-            )
-        }
-    }
-    if (show) PhoneConnectDialog(repo, PhoneMode.BACKUP, onDismiss = { show = false })
-}
 
 @Composable
 private fun AboutPage() {
