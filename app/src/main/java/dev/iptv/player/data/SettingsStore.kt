@@ -58,6 +58,8 @@ sealed class Setting<T>(val key: Preferences.Key<T>, val default: T) {
     data object LastChannel : Setting<String>(stringPreferencesKey("last_channel"), "")
     /** JSON map key -> display label for hidden channels/categories and locked categories. */
     data object HiddenLabels : Setting<String>(stringPreferencesKey("hidden_labels"), "{}")
+    // EPG channel matching: entries "playlistId|streamId<TAB>xmltvChannelId" (epg package)
+    data object EpgChannelOverrides : Setting<Set<String>>(stringSetPreferencesKey("epg_channel_overrides"), emptySet())
 }
 
 class SettingsStore(context: Context) {

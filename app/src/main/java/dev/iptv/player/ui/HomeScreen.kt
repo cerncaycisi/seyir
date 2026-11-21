@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.PlaylistPlay
+import androidx.compose.material.icons.rounded.CalendarViewWeek
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material.icons.rounded.LiveTv
@@ -63,6 +64,7 @@ import kotlinx.coroutines.launch
 enum class Section(val label: String, val icon: ImageVector) {
     HOME("Ana Sayfa", Icons.Rounded.Home),
     LIVE("Canlı TV", Icons.Rounded.LiveTv),
+    GUIDE("Rehber", Icons.Rounded.CalendarViewWeek),
     MOVIES("Filmler", Icons.Rounded.Movie),
     SERIES("Diziler", Icons.Rounded.VideoLibrary),
     FAVORITES("Favoriler", Icons.Rounded.Favorite),
@@ -215,6 +217,7 @@ fun HomeScreen(
                 when (section) {
                     Section.HOME -> HomeSection(repo, playlist, actions)
                     Section.LIVE -> LiveSection(repo, playlist, actions)
+                    Section.GUIDE -> GuideSection(repo, playlist, actions)
                     Section.MOVIES -> VodSection(repo, playlist, ContentType.MOVIE, actions)
                     Section.SERIES -> VodSection(repo, playlist, ContentType.SERIES, actions)
                     Section.FAVORITES -> FavoritesSection(repo, playlist, actions)

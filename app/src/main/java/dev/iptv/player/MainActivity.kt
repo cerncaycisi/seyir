@@ -58,13 +58,20 @@ class MainActivity : ComponentActivity() {
         val repository = (application as App).repository
         val prefs = (application as App).releasePrefs
         if (savedInstanceState == null) deepLink.value = intent?.data?.takeIf { it.scheme == DeepLinks.SCHEME }
-        setContent { IptvTheme { AppNav(repository, prefs, deepLink) } }
+        dev.iptv.player.epg.ReminderBus.handleIntent(intent)
+        setContent {
+            IptvTheme {
+                AppNav(repository, prefs, deepLink)
+                dev.iptv.player.ui.ReminderHost()
+            }
+        }
     }
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
         deepLink.value = intent.data?.takeIf { it.scheme == DeepLinks.SCHEME }
+        dev.iptv.player.epg.ReminderBus.handleIntent(intent)
     }
 }
 
@@ -92,6 +99,19 @@ private fun AppNav(repo: Repository, prefs: dev.iptv.player.data.ReleasePrefs, d
         PlayerQueue.index = index
         PlayerQueue.save(repo.appContext)
         nav.navigate("player")
+    }
+
+    // EPG reminder "İzle" / notification deep link: start the live channel.
+    val tune by dev.iptv.player.epg.ReminderBus.tune.collectAsState()
+    LaunchedEffect(tune, all) {
+        val req = tune ?: return@LaunchedEffect
+        dev.iptv.player.epg.ReminderBus.tune.value = null
+        val playlist = all.firstOrNull { it.id == req.playlistId } ?: return@LaunchedEffect
+        val items = runCatching { repo.content(playlist, dev.iptv.player.data.ContentType.LIVE).items }.getOrNull() ?: return@LaunchedEffect
+        val idx = items.indexOfFirst { it.id == req.streamId }
+        if (idx < 0) return@LaunchedEffect
+        if (nav.currentDestination?.route == "player") nav.popBackStack()
+        play(playlist, items, idx)
     }
 
     val needPicker = st.profiles.size > 1 && !ProfileStore.pickedThisLaunch
@@ -127,7 +147,7 @@ private fun AppNav(repo: Repository, prefs: dev.iptv.player.data.ReleasePrefs, d
                     nav.goHome()
                 },
                 onAdd = { nav.navigate("add") },
-                                onDelete = { p -> scope.launch { repo.removePlaylist(p.id) } },
+                onDelete = { p -> scope.launch { repo.removePlaylist(p.id) } },
                 onEdit = { p -> nav.navigate("edit/${Uri.encode(p.id)}") },
                 onRefresh = { p ->
                     try {

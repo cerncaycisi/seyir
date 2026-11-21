@@ -15,7 +15,7 @@ function Api([string]$action) {
         '' { return '{"user_info":{"auth":1,"status":"Active","username":"test"},"server_info":{"url":"localhost"}}' }
         'get_live_categories' { return '[{"category_id":"1","category_name":"Haber"},{"category_id":"2","category_name":"Belgesel"}]' }
         'get_live_streams' {
-            return '[{"stream_id":101,"name":"Test Kanal 1","stream_icon":"https://picsum.photos/seed/kanal1/320/180","category_id":"1","epg_channel_id":"t1"},' +
+            return '[{"stream_id":101,"name":"Test Kanal 1","stream_icon":"https://picsum.photos/seed/kanal1/320/180","category_id":"1","epg_channel_id":"t1","tv_archive":1,"tv_archive_duration":3},' +
                    '{"stream_id":102,"name":"Test Kanal 2","stream_icon":null,"category_id":"1","epg_channel_id":""},' +
                    '{"stream_id":103,"name":"Belgesel Test","stream_icon":"","category_id":"2"}]'
         }
@@ -41,6 +41,21 @@ function Api([string]$action) {
         }
         default { return '[]' }
     }
+}
+
+function Xmltv {
+    # Small guide for channel "t1": hourly programmes from 6h ago to 12h ahead (times in +0000).
+    $t0 = [DateTimeOffset]::UtcNow
+    $t0 = $t0.AddMinutes(-$t0.Minute).AddSeconds(-$t0.Second).AddHours(-6)
+    $sb = [Text.StringBuilder]::new()
+    [void]$sb.AppendLine('<?xml version="1.0" encoding="UTF-8"?><tv>')
+    [void]$sb.AppendLine('<channel id="t1"><display-name>Test Kanal 1</display-name></channel>')
+    for ($i = 0; $i -lt 18; $i++) {
+        $s = $t0.AddHours($i); $e = $s.AddHours(1)
+        [void]$sb.AppendLine("<programme start=`"$($s.ToString('yyyyMMddHHmmss')) +0000`" stop=`"$($e.ToString('yyyyMMddHHmmss')) +0000`" channel=`"t1`"><title>Test Programı $i</title><desc>Örnek açıklama $i</desc><category>Haber</category></programme>")
+    }
+    [void]$sb.AppendLine('</tv>')
+    return $sb.ToString()
 }
 
 $m3u = @"
@@ -76,7 +91,10 @@ while ($listener.IsListening) {
         } else {
             $body = Api ([string]$req.QueryString['action'])
         }
-    } elseif ($path -like '/live/*') {
+    } elseif ($path -eq '/xmltv.php') {
+        $type = 'application/xml; charset=utf-8'
+        $body = Xmltv
+    } elseif ($path -like '/live/*' -or $path -like '/timeshift/*') {
         $redirect = $tsClip
     } elseif ($path -like '/movie/*' -or $path -like '/series/*') {
         $redirect = $sintel

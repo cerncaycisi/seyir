@@ -57,8 +57,9 @@ class XtreamApi(source: PlaylistSource.Xtream, private val http: OkHttpClient) {
             Stream(
                 id, o.str("name").orEmpty(), o.str("stream_icon").blankToNull(), "$base/live/$user/$pass/$id.ts",
                 o.str("category_id").orEmpty(), type, o.str("epg_channel_id").blankToNull(),
-                catchup = if (o.str("tv_archive") == "1") "xc" else null,
-                catchupDays = if (o.str("tv_archive") == "1") o.str("tv_archive_duration")?.toIntOrNull() ?: 0 else 0,
+                archiveDays = archiveDays(o),
+                catchup = if (archiveDays(o) > 0) "xc" else null,
+                catchupDays = archiveDays(o),
             )
         }
         ContentType.MOVIE -> call("&action=get_vod_streams").objects().mapNotNull { o ->
@@ -194,3 +195,9 @@ internal fun parseAccountInfo(info: JsonObject) = AccountInfo(
     activeConnections = info.str("active_cons")?.trim()?.toIntOrNull(),
     trial = info.str("is_trial").let { it == "1" || it == "true" },
 )
+
+// tv_archive is "1"/1 when the channel records; tv_archive_duration is the number of days kept.
+private fun archiveDays(o: JsonObject): Int {
+    if (o.str("tv_archive")?.trim() != "1") return 0
+    return o.str("tv_archive_duration")?.trim()?.toIntOrNull()?.takeIf { it > 0 } ?: 1
+}

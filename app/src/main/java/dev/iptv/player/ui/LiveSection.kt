@@ -47,6 +47,9 @@ import dev.iptv.player.data.Playlist
 import dev.iptv.player.data.Repository
 import dev.iptv.player.data.Stream
 import dev.iptv.player.data.favoriteKey
+import dev.iptv.player.epg.Catchup
+import dev.iptv.player.epg.Programme
+import androidx.compose.runtime.collectAsState
 import kotlinx.coroutines.delay
 
 private const val ALL = "*"
@@ -87,6 +90,11 @@ private fun LiveBrowser(repo: Repository, playlist: Playlist, content: Content, 
     val categoryFocus = remember { FocusRequester() }
     var focused by remember { mutableStateOf<Stream?>(null) }
     var epg by remember { mutableStateOf<List<EpgEntry>>(emptyList()) }
+    val epgSvc = rememberEpg()
+    val gen by epgSvc.generation.collectAsState()
+    val nowSec by rememberNowSec(60_000)
+    var showMatch by remember { mutableStateOf(false) }
+    var showPast by remember { mutableStateOf(false) }
 
     val restore = actions.restore
     val restoreIndex = restore.itemId?.let { id -> items.indexOfFirst { it.id == id } } ?: -1
@@ -101,11 +109,13 @@ private fun LiveBrowser(repo: Repository, playlist: Playlist, content: Content, 
         }
         if (restore.itemId != null || restore.initial) restore.done()
     }
-    LaunchedEffect(focused) {
+    LaunchedEffect(playlist.id) { epgSvc.requestFresh(playlist) }
+    LaunchedEffect(focused, gen) {
         epg = emptyList()
         val f = focused ?: return@LaunchedEffect
         delay(350)
-        epg = runCatching { repo.shortEpg(playlist, f) }.getOrDefault(emptyList())
+        epg = epgSvc.nowAndNext(playlist.id, f, 2).map { EpgEntry(it.title, it.start, it.stop) }
+            .ifEmpty { runCatching { repo.shortEpg(playlist, f) }.getOrDefault(emptyList()) }
     }
 
     Row(Modifier.fillMaxSize()) {
@@ -145,6 +155,7 @@ private fun LiveBrowser(repo: Repository, playlist: Playlist, content: Content, 
                     contentPadding = PaddingValues(top = 4.dp, bottom = 48.dp, start = 4.dp, end = 4.dp),
                 ) {
                     itemsIndexed(items) { i, s ->
+                        val nowProg by produceState<Programme?>(null, s.id, gen, nowSec / 60) { value = epgSvc.nowPlaying(playlist.id, s, nowSec) }
                         ChannelRow(
                             number = i + 1,
                             stream = s,
@@ -152,6 +163,8 @@ private fun LiveBrowser(repo: Repository, playlist: Playlist, content: Content, 
                             onClick = { actions.open(items, i) },
                             onLongClick = { actions.longPress(s, categories.firstOrNull { it.id == s.categoryId }?.name) },
                             onFocused = { focused = s },
+                            nowTitle = nowProg?.title,
+                            progress = nowProg?.let { (nowSec - it.start).toFloat() / (it.stop - it.start).coerceAtLeast(1) },
                             modifier = if (i == restoreIndex) Modifier.focusRequester(itemFocus) else Modifier,
                         )
                     }
@@ -159,12 +172,18 @@ private fun LiveBrowser(repo: Repository, playlist: Playlist, content: Content, 
             }
         }
         Spacer(Modifier.width(20.dp))
-        ChannelPreview(focused, epg, Modifier.width(260.dp).fillMaxHeight().padding(bottom = 24.dp))
+        ChannelPreview(focused, epg, archive = focused?.let { Catchup.available(playlist, it) } == true, onMatch = { showMatch = true }, onPast = { showPast = true }, modifier = Modifier.width(260.dp).fillMaxHeight().padding(bottom = 24.dp))
+    }
+    if (showMatch) focused?.let { s -> EpgMatchDialog(playlist, s, onDismiss = { showMatch = false }) }
+    if (showPast) focused?.let { s ->
+        PastBroadcastsDialog(playlist, s, onPlay = { p ->
+            Catchup.streamFor(playlist, s, p)?.let { actions.open(listOf(it), 0) }
+        }, onDismiss = { showPast = false })
     }
 }
 
 @Composable
-private fun ChannelPreview(stream: Stream?, epg: List<EpgEntry>, modifier: Modifier = Modifier) {
+private fun ChannelPreview(stream: Stream?, epg: List<EpgEntry>, archive: Boolean, onMatch: () -> Unit, onPast: () -> Unit, modifier: Modifier = Modifier) {
     Column(modifier.clip(RoundedCornerShape(16.dp)).background(Palette.Surface).padding(16.dp)) {
         if (stream == null) {
             EmptyState(Icons.Rounded.LiveTv, "Bir kanal seçin", "Program bilgisi burada görünür")
@@ -193,6 +212,12 @@ private fun ChannelPreview(stream: Stream?, epg: List<EpgEntry>, modifier: Modif
                 }
             }
             Spacer(Modifier.weight(1f))
+            if (archive) {
+                EpgButton("Geçmiş yayınlar", onPast)
+                Spacer(Modifier.height(6.dp))
+            }
+            EpgButton("EPG eşleştir", onMatch)
+            Spacer(Modifier.height(8.dp))
             Text("OK  izle   ·   Basılı tut  seçenekler", style = MaterialTheme.typography.labelMedium, color = Palette.TextFaint)
         }
     }

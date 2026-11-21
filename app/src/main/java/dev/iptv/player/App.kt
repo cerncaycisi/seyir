@@ -18,12 +18,12 @@ import java.io.File
 
 class App : Application() {
     val releasePrefs by lazy { dev.iptv.player.data.ReleasePrefs(this) }
-
     val repository by lazy { Repository(this) }
 
     override fun onCreate() {
         super.onCreate()
         dev.iptv.player.util.CrashReporter.install(this)
+        dev.iptv.player.epg.EpgScheduler.schedule(this)
         // Keep the background refresh in step with the "auto refresh hours" setting (0 disables it).
         repository.scope.launch {
             repository.settings.flow(Setting.AutoRefreshHours).distinctUntilChanged().collect {

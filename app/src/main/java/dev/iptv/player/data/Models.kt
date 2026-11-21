@@ -45,6 +45,8 @@ data class Stream(
     val catchupDays: Int = 0,
     /** Catch-up URL template (M3U `catchup-source`), null when the mode implies a default. */
     val catchupSource: String? = null,
+    /** Catch-up archive length in days (Xtream tv_archive_duration); 0 = none. */
+    val archiveDays: Int = 0,
 )
 
 data class Content(val categories: List<Category>, val items: List<Stream>)
