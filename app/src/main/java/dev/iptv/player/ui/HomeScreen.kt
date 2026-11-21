@@ -159,6 +159,9 @@ fun HomeScreen(
         scrimBrush = Brush.horizontalGradient(listOf(Palette.Background.copy(alpha = 0.92f), Color.Transparent)),
         drawerContent = { value ->
             val open = value == DrawerValue.Open
+            LaunchedEffect(open) {
+                if (open) runCatching { navFocus[section.ordinal].requestFocus() }
+            }
             Column(
                 Modifier
                     .fillMaxHeight()
