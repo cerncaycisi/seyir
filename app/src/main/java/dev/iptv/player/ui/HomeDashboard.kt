@@ -60,8 +60,13 @@ fun HomeSection(repo: Repository, playlist: Playlist, actions: HomeActions) {
         is Load.Err -> ErrorState(s.message)
         is Load.Ok -> {
             val data = s.value
-            val rows = remember(uiContext, data, history, actions.favorites, actions.watchLater, actions.rules) {
+            // Built off the main thread: it scans every movie, series and channel of the playlist.
+            val rows = rememberBackground(data, history, actions.favorites, actions.watchLater, actions.rules) {
                 buildHomeRows(uiContext, playlist, data, history.orEmpty().filter { it.playlistId == playlist.id }, actions.favorites, actions.watchLater, actions.rules)
+            }
+            if (rows == null) {
+                LoadingState()
+                return
             }
             if (rows.isEmpty()) {
                 EmptyState(Icons.Rounded.Home, uiContext.getString(R.string.ui_content_empty), uiContext.getString(R.string.ui_content_empty_hint))

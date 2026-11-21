@@ -214,7 +214,8 @@ class EpgService private constructor(context: Context) {
     suspend fun resolve(playlistId: String, stream: Stream): String? {
         val key = "$playlistId|${stream.id}"
         matchMemo[key]?.let { return it.ifEmpty { null } }
-        val result = overrides()[key] ?: channelIndex().match(stream.epgId, stream.name)
+        // Fuzzy name matching against thousands of EPG channels; called per visible row, so keep it off the main thread.
+        val result = overrides()[key] ?: kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { channelIndex().match(stream.epgId, stream.name) }
         matchMemo[key] = result.orEmpty()
         return result
     }

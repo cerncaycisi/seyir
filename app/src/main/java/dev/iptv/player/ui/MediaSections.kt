@@ -17,7 +17,6 @@ import androidx.compose.material.icons.rounded.DeleteSweep
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.focus.focusProperties
-import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -74,6 +73,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -166,39 +166,25 @@ private fun VodBrowser(
     var genre by rememberSaveable { mutableStateOf<String?>(null) }
     var selectedKey by rememberSaveable { mutableStateOf(SpecialCategory.ALL.name) }
     var confirmClear by remember { mutableStateOf(false) }
-    val history by repo.history.entries.collectAsState(initial = emptyList())
-    val hist = remember(history, playlist.id, type) { history.filter { it.type == type && it.playlistId == playlist.id } }
-
-    val base = remember(content, rules.hiddenChannels, rules.hiddenCategories, rules.hideAdult) { rules.filterBase(playlist, type, content) }
-    val visible = remember(base, rules.lockedCategories, rules.unlocked) { rules.unlockedItems(playlist, type, base.items) }
-    val specialLists = remember(visible, actions.favorites, actions.watchLater, hist) {
-        SpecialCategory.entries.associateWith { specialItems(it, playlist, visible, actions.favorites, actions.watchLater, hist) }
+    val history by repo.history.entries.collectAsState(initial = null)
+    // Filtering/sorting ~20k titles takes far longer than a frame: do it off the main thread and keep
+    // showing the previous result meanwhile (this was the 1-2 s freeze when opening Movies/Series).
+    val view = rememberBackground(content, rules, playlist.id, type, actions.favorites, actions.watchLater, history, selectedKey, sort, genre) {
+        val h = history ?: return@rememberBackground null
+        buildVodView(uiContext, playlist, type, content, rules, actions.favorites, actions.watchLater, h, selectedKey, sort, genre)
     }
-    val counts = remember(base) { base.items.groupingBy { it.categoryId }.eachCount() }
-    val categories = remember(uiContext, base, counts, specialLists) {
-        val knownIds = base.categories.mapTo(HashSet()) { it.id }
-        val other = base.items.count { it.categoryId !in knownIds }
-        SpecialCategory.entries.map { BrowseCategory(it.name, specialLabel(uiContext, it), specialLists[it].orEmpty().size, special = it) } +
-            base.categories.filter { (counts[it.id] ?: 0) > 0 }.map { BrowseCategory("c:${it.id}", it.name, counts[it.id] ?: 0, providerId = it.id) } +
-            (if (other > 0) listOf(BrowseCategory("c:$OTHER_CATEGORY", uiContext.getString(R.string.ui_other), other, providerId = OTHER_CATEGORY)) else emptyList())
+    if (view == null) {
+        LoadingState()
+        return
     }
-    val selected = categories.firstOrNull { it.key == selectedKey } ?: categories.first()
+    val categories = view.categories
+    val selected = view.selected
     val selPid = selected.providerId
     if (selPid != null && selPid != OTHER_CATEGORY && rules.isCategoryLocked(playlist, type, selPid)) selectedKey = SpecialCategory.ALL.name
-
-    val raw = remember(selected.key, specialLists, base) {
-        when {
-            selected.special != null -> specialLists[selected.special].orEmpty()
-            selPid == OTHER_CATEGORY -> {
-                val known = base.categories.mapTo(HashSet()) { it.id }
-                base.items.filter { it.categoryId !in known }
-            }
-            else -> base.items.filter { it.categoryId == selPid }
-        }
-    }
-    val genres = remember(raw) { genresOf(raw).take(24) }
-    val genreSel = genre?.takeIf { it in genres }
-    val shown = remember(raw, sort, genreSel) { sortStreams(filterByGenre(raw, genreSel), sort) }
+    val raw = view.raw
+    val genres = view.genres
+    val genreSel = view.genre
+    val shown = view.shown
 
     val gridState = rememberLazyGridState()
     val catState = rememberLazyListState(initialFirstVisibleItemIndex = (categories.indexOfFirst { it.key == selected.key } - 3).coerceAtLeast(0))
@@ -221,8 +207,11 @@ private fun VodBrowser(
         }
         if (restore.itemId != null || restore.initial) restore.done()
     }
-    LaunchedEffect(jumpToGrid) {
-        if (jumpToGrid == 0) return@LaunchedEffect
+    var handledJump by remember { mutableIntStateOf(0) }
+    // Waits for the background result of the newly selected category before moving focus into its grid.
+    LaunchedEffect(jumpToGrid, view) {
+        if (jumpToGrid == handledJump || view.selected.key != selectedKey) return@LaunchedEffect
+        handledJump = jumpToGrid
         gridFocusIndex = 0
         withFrameNanos { }
         if (shown.isEmpty()) return@LaunchedEffect
@@ -358,10 +347,19 @@ internal fun PosterGrid(
     onFocused: (Stream) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    // Coming back from the category list returns to the last focused poster if it is on screen, else the
+    // top-left visible one. (Modifier.focusRestorer crashed inside lazy layouts.)
+    var lastFocused by remember { mutableIntStateOf(-1) }
+    val entryIndex by remember(state) {
+        derivedStateOf {
+            val i = lastFocused
+            if (state.layoutInfo.visibleItemsInfo.any { it.index == i }) i else state.firstVisibleItemIndex
+        }
+    }
+    val entry = remember { FocusRequester() }
     LazyVerticalGrid(
         GridCells.Fixed(columns),
-        // Coming back from the category list returns to the last focused poster.
-        modifier.fillMaxWidth().focusRestorer(),
+        modifier.fillMaxWidth().focusProperties { enter = { entry } },
         state = state,
         contentPadding = PaddingValues(start = 6.dp, end = 6.dp, top = 8.dp, bottom = 32.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
@@ -374,8 +372,10 @@ internal fun PosterGrid(
                 key in actions.favorites,
                 onClick = { actions.open(items, i) },
                 onLongClick = { actions.longPress(s, categoryName) },
-                onFocused = { onFocused(s) },
-                modifier = Modifier.fillMaxWidth().then(if (i == focusIndex) Modifier.focusRequester(focusRequester) else Modifier),
+                onFocused = { lastFocused = i; onFocused(s) },
+                modifier = Modifier.fillMaxWidth()
+                    .then(if (i == focusIndex) Modifier.focusRequester(focusRequester) else Modifier)
+                    .then(if (i == entryIndex) Modifier.focusRequester(entry) else Modifier),
                 progress = actions.progress[key],
                 badge = actions.badges[key],
             )
@@ -468,14 +468,19 @@ fun FavoritesSection(repo: Repository, playlist: Playlist, actions: HomeActions)
             Load.Loading -> LoadingState()
             is Load.Err -> ErrorState(s.message)
             is Load.Ok -> {
-                val favorites = s.value.flatMap { (type, content) -> visibleContentItems(playlist, type, content, actions.rules) }
-                    .filter { favoriteKey(playlist, it) in actions.favorites }
-                val rows = listOf(
-                    MediaRow(uiContext.getString(R.string.ui_channels), favorites.filter { it.type == ContentType.LIVE }),
-                    MediaRow(uiContext.getString(R.string.ui_movies), favorites.filter { it.type == ContentType.MOVIE }),
-                    MediaRow(uiContext.getString(R.string.ui_series), favorites.filter { it.type == ContentType.SERIES }),
-                ).filter { it.items.isNotEmpty() }
-                if (rows.isEmpty()) {
+                // Off the main thread (and only when the inputs change): it walks the whole catalog.
+                val rows = rememberBackground(s.value, actions.rules, actions.favorites) {
+                    val favorites = s.value.flatMap { (type, content) -> visibleContentItems(playlist, type, content, actions.rules) }
+                        .filter { favoriteKey(playlist, it) in actions.favorites }
+                    listOf(
+                        MediaRow(uiContext.getString(R.string.ui_channels), favorites.filter { it.type == ContentType.LIVE }),
+                        MediaRow(uiContext.getString(R.string.ui_movies), favorites.filter { it.type == ContentType.MOVIE }),
+                        MediaRow(uiContext.getString(R.string.ui_series), favorites.filter { it.type == ContentType.SERIES }),
+                    ).filter { it.items.isNotEmpty() }
+                }
+                if (rows == null) {
+                    LoadingState()
+                } else if (rows.isEmpty()) {
                     EmptyState(Icons.Rounded.FavoriteBorder, uiContext.getString(R.string.ui_no_favorites), uiContext.getString(R.string.ui_favorites_hint))
                 } else {
                     MediaRows(rows, playlist, actions, onFocused = {})
@@ -494,7 +499,8 @@ fun SearchSection(repo: Repository, playlist: Playlist, actions: HomeActions, in
     val all by produceState<Map<ContentType, Content>?>(null, playlist.id) { value = allContent(repo, playlist) }
     val q = query.trim()
     val rules = actions.rules
-    val rows = remember(uiContext, all, q, rules) {
+    // Scans every channel, movie and series per keystroke: run it off the main thread so typing stays smooth.
+    val rows = rememberBackground(all, q, rules) {
         val source = all
         if (source == null || q.length < 2) {
             emptyList()
@@ -506,6 +512,15 @@ fun SearchSection(repo: Repository, playlist: Playlist, actions: HomeActions, in
                 MediaRow(uiContext.getString(R.string.ui_movies), hits.filter { it.type == ContentType.MOVIE }.take(60)),
                 MediaRow(uiContext.getString(R.string.ui_series), hits.filter { it.type == ContentType.SERIES }.take(60)),
             ).filter { it.items.isNotEmpty() }
+        }
+    }.orEmpty()
+    // Opening Search from the menu puts focus on the search field.
+    val fieldFocus = remember { FocusRequester() }
+    LaunchedEffect(Unit) {
+        if (actions.restore.initial) {
+            withFrameNanos { }
+            runCatching { fieldFocus.requestFocus() }
+            actions.restore.done()
         }
     }
     Column(Modifier.fillMaxSize()) {
@@ -523,7 +538,7 @@ fun SearchSection(repo: Repository, playlist: Playlist, actions: HomeActions, in
             r.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)?.firstOrNull()?.let { query = it }
         }
         Row(Modifier.widthIn(max = 760.dp), verticalAlignment = Alignment.CenterVertically) {
-            TvTextField(query, { query = it }, uiContext.getString(R.string.ui_search_prompt), Modifier.weight(1f), leadingIcon = Icons.Rounded.Search)
+            TvTextField(query, { query = it }, uiContext.getString(R.string.ui_search_prompt), Modifier.weight(1f).focusRequester(fieldFocus), leadingIcon = Icons.Rounded.Search)
             if (voiceAvailable) {
                 Spacer(Modifier.width(10.dp))
                 MicButton { runCatching { launcher.launch(voiceIntent) } }
@@ -568,3 +583,48 @@ private fun sortLabel(context: android.content.Context, sort: VodSort): String =
     VodSort.ZA -> R.string.ui_sort_za
     VodSort.YEAR -> R.string.ui_sort_year
 })
+
+/** Everything the Movies / Series browser shows for one selection; built off the main thread. */
+private class VodView(
+    val categories: List<BrowseCategory>,
+    val selected: BrowseCategory,
+    val raw: List<Stream>,
+    val genres: List<String>,
+    val genre: String?,
+    val shown: List<Stream>,
+)
+
+private fun buildVodView(
+    uiContext: android.content.Context,
+    playlist: Playlist,
+    type: ContentType,
+    content: Content,
+    rules: ContentRules,
+    favorites: Set<String>,
+    watchLater: Set<String>,
+    history: List<dev.iptv.player.data.HistoryEntry>,
+    selectedKey: String,
+    sort: VodSort,
+    genre: String?,
+): VodView {
+    val hist = history.filter { it.type == type && it.playlistId == playlist.id }
+    val base = rules.filterBase(playlist, type, content)
+    val visible = rules.unlockedItems(playlist, type, base.items)
+    val specialLists = SpecialCategory.entries.associateWith { specialItems(it, playlist, visible, favorites, watchLater, hist) }
+    val counts = base.items.groupingBy { it.categoryId }.eachCount()
+    val knownIds = base.categories.mapTo(HashSet()) { it.id }
+    val other = base.items.count { it.categoryId !in knownIds }
+    val categories = SpecialCategory.entries.map { BrowseCategory(it.name, specialLabel(uiContext, it), specialLists[it].orEmpty().size, special = it) } +
+        base.categories.filter { (counts[it.id] ?: 0) > 0 }.map { BrowseCategory("c:${it.id}", it.name, counts[it.id] ?: 0, providerId = it.id) } +
+        (if (other > 0) listOf(BrowseCategory("c:$OTHER_CATEGORY", uiContext.getString(R.string.ui_other), other, providerId = OTHER_CATEGORY)) else emptyList())
+    val selected = categories.firstOrNull { it.key == selectedKey } ?: categories.first()
+    val selPid = selected.providerId
+    val raw = when {
+        selected.special != null -> specialLists[selected.special].orEmpty()
+        selPid == OTHER_CATEGORY -> base.items.filter { it.categoryId !in knownIds }
+        else -> base.items.filter { it.categoryId == selPid }
+    }
+    val genres = genresOf(raw).take(24)
+    val genreSel = genre?.takeIf { it in genres }
+    return VodView(categories, selected, raw, genres, genreSel, sortStreams(filterByGenre(raw, genreSel), sort))
+}

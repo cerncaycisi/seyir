@@ -14,7 +14,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.focus.focusProperties
-import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.unit.Dp
 import androidx.tv.material3.Border
 import androidx.tv.material3.ClickableSurfaceDefaults
@@ -142,13 +141,22 @@ private fun LiveBrowser(
     val itemFocus = remember { FocusRequester() }
     val categoryFocus = remember { FocusRequester() }
     val firstVisibleFocus = remember { FocusRequester() }
-    val firstVisible by remember { derivedStateOf { listState.firstVisibleItemIndex } }
+    // Entering the list (Right from the categories, Left from the preview) lands on the last focused channel
+    // when it is on screen, else the top visible one. (Modifier.focusRestorer crashed inside lazy lists.)
+    var lastFocusedIndex by remember { mutableIntStateOf(-1) }
+    val firstVisible by remember {
+        derivedStateOf {
+            val i = lastFocusedIndex
+            if (listState.layoutInfo.visibleItemsInfo.any { it.index == i }) i else listState.firstVisibleItemIndex
+        }
+    }
     // OK on a category moves focus into its channel list (like pressing Right), starting at the top.
     var jumpToList by remember { mutableIntStateOf(0) }
     LaunchedEffect(jumpToList) {
         if (jumpToList == 0) return@LaunchedEffect
         withFrameNanos { }
         if (items.isEmpty()) return@LaunchedEffect
+        lastFocusedIndex = 0
         listState.scrollToItem(0)
         withFrameNanos { }
         runCatching { firstVisibleFocus.requestFocus() }
@@ -253,7 +261,7 @@ private fun LiveBrowser(
                 LazyColumn(
                     // Re-entering the list returns to the last focused channel, else the top visible one
                     // (not whichever row happens to be level with the category).
-                    Modifier.focusRestorer { firstVisibleFocus },
+                    Modifier.focusProperties { enter = { firstVisibleFocus } },
                     state = listState,
                     verticalArrangement = Arrangement.spacedBy(4.dp),
                     contentPadding = PaddingValues(top = 4.dp, bottom = 48.dp, start = 4.dp, end = 4.dp),
@@ -269,7 +277,7 @@ private fun LiveBrowser(
                             // First OK starts the channel in the preview; OK on the one already playing goes fullscreen.
                             onClick = { if (preview?.channel?.id == s.id) openFullscreen(i) else preview?.play(s) ?: openFullscreen(i) },
                             onLongClick = { actions.longPress(s, categories.firstOrNull { it.id == s.categoryId }?.name) },
-                            onFocused = { focused = s },
+                            onFocused = { focused = s; lastFocusedIndex = i },
                             nowTitle = nowProg?.title,
                             progress = nowProg?.let { (nowSec - it.start).toFloat() / (it.stop - it.start).coerceAtLeast(1) },
                             modifier = Modifier

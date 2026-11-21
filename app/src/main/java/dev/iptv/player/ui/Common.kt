@@ -212,3 +212,19 @@ fun TvTextField(
       }
     }
 }
+
+/**
+ * Runs [compute] on a background thread whenever [keys] change and returns its latest result
+ * (null until the first one is ready). The previous result stays visible while a new one is computed,
+ * so heavy list filtering never blocks a frame.
+ */
+@Composable
+fun <T> rememberBackground(vararg keys: Any?, compute: () -> T?): T? {
+    val state = androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<T?>(null) }
+    val latest = androidx.compose.runtime.rememberUpdatedState(compute)
+    androidx.compose.runtime.LaunchedEffect(*keys) {
+        val result = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { latest.value() }
+        if (result != null) state.value = result
+    }
+    return state.value
+}
