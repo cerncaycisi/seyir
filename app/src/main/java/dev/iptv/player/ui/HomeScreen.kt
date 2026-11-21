@@ -14,6 +14,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.PlaylistPlay
 import androidx.compose.material.icons.rounded.CalendarViewWeek
+import androidx.compose.material.icons.rounded.FiberManualRecord
+import androidx.compose.material.icons.rounded.GridView
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material.icons.rounded.LiveTv
@@ -68,6 +70,7 @@ enum class Section(val label: String, val icon: ImageVector) {
     MOVIES("Filmler", Icons.Rounded.Movie),
     SERIES("Diziler", Icons.Rounded.VideoLibrary),
     FAVORITES("Favoriler", Icons.Rounded.Favorite),
+    RECORDINGS("Kayıtlar", Icons.Rounded.FiberManualRecord),
     SEARCH("Ara", Icons.Rounded.Search),
 }
 
@@ -109,6 +112,8 @@ fun HomeScreen(
     onPlaylists: () -> Unit,
     onSettings: () -> Unit = {},
     initialSection: String? = null,
+    /** (live channel list, index, 2 or 4): opens the multi-view screen. */
+    onMultiView: (List<Stream>, Int, Int) -> Unit = { _, _, _ -> },
 ) {
     var section by rememberSaveable { mutableStateOf(Section.entries.firstOrNull { it.name == initialSection } ?: Section.HOME) }
     var restoreId by rememberSaveable { mutableStateOf<String?>(null) }
@@ -224,13 +229,14 @@ fun HomeScreen(
                     Section.MOVIES -> VodSection(repo, playlist, ContentType.MOVIE, actions)
                     Section.SERIES -> VodSection(repo, playlist, ContentType.SERIES, actions)
                     Section.FAVORITES -> FavoritesSection(repo, playlist, actions)
+                    Section.RECORDINGS -> RecordingsSection(repo, playlist, onPlay)
                     Section.SEARCH -> SearchSection(repo, playlist, actions)
                 }
             }
         }
     }
 
-    HomeOverlays(repo, playlist, target, hasPin.isNotEmpty(), rules, favorites, { target = null }, pendingUnlock, { pendingUnlock = null })
+    HomeOverlays(repo, playlist, target, hasPin.isNotEmpty(), rules, favorites, { target = null }, pendingUnlock, { pendingUnlock = null }, onMultiView)
 }
 
 @Composable
@@ -244,6 +250,7 @@ private fun HomeOverlays(
     dismiss: () -> Unit,
     pendingUnlock: (() -> Unit)?,
     clearUnlock: () -> Unit,
+    onMultiView: (List<Stream>, Int, Int) -> Unit,
 ) {
     val scope = rememberCoroutineScope()
     val noPin = "Kilitlemek için önce Ayarlar > Ebeveyn kontrolü'nden PIN belirleyin"
@@ -262,6 +269,20 @@ private fun HomeOverlays(
                     scope.launch { repo.prefs.setChannelHidden(playlist, s, true) }
                     dismiss()
                 })
+                if (s.type == ContentType.LIVE) {
+                    for (n in intArrayOf(2, 4)) {
+                        add(CardAction("Çoklu izleme ($n kanal)", Icons.Rounded.GridView) {
+                            dismiss()
+                            scope.launch {
+                                val content = runCatching { repo.content(playlist, ContentType.LIVE) }.getOrNull() ?: return@launch
+                                val items = rules.unlockedItems(playlist, ContentType.LIVE, rules.filterBase(playlist, ContentType.LIVE, content).items)
+                                    .filter { it.url.isNotEmpty() }
+                                val idx = items.indexOfFirst { it.id == s.id }
+                                if (idx >= 0) onMultiView(items, idx, n) else onMultiView(listOf(s) + items, 0, n)
+                            }
+                        })
+                    }
+                }
                 if (cat != null) {
                     if (!hasPin) {
                         add(CardAction(noPin, enabled = false) {})

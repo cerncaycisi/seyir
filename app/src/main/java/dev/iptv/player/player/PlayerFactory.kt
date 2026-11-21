@@ -72,6 +72,8 @@ fun buildPlayer(context: Context, cfg: PlayerConfig, headers: RequestHeaders): E
     val bufferMs = cfg.bufferSeconds.coerceIn(5, 120) * 1000
     val loadControl = DefaultLoadControl.Builder()
         .setBufferDurationsMs(bufferMs, bufferMs, minOf(2_500, bufferMs), minOf(5_000, bufferMs))
+        // Keep a minute behind the playhead so a short live pause (or small rewind) resumes from memory, see Timeshift.
+        .setBackBuffer(60_000, true)
         .build()
 
     return ExoPlayer.Builder(context, renderers)

@@ -24,6 +24,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ErrorOutline
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -63,7 +64,9 @@ import androidx.media3.common.MimeTypes
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.TrackSelectionParameters
+import androidx.media3.common.Timeline
 import androidx.media3.common.Tracks
+import androidx.media3.common.VideoSize
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.session.MediaSession
 import androidx.media3.ui.PlayerView
@@ -78,6 +81,10 @@ import dev.iptv.player.data.Repository
 import dev.iptv.player.data.Setting
 import dev.iptv.player.data.Stream
 import dev.iptv.player.data.favoriteKey
+import dev.iptv.player.epg.Catchup
+import dev.iptv.player.record.RecStatus
+import dev.iptv.player.record.RecordingDb
+import dev.iptv.player.record.RecordingManager
 import dev.iptv.player.ui.Palette
 import dev.iptv.player.ui.Pill
 import dev.iptv.player.ui.formatClock
@@ -95,7 +102,7 @@ private fun requestHeadersFor(stream: Stream): Map<String, String> = stream.head
 private class ViewHolder { var view: PlayerView? = null }
 
 @Composable
-fun PlayerScreen(repo: Repository, onBack: () -> Unit) {
+fun PlayerScreen(repo: Repository, onBack: () -> Unit, onMultiView: (Int) -> Unit = {}) {
     // Process death: the in-memory queue is gone, rebuild it from disk (saved by PlayerQueue.save).
     if (PlayerQueue.items.isEmpty()) PlayerQueue.restore(LocalContext.current)
     val items = PlayerQueue.items
@@ -124,7 +131,7 @@ fun PlayerScreen(repo: Repository, onBack: () -> Unit) {
         }
         return
     }
-    PlayerContent(repo, c, onBack)
+    PlayerContent(repo, c, onBack, onMultiView)
 }
 
 /** Opens [stream] in the app named by the ExternalPlayer setting; false when unset or not installed. */
@@ -154,7 +161,7 @@ private fun launchExternalPlayer(context: Context, setting: String, stream: Stre
 
 @OptIn(UnstableApi::class)
 @Composable
-private fun PlayerContent(repo: Repository, cfg: PlayerConfig, onBack: () -> Unit) {
+private fun PlayerContent(repo: Repository, cfg: PlayerConfig, onBack: () -> Unit, onMultiView: (Int) -> Unit) {
     val items = PlayerQueue.items
     val playlist = PlayerQueue.playlist!!
     val context = LocalContext.current
@@ -193,7 +200,53 @@ private fun PlayerContent(repo: Repository, cfg: PlayerConfig, onBack: () -> Uni
 
     val aspectMode = AspectMode.fromKey(aspect)
 
+    // Picture-in-Picture: while a live channel plays, HOME shrinks the player (MainActivity.onUserLeaveHint).
+    val inPip by PipState.inPip.collectAsState()
+    val activity = remember(context) { context.findActivity() }
+    DisposableEffect(live) {
+        PipState.autoEnter = live
+        onDispose { PipState.autoEnter = false }
+    }
+    LaunchedEffect(inPip) { if (inPip) { panel = Panel.None; overlay = false } }
+
+    // Recording (DVR) state for the current channel.
+    val recordings by remember { RecordingDb.get(context).dao().observeAll() }.collectAsState(initial = emptyList())
+    val activeRecording = if (live) recordings.firstOrNull { it.status == RecStatus.RECORDING && it.playlistId == playlist.id && it.streamId == current.id } else null
+
+    // Live pause / timeshift: catch-up when the playlist offers it, otherwise ExoPlayer's back buffer (see buildPlayer).
+    var shiftStartSec by remember { mutableStateOf<Long?>(null) }
+    var pausedAtMs by remember { mutableLongStateOf(0L) }
+    var behindSec by remember { mutableLongStateOf(0L) }
+    val holdPause = remember { BooleanArray(1) } // true while the pause comes from the lifecycle, not the user
+    val canReturnToLive = live && (shiftStartSec != null || behindSec >= Timeshift.BEHIND_LIVE_SHOW_SEC)
+
     fun showOverlay() { overlayTick++ }
+    fun toast(message: String) = android.widget.Toast.makeText(context, message, android.widget.Toast.LENGTH_SHORT).show()
+    fun returnToLive() {
+        pausedAtMs = 0
+        if (shiftStartSec != null) {
+            shiftStartSec = null
+            player.setMediaItem(MediaItem.Builder().setUri(current.url).setMediaMetadata(MediaMetadata.Builder().setTitle(current.name).build()).build())
+            player.prepare()
+        } else {
+            player.seekToDefaultPosition()
+        }
+        player.play()
+        behindSec = 0
+    }
+    fun toggleRecording() {
+        scope.launch {
+            val running = activeRecording
+            if (running != null) {
+                RecordingManager.stop(context, running.id)
+                toast("Kayıt durduruluyor")
+            } else {
+                val now = System.currentTimeMillis() / 1000
+                val prog = epg.firstOrNull { it.start <= now && it.end > now }
+                toast(RecordingManager.startNow(context, playlist, current, prog?.title.orEmpty(), prog?.end).message)
+            }
+        }
+    }
     fun zapTo(target: Int) {
         if (target == index) return
         previousIndex = index
@@ -209,7 +262,7 @@ private fun PlayerContent(repo: Repository, cfg: PlayerConfig, onBack: () -> Uni
         val tail = minOf(60_000L, duration / 20)
         val ended = player.playbackState == Player.STATE_ENDED || (duration > 0 && pos > duration - tail)
         repo.scope.launch { repo.store.savePosition(key, if (ended) 0 else pos) }
-        repo.history.record(playlist, item, pos, duration)
+        if (!item.id.startsWith("rec:")) repo.history.record(playlist, item, pos, duration)
     }
 
     fun buildItem(s: Stream): MediaItem = MediaItem.Builder()
@@ -259,10 +312,35 @@ private fun PlayerContent(repo: Repository, cfg: PlayerConfig, onBack: () -> Uni
                     // Series: the countdown card owns the transition; a cancelled card stays on the last frame.
                     if (index < items.lastIndex && nextCancelledFor != index) index++
                 }
+                if (state == Player.STATE_ENDED && items[index].type == ContentType.LIVE && shiftStartSec != null) returnToLive()
             }
 
             override fun onIsPlayingChanged(isPlaying: Boolean) {
                 playing = isPlaying
+            }
+
+            override fun onVideoSizeChanged(videoSize: VideoSize) {
+                PipState.setVideoSize(videoSize.width, videoSize.height, videoSize.pixelWidthHeightRatio)
+            }
+
+            override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
+                val cur = items[index]
+                if (cur.type != ContentType.LIVE || holdPause[0]) return
+                if (!playWhenReady) {
+                    pausedAtMs = System.currentTimeMillis()
+                    return
+                }
+                val pausedAt = pausedAtMs
+                pausedAtMs = 0
+                if (pausedAt <= 0 || shiftStartSec != null || Timeshift.looksLikeReplay(cur.url)) return
+                if (!Timeshift.useCatchup(System.currentTimeMillis() - pausedAt, Catchup.available(playlist, cur))) return
+                // Long pause on a channel with an archive: continue from where it was paused instead of jumping to live.
+                val (from, to) = Timeshift.catchupRange(pausedAt)
+                val url = Catchup.urlFor(playlist, cur, from, to, System.currentTimeMillis() / 1000) ?: return
+                shiftStartSec = from
+                player.setMediaItem(MediaItem.Builder().setUri(url).setMediaMetadata(MediaMetadata.Builder().setTitle(cur.name).build()).build())
+                player.prepare()
+                player.play()
             }
 
             override fun onTracksChanged(t: Tracks) {
@@ -294,8 +372,12 @@ private fun PlayerContent(repo: Repository, cfg: PlayerConfig, onBack: () -> Uni
     DisposableEffect(lifecycle) {
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
-                Lifecycle.Event.ON_STOP -> { saveProgress(); player.pause() }
-                Lifecycle.Event.ON_START -> player.play()
+                Lifecycle.Event.ON_STOP -> { holdPause[0] = true; saveProgress(); player.pause() }
+                Lifecycle.Event.ON_START -> {
+                    player.play()
+                    // The play-state callback arrives asynchronously; keep ignoring it for a moment.
+                    scope.launch { delay(600); holdPause[0] = false; pausedAtMs = 0 }
+                }
                 else -> Unit
             }
         }
@@ -312,6 +394,9 @@ private fun PlayerContent(repo: Repository, cfg: PlayerConfig, onBack: () -> Uni
         reconnectJob?.cancel()
         reconnectAttempt = 0
         nextSeconds = 0
+        shiftStartSec = null
+        pausedAtMs = 0
+        behindSec = 0
         externalSubs.clear()
         speed = 1f
         player.setPlaybackSpeed(1f)
@@ -338,6 +423,17 @@ private fun PlayerContent(repo: Repository, cfg: PlayerConfig, onBack: () -> Uni
         while (overlay) {
             position = player.currentPosition
             duration = player.duration.coerceAtLeast(0)
+            if (live) {
+                val shift = shiftStartSec
+                behindSec = if (shift != null) {
+                    Timeshift.behindSec(System.currentTimeMillis() / 1000, shift, player.currentPosition)
+                } else {
+                    val timeline = player.currentTimeline
+                    val target = if (timeline.isEmpty) null
+                    else timeline.getWindow(player.currentMediaItemIndex, Timeline.Window()).liveConfiguration?.targetOffsetMs?.takeIf { it != C.TIME_UNSET }
+                    Timeshift.behindFromLiveOffset(player.currentLiveOffset.takeIf { it != C.TIME_UNSET }, target)
+                }
+            }
             delay(500)
         }
     }
@@ -464,7 +560,8 @@ private fun PlayerContent(repo: Repository, cfg: PlayerConfig, onBack: () -> Uni
                             if (digits.isNotEmpty()) commitDigits() else if (overlay) overlay = false else showOverlay()
                             true
                         }
-                        Key.MediaPlayPause -> { if (player.isPlaying) player.pause() else player.play(); true }
+                        Key.MediaPlayPause -> { if (player.isPlaying) player.pause() else player.play(); showOverlay(); true }
+                        Key.MediaFastForward, Key.MediaSkipForward -> if (canReturnToLive) { returnToLive(); true } else false
                         else -> false
                     }
                 } else {
@@ -503,7 +600,7 @@ private fun PlayerContent(repo: Repository, cfg: PlayerConfig, onBack: () -> Uni
             modifier = aspectMode.ratio?.let { Modifier.align(Alignment.Center).aspectRatio(it) } ?: Modifier.fillMaxSize(),
         )
 
-        if (error == null && reconnectAttempt > 0) {
+        if (error == null && reconnectAttempt > 0 && !inPip) {
             Row(
                 Modifier.align(Alignment.Center).clip(RoundedCornerShape(16.dp)).background(Color(0xE6111620)).padding(horizontal = 28.dp, vertical = 18.dp),
             ) {
@@ -511,7 +608,7 @@ private fun PlayerContent(repo: Repository, cfg: PlayerConfig, onBack: () -> Uni
             }
         }
 
-        error?.let {
+        error?.takeIf { !inPip }?.let {
             Column(
                 Modifier.align(Alignment.Center).clip(RoundedCornerShape(20.dp)).background(Color(0xE6111620)).padding(32.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
@@ -530,7 +627,7 @@ private fun PlayerContent(repo: Repository, cfg: PlayerConfig, onBack: () -> Uni
             }
         }
 
-        if (digits.isNotEmpty()) {
+        if (digits.isNotEmpty() && !inPip) {
             Text(
                 digits,
                 modifier = Modifier.align(Alignment.TopStart).padding(40.dp).clip(RoundedCornerShape(12.dp)).background(Color(0xCC000000)).padding(horizontal = 24.dp, vertical = 8.dp),
@@ -540,7 +637,16 @@ private fun PlayerContent(repo: Repository, cfg: PlayerConfig, onBack: () -> Uni
             )
         }
 
-        if (overlay && panel == Panel.None && !nextVisible) {
+        if (activeRecording != null && !inPip) {
+            Pill(
+                "● KAYIT",
+                modifier = Modifier.align(Alignment.TopEnd).padding(end = 40.dp, top = 68.dp),
+                color = Palette.Live,
+                contentColor = Color.White,
+            )
+        }
+
+        if (overlay && panel == Panel.None && !nextVisible && !inPip) {
             Text(
                 formatClock(System.currentTimeMillis() / 1000),
                 modifier = Modifier.align(Alignment.TopEnd).padding(horizontal = 40.dp, vertical = 24.dp),
@@ -562,11 +668,21 @@ private fun PlayerContent(repo: Repository, cfg: PlayerConfig, onBack: () -> Uni
                     .background(Brush.verticalGradient(listOf(Color.Transparent, Color(0xCC000000), Color(0xF2000000))))
                     .padding(start = 40.dp, end = 40.dp, top = 56.dp, bottom = 28.dp),
             ) {
+                if (live && (!playing || canReturnToLive)) {
+                    Row(Modifier.padding(bottom = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                        if (!playing) Pill("DURAKLATILDI", color = Color(0x33FFFFFF), contentColor = Color.White)
+                        if (canReturnToLive) {
+                            Spacer(Modifier.size(10.dp))
+                            Pill(Timeshift.label(behindSec), color = Palette.Gold, contentColor = Color.Black)
+                            Text("   Canlıya dön: Menü ▸ Canlıya dön", style = MaterialTheme.typography.labelMedium, color = Palette.TextMuted)
+                        }
+                    }
+                }
                 if (live) LiveOverlay(index + 1, current, epg) else VodOverlay(current.name, position, duration, playing)
             }
         }
 
-        if (nextVisible && panel == Panel.None) {
+        if (nextVisible && panel == Panel.None && !inPip) {
             NextEpisodeCard(
                 nextTitle = items[(index + 1).coerceAtMost(items.lastIndex)].name,
                 seconds = nextSeconds,
@@ -609,6 +725,11 @@ private fun PlayerContent(repo: Repository, cfg: PlayerConfig, onBack: () -> Uni
                 subtitleSearch = subtitleSearch,
                 onPreviousChannel = if (live && previousIndex in items.indices) ({ zapTo(previousIndex); panel = Panel.None }) else null,
                 onChannelList = if (live) ({ panel = Panel.Channels }) else null,
+                onBackToLive = if (canReturnToLive) ({ returnToLive(); panel = Panel.None }) else null,
+                recording = activeRecording != null,
+                onRecordToggle = if (live) ({ toggleRecording(); panel = Panel.None }) else null,
+                onMultiView = if (live) ({ n -> saveProgress(); panel = Panel.None; onMultiView(n) }) else null,
+                onPip = if (PipState.supported(context)) ({ panel = Panel.None; activity?.let { PipState.enter(it) } }) else null,
                 onClose = { panel = Panel.None },
                 modifier = Modifier.align(Alignment.CenterEnd),
             )
