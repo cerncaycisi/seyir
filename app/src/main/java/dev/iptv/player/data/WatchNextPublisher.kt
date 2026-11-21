@@ -13,6 +13,10 @@ object DeepLinks {
     fun movie(playlistId: String, id: String): Uri =
         Uri.Builder().scheme(SCHEME).authority("movie").appendPath(id).appendQueryParameter("playlist", playlistId).build()
 
+    /** Opens the player on a live channel (used by system search). */
+    fun live(playlistId: String, id: String): Uri =
+        Uri.Builder().scheme(SCHEME).authority("live").appendPath(id).appendQueryParameter("playlist", playlistId).build()
+
     fun series(playlistId: String, id: String): Uri =
         Uri.Builder().scheme(SCHEME).authority("series").appendPath(id).appendQueryParameter("playlist", playlistId).build()
 }

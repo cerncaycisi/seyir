@@ -135,6 +135,7 @@ private fun Guide(playlist: Playlist, allChannels: List<Stream>, actions: HomeAc
     val gen by epg.generation.collectAsState()
     val status by epg.status.collectAsState()
     val reminders by epg.reminderIds.collectAsState(initial = emptySet())
+    val recordings by remember { dev.iptv.player.record.RecordingDb.get(context).dao().observeAll() }.collectAsState(initial = emptyList())
     val updated by produceState<Long?>(null, gen, status) { value = epg.lastUpdated() }
 
     var epgOnly by rememberSaveable { mutableStateOf(false) }
@@ -299,7 +300,26 @@ private fun Guide(playlist: Playlist, allChannels: List<Stream>, actions: HomeAc
                     f.prog.start > now -> {
                         val set = Reminder.idOf(playlist.id, f.stream.id, f.prog.start) in reminders
                         add(DialogOption(if (set) "Hatırlatıcıyı kaldır" else "Hatırlatıcı kur") { toggleReminder(f.stream, f.prog) })
+                        val planned = recordings.firstOrNull {
+                            it.id == dev.iptv.player.record.Recording.idOf(playlist.id, f.stream.id, f.prog.start * 1000) &&
+                                it.status == dev.iptv.player.record.RecStatus.SCHEDULED
+                        }
+                        add(DialogOption(if (planned != null) "Kaydı iptal et" else "Kaydı planla") {
+                            scope.launch {
+                                message = if (planned != null) {
+                                    dev.iptv.player.record.RecordingManager.cancel(context, planned)
+                                    "Kayıt planı kaldırıldı"
+                                } else {
+                                    dev.iptv.player.record.RecordingManager.schedule(context, playlist, f.stream, f.prog.title, f.prog.start, f.prog.stop).message
+                                }
+                            }
+                        })
                     }
+                    f.prog.stop > now -> add(DialogOption("Şimdi kaydet") {
+                        scope.launch {
+                            message = dev.iptv.player.record.RecordingManager.startNow(context, playlist, f.stream, f.prog.title, f.prog.stop).message
+                        }
+                    })
                     f.prog.stop <= now && Catchup.playable(playlist, f.stream, f.prog, now) ->
                         add(DialogOption("Geri izle") { playPast(f.stream, f.prog) })
                 }

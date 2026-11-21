@@ -33,6 +33,8 @@ import dev.iptv.player.data.DeepLinks
 import dev.iptv.player.data.Playlist
 import dev.iptv.player.data.Repository
 import dev.iptv.player.data.Stream
+import dev.iptv.player.player.MultiViewScreen
+import dev.iptv.player.player.PipState
 import dev.iptv.player.player.PlayerScreen
 import dev.iptv.player.ui.AboutScreen
 import dev.iptv.player.ui.AddPlaylistScreen
@@ -59,12 +61,21 @@ class MainActivity : ComponentActivity() {
         val prefs = (application as App).releasePrefs
         if (savedInstanceState == null) deepLink.value = intent?.data?.takeIf { it.scheme == DeepLinks.SCHEME }
         dev.iptv.player.epg.ReminderBus.handleIntent(intent)
+        PipState.inPip.value = false
+        // Picture-in-Picture state for the player screen (hides overlays while shrunk).
+        addOnPictureInPictureModeChangedListener { info -> PipState.inPip.value = info.isInPictureInPictureMode }
         setContent {
             IptvTheme {
                 AppNav(repository, prefs, deepLink)
                 dev.iptv.player.ui.ReminderHost()
             }
         }
+    }
+
+    /** HOME while a live channel plays: keep it running in a PiP window instead of stopping it. */
+    override fun onUserLeaveHint() {
+        super.onUserLeaveHint()
+        if (PipState.autoEnter) PipState.enter(this)
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -197,6 +208,13 @@ private fun AppNav(repo: Repository, prefs: dev.iptv.player.data.ReleasePrefs, d
                     onPlaylists = { nav.navigate("playlists") },
                     onSettings = { nav.navigate("settings") },
                     initialSection = st.defaultSection,
+                    onMultiView = { items, index, n ->
+                        PlayerQueue.playlist = active
+                        PlayerQueue.items = items
+                        PlayerQueue.index = index
+                        PlayerQueue.save(repo.appContext)
+                        nav.navigate("multiview/$n")
+                    },
                 )
             }
         }
@@ -215,7 +233,10 @@ private fun AppNav(repo: Repository, prefs: dev.iptv.player.data.ReleasePrefs, d
             if (active != null) SeriesScreen(repo, active, id, onPlay = { items, index -> play(active, items, index) })
         }
         composable("player") {
-            PlayerScreen(repo, onBack = { nav.popBackStack() })
+            PlayerScreen(repo, onBack = { nav.popBackStack() }, onMultiView = { n -> nav.navigate("multiview/$n") })
+        }
+        composable("multiview/{count}") { entry ->
+            MultiViewScreen(repo, entry.arguments?.getString("count")?.toIntOrNull() ?: 2, onBack = { nav.popBackStack() })
         }
     }
 
@@ -226,6 +247,15 @@ private fun AppNav(repo: Repository, prefs: dev.iptv.player.data.ReleasePrefs, d
         val id = uri.lastPathSegment ?: return@LaunchedEffect
         val playlist = all.firstOrNull { it.id == uri.getQueryParameter("playlist") } ?: return@LaunchedEffect
         repo.store.setActive(playlist.id)
+        if (uri.host == "live") {
+            // System search / external link to a live channel: open the player on it.
+            val items = runCatching { repo.content(playlist, ContentType.LIVE).items }.getOrNull().orEmpty().filter { it.url.isNotEmpty() }
+            val idx = items.indexOfFirst { it.id == id }
+            if (idx < 0) return@LaunchedEffect
+            nav.navigate("home") { popUpTo(0) }
+            play(playlist, items, idx)
+            return@LaunchedEffect
+        }
         val route = when (uri.host) {
             "movie" -> "movie/${Uri.encode(id)}"
             "series" -> "series/${Uri.encode(id)}"

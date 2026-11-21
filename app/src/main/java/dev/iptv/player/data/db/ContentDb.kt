@@ -51,8 +51,25 @@ data class SyncEntity(
     val epgUrl: String?,
 )
 
+/** Lightweight projection used by the system-search provider (no URLs, so nothing secret is loaded). */
+data class SearchProjection(
+    val playlistId: String,
+    val type: String,
+    val id: String,
+    val name: String,
+    val logo: String?,
+    val categoryId: String,
+    val year: String?,
+)
+
 @Dao
 abstract class ContentDao {
+    @Query("SELECT playlistId, type, id, name, logo, categoryId, year FROM streams")
+    abstract suspend fun searchProjection(): List<SearchProjection>
+
+    @Query("SELECT COALESCE(MAX(fetchedAt), 0) FROM sync")
+    abstract suspend fun lastFetched(): Long
+
     @Query("SELECT * FROM categories WHERE playlistId = :playlistId AND type = :type ORDER BY ord")
     abstract suspend fun categories(playlistId: String, type: String): List<CategoryEntity>
 

@@ -102,6 +102,11 @@ fun PlayerSettingsPanel(
     onChannelList: (() -> Unit)?,
     onClose: () -> Unit,
     modifier: Modifier = Modifier,
+    onBackToLive: (() -> Unit)? = null,
+    recording: Boolean = false,
+    onRecordToggle: (() -> Unit)? = null,
+    onMultiView: ((Int) -> Unit)? = null,
+    onPip: (() -> Unit)? = null,
 ) {
     var page by remember { mutableStateOf(Page.Main) }
     var mainFocus by remember { mutableIntStateOf(0) }
@@ -128,8 +133,15 @@ fun PlayerSettingsPanel(
                         val i = rows.size
                         rows += RowSpec(label, value) { mainFocus = i; page = target }
                     }
+                    if (onBackToLive != null) rows += RowSpec("Canlıya dön") { onBackToLive() }
                     if (onPreviousChannel != null) rows += RowSpec("Önceki kanal") { onPreviousChannel() }
                     if (onChannelList != null) rows += RowSpec("Kanal listesi") { onChannelList() }
+                    if (onRecordToggle != null) rows += RowSpec(if (recording) "Kaydı durdur" else "Kaydet", if (recording) "● KAYIT" else null) { onRecordToggle() }
+                    if (onMultiView != null) {
+                        rows += RowSpec("Çoklu izleme", "2 kanal") { onMultiView(2) }
+                        rows += RowSpec("Çoklu izleme", "4 kanal") { onMultiView(4) }
+                    }
+                    if (onPip != null) rows += RowSpec("Resim içinde resim") { onPip() }
                     add("Görüntü oranı", aspect.label, Page.Aspect)
                     if (!live) add("Oynatma hızı", speedLabel(speed), Page.Speed)
                     add("Video kalitesi", if (quality.isEmpty()) "Otomatik" else offOrAuto(quality), Page.Quality)
