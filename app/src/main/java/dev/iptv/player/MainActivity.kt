@@ -18,11 +18,13 @@ import dev.iptv.player.data.Repository
 import dev.iptv.player.data.Stream
 import dev.iptv.player.player.PlayerScreen
 import dev.iptv.player.ui.AddPlaylistScreen
+import dev.iptv.player.ui.EditPlaylistScreen
 import dev.iptv.player.ui.HomeScreen
 import dev.iptv.player.ui.IptvTheme
 import dev.iptv.player.ui.PlaylistsScreen
 import dev.iptv.player.ui.SeriesScreen
 import dev.iptv.player.ui.StatusText
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
@@ -47,6 +49,7 @@ private fun AppNav(repo: Repository) {
         PlayerQueue.playlist = playlist
         PlayerQueue.items = items
         PlayerQueue.index = index
+        PlayerQueue.save(repo.appContext)
         nav.navigate("player")
     }
 
@@ -60,8 +63,25 @@ private fun AppNav(repo: Repository) {
                     nav.goHome()
                 },
                 onAdd = { nav.navigate("add") },
-                onDelete = { p -> scope.launch { repo.store.remove(p.id); repo.refresh(p.id) } },
+                onDelete = { p -> scope.launch { repo.removePlaylist(p.id) } },
+                onEdit = { p -> nav.navigate("edit/${Uri.encode(p.id)}") },
+                onRefresh = { p ->
+                    try {
+                        repo.refresh(p.id)
+                        repo.reload(p)
+                        null
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        e.message ?: "Yenilenemedi"
+                    }
+                },
+                loadAccount = { p -> repo.accountInfo(p) },
             )
+        }
+        composable("edit/{id}") { entry ->
+            val target = all.firstOrNull { it.id == entry.arguments?.getString("id") }
+            if (target != null) EditPlaylistScreen(repo, target, onDone = { nav.popBackStack() })
         }
         composable("add") {
             AddPlaylistScreen(repo, onSaved = { nav.goHome() })

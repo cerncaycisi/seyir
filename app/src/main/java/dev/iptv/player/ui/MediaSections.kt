@@ -195,7 +195,7 @@ fun SearchSection(repo: Repository, playlist: Playlist, actions: HomeActions) {
         if (source == null || q.length < 2) {
             emptyList()
         } else {
-            val hits = source.filter { it.name.contains(q, ignoreCase = true) }
+            val hits = source.filter { dev.iptv.player.data.TextSearch.matches(it.name, q) }
             listOf(
                 MediaRow("Kanallar", hits.filter { it.type == ContentType.LIVE }.take(60)),
                 MediaRow("Filmler", hits.filter { it.type == ContentType.MOVIE }.take(60)),

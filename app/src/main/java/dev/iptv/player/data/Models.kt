@@ -34,6 +34,13 @@ data class Stream(
     val plot: String? = null,
     val backdrop: String? = null,
     val genre: String? = null,
+    /** Extra HTTP request headers (User-Agent, Referer…) the player should send for this stream. */
+    val headers: Map<String, String> = emptyMap(),
+    /** Catch-up mode as given by the playlist ("default", "append", "shift", "flussonic", "xc"…), null when unsupported. */
+    val catchup: String? = null,
+    val catchupDays: Int = 0,
+    /** Catch-up URL template (M3U `catchup-source`), null when the mode implies a default. */
+    val catchupSource: String? = null,
 )
 
 data class Content(val categories: List<Category>, val items: List<Stream>)
@@ -58,6 +65,15 @@ data class VodInfo(
     val duration: String?,
     val year: String?,
     val rating: String?,
+)
+
+/** Xtream `user_info` subset. [expiresAt] is epoch seconds, null for unlimited accounts. */
+data class AccountInfo(
+    val status: String?,
+    val expiresAt: Long?,
+    val maxConnections: Int?,
+    val activeConnections: Int?,
+    val trial: Boolean = false,
 )
 
 data class EpgEntry(val title: String, val start: Long, val end: Long)
