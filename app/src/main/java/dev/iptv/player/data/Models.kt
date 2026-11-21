@@ -34,6 +34,10 @@ data class Stream(
     val plot: String? = null,
     val backdrop: String? = null,
     val genre: String? = null,
+    /** Epoch seconds the item was added to the panel (Xtream `added`); null for M3U (list order is used). */
+    val added: Long? = null,
+    /** Set on episode streams so history and deep links can find their series. */
+    val seriesId: String? = null,
 )
 
 data class Content(val categories: List<Category>, val items: List<Stream>)
@@ -58,6 +62,14 @@ data class VodInfo(
     val duration: String?,
     val year: String?,
     val rating: String?,
+    val cast: String? = null,
+    val director: String? = null,
+    /** YouTube video id of the trailer, when the panel provides one. */
+    val trailer: String? = null,
+    val poster: String? = null,
+    val durationSecs: Int? = null,
+    /** True when some fields were filled in from TMDB. */
+    val fromTmdb: Boolean = false,
 )
 
 data class EpgEntry(val title: String, val start: Long, val end: Long)

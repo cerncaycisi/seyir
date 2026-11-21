@@ -14,11 +14,13 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.PlaylistPlay
 import androidx.compose.material.icons.rounded.Favorite
+import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material.icons.rounded.LiveTv
 import androidx.compose.material.icons.rounded.Movie
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.VideoLibrary
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
@@ -48,11 +50,13 @@ import androidx.tv.material3.Text
 import dev.iptv.player.data.ContentType
 import dev.iptv.player.data.Playlist
 import dev.iptv.player.data.Repository
+import dev.iptv.player.data.Setting
 import dev.iptv.player.data.Stream
 import dev.iptv.player.data.favoriteKey
 import kotlinx.coroutines.launch
 
 enum class Section(val label: String, val icon: ImageVector) {
+    HOME("Ana Sayfa", Icons.Rounded.Home),
     LIVE("Canlı TV", Icons.Rounded.LiveTv),
     MOVIES("Filmler", Icons.Rounded.Movie),
     SERIES("Diziler", Icons.Rounded.VideoLibrary),
@@ -69,6 +73,10 @@ class HomeActions(
     val restore: FocusRestore,
     val open: (List<Stream>, Int) -> Unit,
     val toggleFavorite: (Stream) -> Unit,
+    /** Resume a continue-watching item directly (episodes go to their series page). */
+    val resume: (Stream) -> Unit = {},
+    /** Watch progress 0..1 keyed by favoriteKey; used for progress bars and watched checks on cards. */
+    val progress: Map<String, Float> = emptyMap(),
 )
 
 @OptIn(ExperimentalComposeUiApi::class)
@@ -78,14 +86,27 @@ fun HomeScreen(
     playlist: Playlist,
     onPlay: (List<Stream>, Int) -> Unit,
     onSeries: (Stream) -> Unit,
+    onMovie: (Stream) -> Unit,
     onPlaylists: () -> Unit,
 ) {
-    var section by rememberSaveable { mutableStateOf(Section.LIVE) }
+    var savedSection by rememberSaveable { mutableStateOf<Section?>(null) }
+    // Until the stored default is read there is nothing to show; it is a single fast DataStore read.
+    LaunchedEffect(Unit) {
+        if (savedSection == null) {
+            val name = repo.settings.get(Setting.DefaultSection)
+            savedSection = Section.entries.firstOrNull { it.name == name } ?: Section.HOME
+        }
+    }
+    val section = savedSection ?: Section.HOME
     var restoreId by rememberSaveable { mutableStateOf<String?>(null) }
     var initialFocus by rememberSaveable { mutableStateOf(true) }
     val navFocus = remember { Section.entries.map { FocusRequester() } }
     val scope = rememberCoroutineScope()
     val favorites by repo.store.favorites.collectAsState(initial = emptySet())
+    val history by repo.history.entries.collectAsState(initial = emptyList())
+    val progress = remember(history) {
+        history.filter { it.type != ContentType.LIVE }.associate { it.favKey to (if (it.finished) 1f else it.fraction) }
+    }
 
     val actions = HomeActions(
         favorites = favorites,
@@ -97,9 +118,19 @@ fun HomeScreen(
             val s = items[index]
             restoreId = s.id
             val playable = items.filter { it.url.isNotEmpty() }
-            if (s.type == ContentType.SERIES && s.url.isEmpty()) onSeries(s) else onPlay(playable, playable.indexOf(s))
+            when {
+                s.type == ContentType.SERIES && s.url.isEmpty() -> onSeries(s)
+                s.type == ContentType.MOVIE -> onMovie(s)
+                else -> onPlay(playable, playable.indexOf(s))
+            }
         },
         toggleFavorite = { s -> scope.launch { repo.store.toggleFavorite(favoriteKey(playlist, s)) } },
+        resume = { s ->
+            restoreId = s.id
+            val series = s.seriesId
+            if (series != null) onSeries(s.copy(id = series)) else onPlay(listOf(s), 0)
+        },
+        progress = progress,
     )
 
     ModalNavigationDrawer(
@@ -135,7 +166,7 @@ fun HomeScreen(
                 Section.entries.forEach { s ->
                     NavigationDrawerItem(
                         selected = s == section,
-                        onClick = { section = s },
+                        onClick = { savedSection = s },
                         leadingContent = { Icon(s.icon, contentDescription = null) },
                         modifier = Modifier.focusRequester(navFocus[s.ordinal]),
                     ) { Text(s.label) }
@@ -153,8 +184,9 @@ fun HomeScreen(
         },
     ) {
         Box(Modifier.fillMaxSize().padding(start = 84.dp, top = 20.dp, end = 28.dp)) {
-            key(section, playlist.id) {
+            if (savedSection == null) LoadingState() else key(section, playlist.id) {
                 when (section) {
+                    Section.HOME -> HomeSection(repo, playlist, actions)
                     Section.LIVE -> LiveSection(repo, playlist, actions)
                     Section.MOVIES -> VodSection(repo, playlist, ContentType.MOVIE, actions)
                     Section.SERIES -> VodSection(repo, playlist, ContentType.SERIES, actions)

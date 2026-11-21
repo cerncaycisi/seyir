@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -15,6 +17,13 @@ android {
         targetSdk = 35
         versionCode = 1
         versionName = "0.1.0"
+
+        // TMDB key comes from local.properties (tmdb.apiKey); empty disables enrichment.
+        val localProps = Properties().apply {
+            rootProject.file("local.properties").takeIf { it.exists() }?.inputStream()?.use { load(it) }
+        }
+        val tmdbKey = localProps.getProperty("tmdb.apiKey", "").trim().replace("\\", "").replace("\"", "")
+        buildConfigField("String", "TMDB_API_KEY", "\"$tmdbKey\"")
     }
 
     buildTypes {
@@ -32,6 +41,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 }
 
@@ -54,6 +64,7 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
     implementation("io.coil-kt:coil-compose:2.7.0")
+    implementation("androidx.tvprovider:tvprovider:1.0.0")
 
     testImplementation("junit:junit:4.13.2")
 }

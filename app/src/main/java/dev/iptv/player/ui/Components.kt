@@ -46,6 +46,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.ErrorOutline
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Star
@@ -77,6 +78,8 @@ object Palette {
     val TextMuted = Color(0xFF9AA5B4)
     val TextFaint = Color(0xFF6B7687)
 }
+
+const val WATCHED_FRACTION = 0.95f
 
 private val cardShape = RoundedCornerShape(12.dp)
 private val tileGradients = listOf(
@@ -155,6 +158,8 @@ fun PosterCard(
     onFocused: () -> Unit,
     modifier: Modifier = Modifier,
     width: Dp = 100.dp,
+    /** Watch progress 0..1 (null = never watched); >= 0.95 shows a "watched" check instead of the bar. */
+    progress: Float? = null,
 ) {
     Card(
         onClick = onClick,
@@ -189,6 +194,18 @@ fun PosterCard(
                 )
             }
             stream.rating?.let { Pill("★ $it", Modifier.align(Alignment.TopStart).padding(6.dp), color = Color(0xCC000000), contentColor = Palette.Gold) }
+            if (progress != null) {
+                if (progress >= WATCHED_FRACTION) {
+                    Icon(
+                        Icons.Rounded.CheckCircle,
+                        contentDescription = "İzlendi",
+                        tint = Palette.Accent,
+                        modifier = Modifier.align(Alignment.BottomEnd).padding(6.dp).size(22.dp),
+                    )
+                } else if (progress > 0.01f) {
+                    ProgressBar(progress, Modifier.align(Alignment.BottomCenter).padding(horizontal = 6.dp, vertical = 6.dp))
+                }
+            }
             if (favorite) {
                 Icon(
                     Icons.Rounded.Star,
