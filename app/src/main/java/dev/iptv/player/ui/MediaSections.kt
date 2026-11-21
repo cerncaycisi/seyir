@@ -1,5 +1,9 @@
 package dev.iptv.player.ui
 
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.size
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -17,6 +21,15 @@ import androidx.compose.material.icons.rounded.FavoriteBorder
 import androidx.compose.material.icons.rounded.Movie
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.SearchOff
+import android.content.Intent
+import android.speech.RecognizerIntent
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.width
+import androidx.compose.material.icons.rounded.Mic
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -31,6 +44,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.unit.dp
 import dev.iptv.player.data.Content
+import dev.iptv.player.data.ContentRules
 import dev.iptv.player.data.ContentType
 import dev.iptv.player.data.Playlist
 import dev.iptv.player.data.Repository
@@ -39,11 +53,16 @@ import dev.iptv.player.data.VodInfo
 import dev.iptv.player.data.favoriteKey
 import kotlinx.coroutines.delay
 
-data class MediaRow(val title: String, val items: List<Stream>)
+data class MediaRow(val title: String, val items: List<Stream>, val categoryName: String? = null)
 
-private fun buildRows(content: Content): List<MediaRow> {
+private fun buildRows(content: Content, playlist: Playlist, type: ContentType, rules: ContentRules): List<MediaRow> {
+    val base = rules.filterBase(playlist, type, content)
+    return buildRowsRaw(base, playlist, type, rules)
+}
+
+private fun buildRowsRaw(content: Content, playlist: Playlist, type: ContentType, rules: ContentRules): List<MediaRow> {
     val byCategory = content.items.groupBy { it.categoryId }
-    val known = content.categories.mapNotNull { c -> byCategory[c.id]?.let { MediaRow(c.name, it) } }
+    val known = content.categories.mapNotNull { c -> byCategory[c.id]?.let { MediaRow(c.name, it, c.name) } }.filter { !rules.isCategoryLocked(playlist, type, it.items.first().categoryId) }
     val knownIds = content.categories.mapTo(HashSet()) { it.id }
     val rest = content.items.filter { it.categoryId !in knownIds }
     return if (rest.isEmpty()) known else known + MediaRow("Diğer", rest)
@@ -54,16 +73,20 @@ private suspend fun allStreams(repo: Repository, playlist: Playlist): List<Strea
 
 @Composable
 fun VodSection(repo: Repository, playlist: Playlist, type: ContentType, actions: HomeActions) {
-    val state by produceState<Load<List<MediaRow>>>(Load.Loading, playlist.id, type) {
-        value = loadCatching { buildRows(repo.content(playlist, type)) }
+    val state by produceState<Load<Content>>(Load.Loading, playlist.id, type) {
+        value = loadCatching { repo.content(playlist, type) }
     }
+    val rules = actions.rules
     when (val s = state) {
         Load.Loading -> LoadingState()
         is Load.Err -> ErrorState(s.message)
-        is Load.Ok -> if (s.value.isEmpty()) {
-            EmptyState(Icons.Rounded.Movie, if (type == ContentType.MOVIE) "Film bulunamadı" else "Dizi bulunamadı")
-        } else {
-            VodBrowser(repo, playlist, type, s.value, actions)
+        is Load.Ok -> {
+            val rows = remember(s.value, rules) { buildRows(s.value, playlist, type, rules) }
+            if (rows.isEmpty()) {
+                EmptyState(Icons.Rounded.Movie, if (type == ContentType.MOVIE) "Film bulunamadı" else "Dizi bulunamadı")
+            } else {
+                VodBrowser(repo, playlist, type, rows, actions)
+            }
         }
     }
 }
@@ -147,7 +170,7 @@ private fun MediaRowView(row: MediaRow, playlist: Playlist, actions: HomeActions
             itemsIndexed(row.items) { i, s ->
                 val mod = if (i == target) Modifier.focusRequester(requester) else Modifier
                 val open = { actions.open(row.items, i) }
-                val toggle = { actions.toggleFavorite(s) }
+                val toggle = { actions.longPress(s, row.categoryName) }
                 if (s.type == ContentType.LIVE) {
                     ChannelCard(s, open, toggle, { onFocused(s) }, mod)
                 } else {
@@ -169,7 +192,7 @@ fun FavoritesSection(repo: Repository, playlist: Playlist, actions: HomeActions)
             Load.Loading -> LoadingState()
             is Load.Err -> ErrorState(s.message)
             is Load.Ok -> {
-                val favorites = s.value.filter { favoriteKey(playlist, it) in actions.favorites }
+                val favorites = s.value.filter { favoriteKey(playlist, it) in actions.favorites && actions.rules.streamAllowed(playlist, it) }
                 val rows = listOf(
                     MediaRow("Kanallar", favorites.filter { it.type == ContentType.LIVE }),
                     MediaRow("Filmler", favorites.filter { it.type == ContentType.MOVIE }),
@@ -190,12 +213,13 @@ fun SearchSection(repo: Repository, playlist: Playlist, actions: HomeActions) {
     var query by rememberSaveable { mutableStateOf("") }
     val all by produceState<List<Stream>?>(null, playlist.id) { value = allStreams(repo, playlist) }
     val q = query.trim()
-    val rows = remember(all, q) {
+    val rules = actions.rules
+    val rows = remember(all, q, rules) {
         val source = all
         if (source == null || q.length < 2) {
             emptyList()
         } else {
-            val hits = source.filter { it.name.contains(q, ignoreCase = true) }
+            val hits = source.filter { it.name.contains(q, ignoreCase = true) && rules.streamAllowed(playlist, it) }
             listOf(
                 MediaRow("Kanallar", hits.filter { it.type == ContentType.LIVE }.take(60)),
                 MediaRow("Filmler", hits.filter { it.type == ContentType.MOVIE }.take(60)),
@@ -205,13 +229,51 @@ fun SearchSection(repo: Repository, playlist: Playlist, actions: HomeActions) {
     }
     Column(Modifier.fillMaxSize()) {
         ScreenTitle("Ara", "Kanallar, filmler ve diziler arasında")
-        TvTextField(query, { query = it }, "Ne izlemek istersiniz?", Modifier.widthIn(max = 760.dp), leadingIcon = Icons.Rounded.Search)
+        val context = LocalContext.current
+        val voiceIntent = remember {
+            Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+                putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+                putExtra(RecognizerIntent.EXTRA_LANGUAGE, "tr-TR")
+                putExtra(RecognizerIntent.EXTRA_PROMPT, "Ne izlemek istersiniz?")
+            }
+        }
+        val voiceAvailable = remember { voiceIntent.resolveActivity(context.packageManager) != null }
+        val launcher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { r ->
+            r.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)?.firstOrNull()?.let { query = it }
+        }
+        Row(Modifier.widthIn(max = 760.dp), verticalAlignment = Alignment.CenterVertically) {
+            TvTextField(query, { query = it }, "Ne izlemek istersiniz?", Modifier.weight(1f), leadingIcon = Icons.Rounded.Search)
+            if (voiceAvailable) {
+                Spacer(Modifier.width(10.dp))
+                MicButton { runCatching { launcher.launch(voiceIntent) } }
+            }
+        }
         Spacer(Modifier.height(20.dp))
         when {
             all == null -> LoadingState()
             q.length < 2 -> EmptyState(Icons.Rounded.Search, "Aramaya başlayın", "En az 2 harf yazın")
             rows.isEmpty() -> EmptyState(Icons.Rounded.SearchOff, "Sonuç bulunamadı", "\"$q\" için eşleşen içerik yok")
             else -> MediaRows(rows, playlist, actions, onFocused = {})
+        }
+    }
+}
+
+@Composable
+private fun MicButton(onClick: () -> Unit) {
+    androidx.tv.material3.Surface(
+        onClick = onClick,
+        modifier = Modifier.size(52.dp).pointerClick(onClick).semantics { contentDescription = "Sesli arama" },
+        shape = androidx.tv.material3.ClickableSurfaceDefaults.shape(androidx.compose.foundation.shape.CircleShape),
+        colors = androidx.tv.material3.ClickableSurfaceDefaults.colors(
+            containerColor = Palette.Surface,
+            contentColor = Palette.Text,
+            focusedContainerColor = Palette.Primary,
+            focusedContentColor = androidx.compose.ui.graphics.Color.White,
+        ),
+        scale = androidx.tv.material3.ClickableSurfaceDefaults.scale(focusedScale = 1.08f),
+    ) {
+        Box(Modifier.size(52.dp), contentAlignment = Alignment.Center) {
+            androidx.tv.material3.Icon(Icons.Rounded.Mic, contentDescription = "Sesli arama")
         }
     }
 }

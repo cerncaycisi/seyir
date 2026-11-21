@@ -3,4 +3,10 @@
         <item name="android:windowBackground">@android:color/black</item>
         <item name="android:windowNoTitle">true</item>
     </style>
+
+    <style name="Theme.Iptv.Splash" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">#080B10</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_launcher</item>
+        <item name="postSplashScreenTheme">@style/Theme.Iptv</item>
+    </style>
 </resources>

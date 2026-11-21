@@ -181,6 +181,8 @@ fun PlayerScreen(repo: Repository, onBack: () -> Unit) {
         player.prepare()
         player.play()
         showOverlay()
+        // UX hook: remember the last live channel for "Açılışta son kanal".
+        if (live) repo.scope.launch { repo.settings.set(dev.iptv.player.data.Setting.LastChannel, dev.iptv.player.data.LastChannel.encode(playlist.id, current.id)) }
         if (live) epg = runCatching { repo.shortEpg(playlist, current) }.getOrDefault(emptyList())
     }
 
