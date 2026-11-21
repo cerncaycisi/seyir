@@ -76,7 +76,7 @@ object Catchup {
         }
     }
 
-    private val token = Regex("""\$?\{([A-Za-z]+)(?::(\d+))?}""")
+    private val token = Regex("""\$?\{([A-Za-z]+)(?::(\d+))?\}""")
 
     /**
      * Expands catch-up placeholders. Epoch tokens: {utc} {start} {timestamp}(start) ${start} ;
