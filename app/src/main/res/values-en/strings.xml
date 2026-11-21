@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Onboarding (onb_) -->
+    <string name="onb_title">Welcome</string>
+    <string name="onb_headline">This app does not provide any content.</string>
+    <string name="onb_body">%1$s is only a media player; it contains and offers no channels, movies, series or stream addresses.</string>
+    <string name="onb_point_own">Only add M3U / Xtream playlists from your own provider that you are legally entitled to access.</string>
+    <string name="onb_point_resp">You are solely responsible for the legality of the content you add.</string>
+    <string name="onb_point_privacy">Your data stays on your device. Privacy policy:</string>
+    <string name="onb_accept">I agree</string>
+
+    <!-- About (about_) -->
+    <string name="about_title">About</string>
+    <string name="about_version">Version %1$s (%2$d)</string>
+    <string name="about_tagline">An open-source media player that ships no content.</string>
+    <string name="about_links">Links</string>
+    <string name="about_source">Source code</string>
+    <string name="about_privacy">Privacy policy</string>
+    <string name="about_disclaimer">Disclaimer</string>
+    <string name="about_attribution">Credits</string>
+    <string name="about_tmdb">This product uses the TMDB API but is not endorsed or certified by TMDB.</string>
+    <string name="about_opensubtitles">Subtitle data provided by OpenSubtitles.com.</string>
+    <string name="about_licenses">Open-source licenses</string>
+    <string name="about_license_notice">This app is licensed under the Apache License 2.0.</string>
+
+
+    <!-- Crash reporter (crash_) -->
+    <string name="crash_last_report">Last crash report</string>
+    <string name="crash_none">No crash report recorded.</string>
+    <string name="crash_share">Share crash report</string>
+</resources>

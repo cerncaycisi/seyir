@@ -1,3 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Turkish (default). English lives in values-en/strings.xml. Convention: docs/I18N.md -->
 <resources>
-    <string name="app_name">IPTV Player</string>
+    <string name="app_name" translatable="false">Seyir</string>
+
+    <!-- Onboarding (onb_) -->
+    <string name="onb_title">Hoş geldiniz</string>
+    <string name="onb_headline">Bu uygulama içerik sağlamaz.</string>
+    <string name="onb_body">%1$s yalnızca bir medya oynatıcısıdır; hiçbir kanal, film, dizi ya da yayın adresi içermez ve sunmaz.</string>
+    <string name="onb_point_own">Yalnızca yasal olarak erişim hakkınız olan, kendi sağlayıcınızdan edindiğiniz M3U / Xtream listelerini ekleyin.</string>
+    <string name="onb_point_resp">Eklediğiniz içeriğin yasaya uygunluğu tamamen sizin sorumluluğunuzdadır.</string>
+    <string name="onb_point_privacy">Verileriniz yalnızca cihazınızda saklanır. Gizlilik politikası:</string>
+    <string name="onb_accept">Kabul ediyorum</string>
+
+    <!-- About (about_) -->
+    <string name="about_title">Hakkında</string>
+    <string name="about_version">Sürüm %1$s (%2$d)</string>
+    <string name="about_tagline">İçerik sağlamayan, açık kaynaklı medya oynatıcı.</string>
+    <string name="about_links">Bağlantılar</string>
+    <string name="about_source">Kaynak kodu</string>
+    <string name="about_privacy">Gizlilik politikası</string>
+    <string name="about_disclaimer">Yasal uyarı</string>
+    <string name="about_attribution">Teşekkürler</string>
+    <string name="about_tmdb">Bu ürün TMDB API\'sini kullanır ancak TMDB tarafından onaylanmamış veya sertifikalandırılmamıştır.</string>
+    <string name="about_opensubtitles">Altyazı verileri OpenSubtitles.com tarafından sağlanır.</string>
+    <string name="about_licenses">Açık kaynak lisansları</string>
+    <string name="about_license_notice">Bu uygulama Apache License 2.0 ile lisanslanmıştır.</string>
+
+
+    <!-- Crash reporter (crash_) -->
+    <string name="crash_last_report">Son hata raporu</string>
+    <string name="crash_none">Kayıtlı hata raporu yok.</string>
+    <string name="crash_share">Hata raporunu paylaş</string>
 </resources>
