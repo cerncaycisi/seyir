@@ -219,4 +219,27 @@
     <string name="ui_epg">EPG</string>
     <string name="ui_sort_az">A-Z</string>
     <string name="ui_percentage">%1$d%%</string>
+    <string name="ui_cat_watch_later">Watch later</string>
+    <string name="ui_cat_continue">Continue watching</string>
+    <string name="ui_cat_recent">Recently watched</string>
+    <string name="ui_sort_za">Z-A</string>
+    <string name="ui_sort_number">Number</string>
+    <string name="ui_clear_history">Clear history</string>
+    <string name="ui_clear_history_message">Your watch history will be deleted. This cannot be undone.</string>
+    <string name="ui_clear_confirm">Clear</string>
+    <string name="ui_add_watch_later">Watch later</string>
+    <string name="ui_remove_watch_later">Remove from list</string>
+    <string name="ui_remove_favorites">Remove from favorites</string>
+    <string name="ui_category_empty">Nothing in this category</string>
+    <string name="ui_category_empty_hint">Pick another category</string>
+    <string name="ui_watch_later_hint">Add items from their detail page or by long-pressing OK</string>
+    <string name="ui_history_empty_hint">What you watch will show up here</string>
+    <string name="ui_categories">Categories</string>
+    <string name="ui_item_count">%1$d items</string>
+    <string name="ui_resume_prompt">Continue where you left off? (%1$s)</string>
+    <string name="ui_resume_continue">Continue</string>
+    <string name="ui_remove_from_history">Remove from history</string>
+    <string name="ui_watch_episode">Watch · %1$s</string>
+    <string name="ui_restart_series">Watch again from the start</string>
+    <string name="ui_series_badge">S%1$d B%2$d</string>
 </resources>

@@ -9,6 +9,7 @@ enum class VodSort(val label: String) {
     RECENT("Son eklenen"),
     RATING("Puan"),
     AZ("A-Z"),
+    ZA("Z-A"),
     YEAR("Yıl"),
 }
 
@@ -19,6 +20,7 @@ fun sortStreams(items: List<Stream>, sort: VodSort): List<Stream> = when (sort) 
     VodSort.RECENT -> latestOf(items, Int.MAX_VALUE)
     VodSort.RATING -> items.sortedByDescending { it.rating?.toDoubleOrNull() ?: -1.0 }
     VodSort.AZ -> items.sortedWith { a, b -> collator.compare(a.name, b.name) }
+    VodSort.ZA -> items.sortedWith { a, b -> collator.compare(b.name, a.name) }
     VodSort.YEAR -> items.sortedByDescending { it.year?.take(4)?.toIntOrNull() ?: -1 }
 }
 

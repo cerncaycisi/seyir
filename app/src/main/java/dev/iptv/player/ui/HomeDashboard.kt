@@ -26,6 +26,7 @@ import dev.iptv.player.data.VodInfo
 import dev.iptv.player.data.continueWatching
 import dev.iptv.player.data.favoriteKey
 import dev.iptv.player.data.latestOf
+import dev.iptv.player.data.recentStreams
 import dev.iptv.player.data.movieDetails
 
 private class HomeData(val contents: Map<ContentType, Content>)
@@ -54,8 +55,8 @@ fun HomeSection(repo: Repository, playlist: Playlist, actions: HomeActions) {
         is Load.Err -> ErrorState(s.message)
         is Load.Ok -> {
             val data = s.value
-            val rows = remember(uiContext, data, history, actions.favorites, actions.rules) {
-                buildHomeRows(uiContext, playlist, data, history.filter { it.playlistId == playlist.id }, actions.favorites, actions.rules)
+            val rows = remember(uiContext, data, history, actions.favorites, actions.watchLater, actions.rules) {
+                buildHomeRows(uiContext, playlist, data, history.filter { it.playlistId == playlist.id }, actions.favorites, actions.watchLater, actions.rules)
             }
             if (rows.isEmpty()) {
                 EmptyState(Icons.Rounded.Home, uiContext.getString(R.string.ui_content_empty), uiContext.getString(R.string.ui_content_empty_hint))
@@ -79,19 +80,25 @@ private fun buildHomeRows(
     data: HomeData,
     history: List<dev.iptv.player.data.HistoryEntry>,
     favorites: Set<String>,
+    watchLater: Set<String>,
     rules: ContentRules,
 ): List<MediaRow> {
     val visible = data.contents.mapValues { (type, content) -> visibleContentItems(playlist, type, content, rules) }
-    val resume = continueWatching(history).mapNotNull { visibleHistoryStream(playlist, it, data.contents, rules) }
     val recentLive = history.filter { it.type == ContentType.LIVE }.take(20)
         .mapNotNull { visibleHistoryStream(playlist, it, data.contents, rules) }
     val favLive = visible[ContentType.LIVE].orEmpty().filter { favoriteKey(playlist, it) in favorites }.take(40)
+    val vod = visible[ContentType.MOVIE].orEmpty() + visible[ContentType.SERIES].orEmpty()
+    val resume = recentStreams(continueWatching(history), vod, playlist.id)
+    val watched = recentStreams(history.filter { it.type != ContentType.LIVE }, vod, playlist.id).take(40)
+    val later = vod.filter { favoriteKey(playlist, it) in watchLater }.take(40)
     return listOf(
         MediaRow(uiContext.getString(R.string.ui_continue_watching), resume, direct = true),
-        MediaRow(uiContext.getString(R.string.ui_recent_channels), recentLive),
-        MediaRow(uiContext.getString(R.string.ui_favorite_channels), favLive),
+        MediaRow(uiContext.getString(R.string.ui_cat_recent), watched),
+        MediaRow(uiContext.getString(R.string.ui_cat_watch_later), later),
         MediaRow(uiContext.getString(R.string.ui_recent_movies), latestOf(visible[ContentType.MOVIE].orEmpty(), 30)),
         MediaRow(uiContext.getString(R.string.ui_recent_series), latestOf(visible[ContentType.SERIES].orEmpty(), 30)),
+        MediaRow(uiContext.getString(R.string.ui_recent_channels), recentLive),
+        MediaRow(uiContext.getString(R.string.ui_favorite_channels), favLive),
     ).filter { it.items.isNotEmpty() }
 }
 

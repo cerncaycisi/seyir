@@ -47,6 +47,9 @@ data class Stream(
     val catchupSource: String? = null,
     /** Catch-up archive length in days (Xtream tv_archive_duration); 0 = none. */
     val archiveDays: Int = 0,
+    /** Episode streams only: season and episode number (0 = unknown). */
+    val season: Int = 0,
+    val episode: Int = 0,
 )
 
 data class Content(val categories: List<Category>, val items: List<Stream>)

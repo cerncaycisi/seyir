@@ -32,6 +32,8 @@ import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.VisibilityOff
+import androidx.compose.material.icons.rounded.DeleteSweep
+import androidx.compose.material.icons.rounded.WatchLater
 import androidx.compose.material.icons.rounded.VideoLibrary
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -69,6 +71,7 @@ import dev.iptv.player.data.Playlist
 import dev.iptv.player.data.Repository
 import dev.iptv.player.data.Stream
 import dev.iptv.player.data.favoriteKey
+import dev.iptv.player.data.lastEpisodePerSeries
 import kotlinx.coroutines.launch
 
 enum class Section(val labelRes: Int, val icon: ImageVector) {
@@ -93,10 +96,14 @@ class HomeActions(
     val restore: FocusRestore,
     val open: (List<Stream>, Int) -> Unit,
     val toggleFavorite: (Stream) -> Unit,
+    val watchLater: Set<String> = emptySet(),
+    val toggleWatchLater: (Stream) -> Unit = {},
     /** Resume a continue-watching item directly (episodes go to their series page). */
     val resume: (Stream) -> Unit = {},
     /** Watch progress 0..1 keyed by favoriteKey; used for progress bars and watched checks on cards. */
     val progress: Map<String, Float> = emptyMap(),
+    /** Small label on series cards (last watched episode, e.g. "S2 B5") keyed like [progress]. */
+    val badges: Map<String, String> = emptyMap(),
     /** Hidden / locked / adult filtering state (see ContentRules). */
     val rules: ContentRules = ContentRules(),
     /** Long-press on a channel or poster: opens the action card. [categoryName] is null when the row is not a real category. */
@@ -139,9 +146,14 @@ fun HomeScreen(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val favorites by repo.store.favorites.collectAsState(initial = emptySet())
+    val watchLater by repo.store.watchLater.collectAsState(initial = emptySet())
     val history by repo.history.entries.collectAsState(initial = emptyList())
     val progress = remember(history) {
         history.filter { it.type != ContentType.LIVE }.associate { it.favKey to (if (it.finished) 1f else it.fraction) }
+            .plus(lastEpisodePerSeries(history).mapValues { (_, e) -> if (e.finished) 1f else e.fraction })
+    }
+    val badges = remember(history) {
+        lastEpisodePerSeries(history).filterValues { it.season > 0 }.mapValues { (_, e) -> context.getString(R.string.ui_series_badge, e.season, e.episode) }
     }
     val baseRules by repo.prefs.rules.collectAsState(initial = ContentRules())
     val rules = baseRules.copy(unlocked = ParentalSession.unlocked)
@@ -166,12 +178,15 @@ fun HomeScreen(
             }
         },
         toggleFavorite = { s -> scope.launch { repo.store.toggleFavorite(favoriteKey(playlist, s)) } },
+        watchLater = watchLater,
+        toggleWatchLater = { s -> scope.launch { repo.store.toggleWatchLater(favoriteKey(playlist, s)) } },
         resume = { s ->
             restoreId = s.id
             val series = s.seriesId
-            if (series != null) onSeries(s.copy(id = series)) else onPlay(listOf(s), 0)
+            if (series != null) onSeries(s.copy(id = series)) else if (s.type == ContentType.SERIES && s.url.isEmpty()) onSeries(s) else onPlay(listOf(s), 0)
         },
         progress = progress,
+        badges = badges,
         rules = rules,
         longPress = { s, c -> target = ActionTarget.Channel(s, c) },
         categoryLongPress = { t, id, name -> target = ActionTarget.Category(t, id, name) },
@@ -255,7 +270,7 @@ fun HomeScreen(
         }
     }
 
-    HomeOverlays(repo, playlist, target, hasPin.isNotEmpty(), rules, favorites, { target = null }, pendingUnlock, { pendingUnlock = null }, onMultiView)
+    HomeOverlays(repo, playlist, target, hasPin.isNotEmpty(), rules, favorites, watchLater, { target = null }, pendingUnlock, { pendingUnlock = null }, onMultiView)
 }
 
 @Composable
@@ -266,11 +281,13 @@ private fun HomeOverlays(
     hasPin: Boolean,
     rules: ContentRules,
     favorites: Set<String>,
+    watchLater: Set<String>,
     dismiss: () -> Unit,
     pendingUnlock: (() -> Unit)?,
     clearUnlock: () -> Unit,
     onMultiView: (List<Stream>, Int, Int) -> Unit,
 ) {
+    val historyEntries by repo.history.entries.collectAsState(initial = emptyList())
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val noPin = context.getString(R.string.play_pin_needed)
@@ -285,6 +302,19 @@ private fun HomeOverlays(
                     scope.launch { repo.store.toggleFavorite(favoriteKey(playlist, s)) }
                     dismiss()
                 })
+                if (s.type != ContentType.LIVE) {
+                    val later = favoriteKey(playlist, s) in watchLater
+                    add(CardAction(if (later) context.getString(R.string.ui_remove_watch_later) else context.getString(R.string.ui_add_watch_later), Icons.Rounded.WatchLater) {
+                        scope.launch { repo.store.toggleWatchLater(favoriteKey(playlist, s)) }
+                        dismiss()
+                    })
+                }
+                if (historyEntries.any { it.playlistId == playlist.id && (it.favKey == favoriteKey(playlist, s) || (s.type == ContentType.SERIES && it.seriesId == s.id)) }) {
+                    add(CardAction(context.getString(R.string.ui_remove_from_history), Icons.Rounded.DeleteSweep) {
+                        scope.launch { repo.history.remove(playlist, s) }
+                        dismiss()
+                    })
+                }
                 add(CardAction(context.getString(R.string.play_hide), Icons.Rounded.VisibilityOff) {
                     scope.launch { repo.prefs.setChannelHidden(playlist, s, true) }
                     dismiss()

@@ -219,4 +219,27 @@
     <string name="ui_epg">EPG</string>
     <string name="ui_sort_az">A-Z</string>
     <string name="ui_percentage">%%%1$d</string>
+    <string name="ui_cat_watch_later">Sonra İzle</string>
+    <string name="ui_cat_continue">Devam Et</string>
+    <string name="ui_cat_recent">Son İzlenenler</string>
+    <string name="ui_sort_za">Z-A</string>
+    <string name="ui_sort_number">Numara</string>
+    <string name="ui_clear_history">Geçmişi temizle</string>
+    <string name="ui_clear_history_message">İzleme geçmişi silinecek. Bu işlem geri alınamaz.</string>
+    <string name="ui_clear_confirm">Temizle</string>
+    <string name="ui_add_watch_later">Sonra izle</string>
+    <string name="ui_remove_watch_later">Listeden çıkar</string>
+    <string name="ui_remove_favorites">Favorilerden çıkar</string>
+    <string name="ui_category_empty">Bu kategoride içerik yok</string>
+    <string name="ui_category_empty_hint">Başka bir kategori seçin</string>
+    <string name="ui_watch_later_hint">Bir içeriğin detay sayfasından veya OK tuşunu basılı tutarak ekleyin</string>
+    <string name="ui_history_empty_hint">İzledikleriniz burada görünür</string>
+    <string name="ui_categories">Kategoriler</string>
+    <string name="ui_item_count">%1$d öğe</string>
+    <string name="ui_resume_prompt">Kaldığın yerden devam edilsin mi? (%1$s)</string>
+    <string name="ui_resume_continue">Devam et</string>
+    <string name="ui_remove_from_history">Geçmişten kaldır</string>
+    <string name="ui_watch_episode">İzle · %1$s</string>
+    <string name="ui_restart_series">Baştan izle</string>
+    <string name="ui_series_badge">S%1$d B%2$d</string>
 </resources>

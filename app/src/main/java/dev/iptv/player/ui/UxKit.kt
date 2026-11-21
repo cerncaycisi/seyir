@@ -365,10 +365,13 @@ fun <T> PickerRow(
 ) {
     val idx = options.indexOfFirst { it.first == value }.coerceAtLeast(0)
     fun step(d: Int) = onChange(options[(idx + d + options.size) % options.size].first)
+    var open by remember { mutableStateOf(false) }
+    // OK or tap opens a list to pick from; left/right still step through the values as a shortcut.
     SettingRow(
-        title, modifier, subtitle, onClick = { step(1) }, onLeft = { step(-1) }, onRight = { step(1) },
+        title, modifier, subtitle, onClick = { open = true }, onLeft = { step(-1) }, onRight = { step(1) },
         trailing = { ValueChip(options.getOrNull(idx)?.second.orEmpty(), true) },
     )
+    if (open) ListPickerDialog(title, options, value, onSelect = { onChange(it); open = false }, onDismiss = { open = false })
 }
 
 @Composable

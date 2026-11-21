@@ -31,6 +31,8 @@ data class HistoryEntry(
     val url: String = "",
     val categoryId: String = "",
     val seriesId: String? = null,
+    val season: Int = 0,
+    val episode: Int = 0,
     val positionMs: Long = 0,
     val durationMs: Long = 0,
     val updatedAt: Long = 0,
@@ -46,7 +48,7 @@ data class HistoryEntry(
     val resumable: Boolean
         get() = type != ContentType.LIVE && !finished && positionMs >= MIN_RESUME_MS
 
-    fun toStream() = Stream(id, name, logo, url, categoryId, type, seriesId = seriesId)
+    fun toStream() = Stream(id, name, logo, url, categoryId, type, seriesId = seriesId, season = season, episode = episode)
 
     companion object {
         const val MIN_RESUME_MS = 15_000L
@@ -97,6 +99,8 @@ class WatchHistory(context: Context, private val scope: CoroutineScope) {
             url = stream.url,
             categoryId = stream.categoryId,
             seriesId = stream.seriesId,
+            season = stream.season,
+            episode = stream.episode,
             positionMs = positionMs.coerceAtLeast(0),
             durationMs = durationMs.coerceAtLeast(0),
             updatedAt = System.currentTimeMillis(),
@@ -115,6 +119,29 @@ class WatchHistory(context: Context, private val scope: CoroutineScope) {
     suspend fun clear() {
         store.edit { it.remove(entriesKey) }
         watchNext.sync(emptyList())
+    }
+
+    /** Clears the active profile's history of one content type (live, movies or series). */
+    suspend fun clearType(type: ContentType) {
+        val p = keyPrefix
+        var snapshot: List<HistoryEntry> = emptyList()
+        store.edit { prefs ->
+            snapshot = decode(prefs[entriesKey]).filterNot { it.key.startsWith(p) && it.type == type }
+            prefs[entriesKey] = json.encodeToString(snapshot)
+        }
+        watchNext.sync(snapshot.filter { it.key.startsWith(p) })
+    }
+
+    /** Removes one movie / channel, or every episode of a series, from the active profile's history. */
+    suspend fun remove(playlist: Playlist, stream: Stream) {
+        val p = keyPrefix
+        val fav = scoped(favoriteKey(playlist, stream))
+        store.edit { prefs ->
+            prefs[entriesKey] = json.encodeToString(decode(prefs[entriesKey]).filterNot {
+                it.key == fav || (it.key.startsWith(p) && stream.type == ContentType.SERIES && it.playlistId == playlist.id && it.seriesId == stream.id)
+            })
+        }
+        watchNext.sync(decode(store.data.first()[entriesKey]).filter { it.key.startsWith(p) })
     }
 
     suspend fun removePlaylist(playlistId: String) {

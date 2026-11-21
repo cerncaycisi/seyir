@@ -170,6 +170,8 @@ fun PosterCard(
     width: Dp = 100.dp,
     /** Watch progress 0..1 (null = never watched); >= 0.95 shows a "watched" check instead of the bar. */
     progress: Float? = null,
+    /** Small label at the bottom start (e.g. last watched episode). */
+    badge: String? = null,
 ) {
     val uiContext = LocalContext.current
     Card(
@@ -217,6 +219,7 @@ fun PosterCard(
                     ProgressBar(progress, Modifier.align(Alignment.BottomCenter).padding(horizontal = 6.dp, vertical = 6.dp))
                 }
             }
+            if (badge != null) Pill(badge, Modifier.align(Alignment.BottomStart).padding(start = 6.dp, bottom = if (progress != null && progress > 0.01f && progress < WATCHED_FRACTION) 14.dp else 6.dp), color = Color(0xCC000000), contentColor = Color.White)
             if (favorite) {
                 Icon(
                     Icons.Rounded.Star,
@@ -337,7 +340,7 @@ fun CategoryItem(
     Surface(
         onClick = onClick,
         onLongClick = onLongClick,
-        modifier = modifier.fillMaxWidth().height(42.dp).pointerClick(onClick, onLongClick),
+        modifier = modifier.fillMaxWidth().height(48.dp).pointerClick(onClick, onLongClick),
         shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(10.dp)),
         colors = ClickableSurfaceDefaults.colors(
             containerColor = if (selected) Palette.Surface else Color.Transparent,

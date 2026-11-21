@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -31,6 +32,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.FavoriteBorder
 import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.WatchLater
 import androidx.compose.material.icons.rounded.Replay
 import androidx.compose.material.icons.rounded.Theaters
 import androidx.compose.runtime.Composable
@@ -113,6 +116,8 @@ private fun MovieDetail(
     val context = LocalContext.current
     val favorites by repo.store.favorites.collectAsState(initial = emptySet())
     val isFavorite = key in favorites
+    val watchLater by repo.store.watchLater.collectAsState(initial = emptySet())
+    val isLater = key in watchLater
     val progress by repo.history.entries.collectAsState(initial = emptyList())
     // Lint misses the direct ProduceStateScope.value assignment in this producer.
     @SuppressLint("ProduceStateDoesNotAssignValue")
@@ -171,7 +176,8 @@ private fun MovieDetail(
             info?.director?.let { CreditLine(uiContext.getString(R.string.ui_director), it) }
             info?.cast?.let { CreditLine(uiContext.getString(R.string.ui_cast), it) }
 
-            Row(Modifier.padding(top = 18.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            // Primary action on its own row, secondary actions below (all labelled, no long-press needed).
+            Column(Modifier.padding(top = 18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 if (data.resumeMs > 0) {
                     ActionButton(
                         uiContext.getString(R.string.ui_resume_position, formatPosition(data.resumeMs)),
@@ -180,20 +186,28 @@ private fun MovieDetail(
                         onClick = { onPlay(listOf(stream), 0) },
                         modifier = Modifier.focusRequester(primary),
                     )
-                    ActionButton(uiContext.getString(R.string.ui_restart), Icons.Rounded.Replay) {
-                        scope.launch {
-                            repo.store.savePosition(key, 0)
-                            onPlay(listOf(stream), 0)
-                        }
-                    }
                 } else {
                     ActionButton(uiContext.getString(R.string.ui_play), Icons.Rounded.PlayArrow, primary = true, onClick = { onPlay(listOf(stream), 0) }, modifier = Modifier.focusRequester(primary))
                 }
-                ActionButton(
-                    if (isFavorite) uiContext.getString(R.string.ui_in_favorites) else uiContext.getString(R.string.ui_add_favorites),
-                    if (isFavorite) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
-                ) { scope.launch { repo.store.toggleFavorite(key) } }
-                info?.trailer?.let { id -> ActionButton(uiContext.getString(R.string.ui_trailer), Icons.Rounded.Theaters) { openTrailer(context, id) } }
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    if (data.resumeMs > 0) {
+                        ActionButton(uiContext.getString(R.string.ui_restart), Icons.Rounded.Replay) {
+                            scope.launch {
+                                repo.store.savePosition(key, 0)
+                                onPlay(listOf(stream), 0)
+                            }
+                        }
+                    }
+                    ActionButton(
+                        if (isLater) uiContext.getString(R.string.ui_remove_watch_later) else uiContext.getString(R.string.ui_add_watch_later),
+                        if (isLater) Icons.Rounded.Check else Icons.Rounded.WatchLater,
+                    ) { scope.launch { repo.store.toggleWatchLater(key) } }
+                    ActionButton(
+                        if (isFavorite) uiContext.getString(R.string.ui_remove_favorites) else uiContext.getString(R.string.ui_add_favorites),
+                        if (isFavorite) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
+                    ) { scope.launch { repo.store.toggleFavorite(key) } }
+                    info?.trailer?.let { id -> ActionButton(uiContext.getString(R.string.ui_trailer), Icons.Rounded.Theaters) { openTrailer(context, id) } }
+                }
             }
 
             if (data.similar.isNotEmpty()) {
@@ -251,7 +265,7 @@ internal fun ActionButton(
 ) {
     Surface(
         onClick = onClick,
-        modifier = modifier.pointerClick(onClick),
+        modifier = modifier.heightIn(min = MinTapTarget).pointerClick(onClick),
         shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(50)),
         colors = ClickableSurfaceDefaults.colors(
             containerColor = if (primary) Palette.Text else Palette.Surface,
@@ -261,7 +275,7 @@ internal fun ActionButton(
         ),
         scale = ClickableSurfaceDefaults.scale(focusedScale = 1.06f),
     ) {
-        Row(Modifier.padding(horizontal = 16.dp, vertical = 9.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.heightIn(min = MinTapTarget).padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
             Icon(icon, contentDescription = null, modifier = Modifier.size(20.dp))
             Spacer(Modifier.size(8.dp))
             Text(label, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, maxLines = 1)

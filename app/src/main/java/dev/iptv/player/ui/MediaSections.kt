@@ -5,6 +5,25 @@ import android.annotation.SuppressLint
 import dev.iptv.player.R
 
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyGridState
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.itemsIndexed
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.rounded.DeleteSweep
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.focus.focusProperties
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
+import androidx.tv.material3.Icon
+import dev.iptv.player.data.SpecialCategory
+import dev.iptv.player.data.specialItems
+import kotlinx.coroutines.launch
 import androidx.compose.foundation.layout.size
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -110,85 +129,240 @@ fun VodSection(repo: Repository, playlist: Playlist, type: ContentType, actions:
     }
 }
 
-private fun buildVodRows(uiContext: android.content.Context, content: Content, playlist: Playlist, type: ContentType, rules: ContentRules, sort: VodSort, genre: String?): List<MediaRow> {
-    val filtered = rules.filterBase(playlist, type, content)
-    val items = filterByGenre(rules.unlockedItems(playlist, type, filtered.items), genre)
-    if (items.isEmpty()) return emptyList()
-    // Sorting replaces the category rows with one flat, sorted row.
-    if (sort != VodSort.DEFAULT) return listOf(MediaRow(uiContext.getString(R.string.ui_sort_heading, sortLabel(uiContext, sort)), sortStreams(items, sort)))
-    val base = buildRows(uiContext, Content(filtered.categories, items), playlist, type, rules)
-    return listOf(MediaRow(uiContext.getString(R.string.ui_recent_items), latestOf(items, 30))) + base
-}
+private const val OTHER_CATEGORY = "\u0000other"
 
+private fun specialLabel(context: android.content.Context, kind: SpecialCategory): String = context.getString(when (kind) {
+    SpecialCategory.ALL -> R.string.ui_all
+    SpecialCategory.FAVORITES -> R.string.ui_favorites
+    SpecialCategory.WATCH_LATER -> R.string.ui_cat_watch_later
+    SpecialCategory.CONTINUE -> R.string.ui_cat_continue
+    SpecialCategory.RECENT -> R.string.ui_cat_recent
+})
+
+/** One entry of the category column: a pinned special category or a provider category. */
+internal class BrowseCategory(val key: String, val name: String, val count: Int, val special: SpecialCategory? = null, val providerId: String? = null)
+
+/**
+ * Left category column + header (title, sort, genre) + vertical poster grid.
+ * [categoryWidth] and [columns] are parameters so other form factors can reuse the pieces.
+ */
+@OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
 @Composable
-private fun VodBrowser(repo: Repository, playlist: Playlist, type: ContentType, content: Content, actions: HomeActions) {
+private fun VodBrowser(
+    repo: Repository,
+    playlist: Playlist,
+    type: ContentType,
+    content: Content,
+    actions: HomeActions,
+    categoryWidth: Dp = 200.dp,
+    columns: Int = 5,
+) {
     val uiContext = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val rules = actions.rules
     var sort by rememberSaveable { mutableStateOf(VodSort.DEFAULT) }
     var genre by rememberSaveable { mutableStateOf<String?>(null) }
-    val genres = remember(content, actions.rules) { genresOf(actions.rules.unlockedItems(playlist, type, actions.rules.filterBase(playlist, type, content).items)).take(24) }
-    val rules = actions.rules
-    val rows = remember(uiContext, content, rules, sort, genre) { buildVodRows(uiContext, content, playlist, type, rules, sort, genre) }
-    var focused by remember { mutableStateOf<Stream?>(null) }
-    val shown = focused ?: rows.firstOrNull()?.items?.firstOrNull()
-    // Lint misses the direct ProduceStateScope.value assignment in this producer.
-    @SuppressLint("ProduceStateDoesNotAssignValue")
-    val info by produceState<VodInfo?>(null, shown) {
-        value = null
-        if (type == ContentType.MOVIE && shown != null) {
-            delay(350)
-            value = runCatching { repo.vodInfo(playlist, shown) }.getOrNull()
+    var selectedKey by rememberSaveable { mutableStateOf(SpecialCategory.ALL.name) }
+    var confirmClear by remember { mutableStateOf(false) }
+    val history by repo.history.entries.collectAsState(initial = emptyList())
+    val hist = remember(history, playlist.id, type) { history.filter { it.type == type && it.playlistId == playlist.id } }
+
+    val base = remember(content, rules.hiddenChannels, rules.hiddenCategories, rules.hideAdult) { rules.filterBase(playlist, type, content) }
+    val visible = remember(base, rules.lockedCategories, rules.unlocked) { rules.unlockedItems(playlist, type, base.items) }
+    val specialLists = remember(visible, actions.favorites, actions.watchLater, hist) {
+        SpecialCategory.entries.associateWith { specialItems(it, playlist, visible, actions.favorites, actions.watchLater, hist) }
+    }
+    val counts = remember(base) { base.items.groupingBy { it.categoryId }.eachCount() }
+    val categories = remember(uiContext, base, counts, specialLists) {
+        val knownIds = base.categories.mapTo(HashSet()) { it.id }
+        val other = base.items.count { it.categoryId !in knownIds }
+        SpecialCategory.entries.map { BrowseCategory(it.name, specialLabel(uiContext, it), specialLists[it].orEmpty().size, special = it) } +
+            base.categories.filter { (counts[it.id] ?: 0) > 0 }.map { BrowseCategory("c:${it.id}", it.name, counts[it.id] ?: 0, providerId = it.id) } +
+            (if (other > 0) listOf(BrowseCategory("c:$OTHER_CATEGORY", uiContext.getString(R.string.ui_other), other, providerId = OTHER_CATEGORY)) else emptyList())
+    }
+    val selected = categories.firstOrNull { it.key == selectedKey } ?: categories.first()
+    val selPid = selected.providerId
+    if (selPid != null && selPid != OTHER_CATEGORY && rules.isCategoryLocked(playlist, type, selPid)) selectedKey = SpecialCategory.ALL.name
+
+    val raw = remember(selected.key, specialLists, base) {
+        when {
+            selected.special != null -> specialLists[selected.special].orEmpty()
+            selPid == OTHER_CATEGORY -> {
+                val known = base.categories.mapTo(HashSet()) { it.id }
+                base.items.filter { it.categoryId !in known }
+            }
+            else -> base.items.filter { it.categoryId == selPid }
         }
     }
-    Column(Modifier.fillMaxSize()) {
-        if (shown != null) {
-            Hero(
-                title = shown.name,
-                image = info?.backdrop ?: shown.backdrop ?: shown.logo,
-                meta = listOfNotNull(
-                    info?.year ?: shown.year,
-                    (info?.rating ?: shown.rating)?.let { "★ $it" },
-                    info?.genre ?: shown.genre,
-                    info?.duration,
-                ),
-                plot = info?.plot ?: shown.plot,
-            )
+    val genres = remember(raw) { genresOf(raw).take(24) }
+    val genreSel = genre?.takeIf { it in genres }
+    val shown = remember(raw, sort, genreSel) { sortStreams(filterByGenre(raw, genreSel), sort) }
+
+    val gridState = rememberLazyGridState()
+    val catState = rememberLazyListState(initialFirstVisibleItemIndex = (categories.indexOfFirst { it.key == selected.key } - 3).coerceAtLeast(0))
+    val selectedReq = remember { FocusRequester() }
+    val firstItemReq = remember { FocusRequester() }
+    val restore = actions.restore
+    val restoreIndex = restore.itemId?.let { id -> shown.indexOfFirst { it.id == id } } ?: -1
+    var focused by remember { mutableStateOf<Stream?>(null) }
+    LaunchedEffect(Unit) {
+        if (restoreIndex >= 0) {
+            gridState.scrollToItem(restoreIndex)
+            withFrameNanos { }
+            runCatching { firstItemReq.requestFocus() }
+        } else if (restore.initial) {
+            withFrameNanos { }
+            runCatching { selectedReq.requestFocus() }
         }
-        // Chips cycle on OK so no dialog or dropdown is needed on a remote.
-        Row(Modifier.padding(vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            ControlChip(uiContext.getString(R.string.ui_sort), sortLabel(uiContext, sort)) { sort = VodSort.entries[(sort.ordinal + 1) % VodSort.entries.size] }
-            if (genres.isNotEmpty()) {
-                ControlChip(uiContext.getString(R.string.ui_genre), genre ?: uiContext.getString(R.string.ui_all)) {
-                    val i = genre?.let { genres.indexOf(it) } ?: -1
-                    genre = genres.getOrNull(i + 1)
+        if (restore.itemId != null || restore.initial) restore.done()
+    }
+
+    Row(Modifier.fillMaxSize()) {
+        Column(Modifier.width(categoryWidth).fillMaxHeight()) {
+            ScreenTitle(uiContext.getString(if (type == ContentType.MOVIE) R.string.ui_movies else R.string.ui_series))
+            LazyColumn(
+                Modifier.focusProperties {
+                    // Entering the list from the grid lands on the selected category, not the nearest row.
+                    enter = { if (catState.layoutInfo.visibleItemsInfo.any { it.key == selected.key }) selectedReq else FocusRequester.Default }
+                },
+                state = catState,
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+                contentPadding = PaddingValues(bottom = 32.dp),
+            ) {
+                items(categories, key = { it.key }) { c ->
+                    val pid = c.providerId
+                    CategoryItem(
+                        name = c.name,
+                        count = c.count,
+                        selected = c.key == selected.key,
+                        locked = pid != null && pid != OTHER_CATEGORY && rules.isCategoryMarkedLocked(playlist, type, pid),
+                        onClick = {
+                            val select = { selectedKey = c.key; genre = null; focused = null }
+                            if (pid != null && pid != OTHER_CATEGORY && rules.isCategoryLocked(playlist, type, pid)) actions.requireUnlock(select) else select()
+                        },
+                        onLongClick = if (pid != null && pid != OTHER_CATEGORY) ({ actions.categoryLongPress(type, pid, c.name) }) else null,
+                        modifier = if (c.key == selected.key) Modifier.focusRequester(selectedReq) else Modifier,
+                    )
                 }
             }
         }
-        if (rows.isEmpty()) {
-            EmptyState(Icons.Rounded.SearchOff, uiContext.getString(R.string.ui_no_genre), uiContext.getString(R.string.ui_choose_genre))
-        } else {
-            MediaRows(rows, playlist, actions, onFocused = { focused = it }, modifier = Modifier.weight(1f))
+        Spacer(Modifier.width(16.dp))
+        Column(Modifier.weight(1f).fillMaxHeight()) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Column(Modifier.weight(1f)) {
+                    Text(selected.name, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = Palette.Text, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(uiContext.getString(R.string.ui_item_count, shown.size), style = MaterialTheme.typography.bodySmall, color = Palette.TextMuted)
+                }
+                if (selected.special == SpecialCategory.RECENT && raw.isNotEmpty()) {
+                    HeaderButton(uiContext.getString(R.string.ui_clear_history), Icons.Rounded.DeleteSweep) { confirmClear = true }
+                }
+                DropdownButton(uiContext.getString(R.string.ui_sort), VodSort.entries.map { it to sortLabel(uiContext, it) }, sort, { sort = it })
+                if (genres.isNotEmpty()) {
+                    val options = listOf<String?>(null) + genres
+                    DropdownButton(uiContext.getString(R.string.ui_genre), options.map { it to (it ?: uiContext.getString(R.string.ui_all)) }, genreSel, { genre = it })
+                }
+            }
+            Spacer(Modifier.height(8.dp))
+            if (shown.isEmpty()) {
+                val (title, hint) = when (selected.special) {
+                    SpecialCategory.FAVORITES -> uiContext.getString(R.string.ui_no_favorites) to uiContext.getString(R.string.ui_favorites_hint)
+                    SpecialCategory.WATCH_LATER -> uiContext.getString(R.string.ui_cat_watch_later) to uiContext.getString(R.string.ui_watch_later_hint)
+                    SpecialCategory.CONTINUE, SpecialCategory.RECENT -> selected.name to uiContext.getString(R.string.ui_history_empty_hint)
+                    else -> uiContext.getString(R.string.ui_category_empty) to uiContext.getString(R.string.ui_category_empty_hint)
+                }
+                EmptyState(Icons.Rounded.SearchOff, title, hint)
+            } else {
+                PosterGrid(
+                    items = shown,
+                    playlist = playlist,
+                    actions = actions,
+                    columns = columns,
+                    state = gridState,
+                    focusIndex = restoreIndex,
+                    focusRequester = firstItemReq,
+                    categoryName = selPid?.let { selected.name },
+                    onFocused = { focused = it },
+                    modifier = Modifier.weight(1f),
+                )
+                Text(
+                    focused?.let { listOfNotNull(it.name, it.year, it.rating?.let { r -> "★ $r" }).joinToString("  ·  ") }.orEmpty(),
+                    modifier = Modifier.fillMaxWidth().height(24.dp),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = Palette.TextMuted,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
         }
+    }
+    if (confirmClear) {
+        ConfirmDialog(
+            uiContext.getString(R.string.ui_clear_history),
+            uiContext.getString(R.string.ui_clear_history_message),
+            uiContext.getString(R.string.ui_clear_confirm),
+            onConfirm = { confirmClear = false; scope.launch { repo.history.clearType(type) } },
+            onDismiss = { confirmClear = false },
+        )
     }
 }
 
+/** Header button with an icon (e.g. "clear history"); same look and 48dp tap target as [DropdownButton]. */
 @Composable
-private fun ControlChip(label: String, value: String, onClick: () -> Unit) {
+internal fun HeaderButton(label: String, icon: ImageVector, onClick: () -> Unit) {
     Surface(
         onClick = onClick,
-        modifier = Modifier.pointerClick(onClick),
+        modifier = Modifier.heightIn(min = MinTapTarget).pointerClick(onClick),
         shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(50)),
         colors = ClickableSurfaceDefaults.colors(
             containerColor = Palette.Surface,
             contentColor = Palette.Text,
-            focusedContainerColor = Palette.Primary,
+            focusedContainerColor = Palette.Live,
             focusedContentColor = Color.White,
         ),
-        scale = ClickableSurfaceDefaults.scale(focusedScale = 1.05f),
+        scale = ClickableSurfaceDefaults.scale(focusedScale = 1.04f),
     ) {
-        Row(Modifier.padding(horizontal = 14.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text("$label:", style = MaterialTheme.typography.labelLarge, color = Palette.TextMuted)
+        Row(Modifier.heightIn(min = MinTapTarget).padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+            Icon(icon, contentDescription = null, modifier = Modifier.size(20.dp))
             Spacer(Modifier.width(6.dp))
-            Text(value, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
+            Text(label, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold, maxLines = 1)
+        }
+    }
+}
+
+/** Vertical poster grid; scrolls by finger or D-pad. [focusIndex] (>= 0) attaches [focusRequester] to that cell. */
+@Composable
+internal fun PosterGrid(
+    items: List<Stream>,
+    playlist: Playlist,
+    actions: HomeActions,
+    columns: Int,
+    state: LazyGridState,
+    focusIndex: Int,
+    focusRequester: FocusRequester,
+    categoryName: String?,
+    onFocused: (Stream) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    LazyVerticalGrid(
+        GridCells.Fixed(columns),
+        modifier.fillMaxWidth(),
+        state = state,
+        contentPadding = PaddingValues(start = 6.dp, end = 6.dp, top = 8.dp, bottom = 32.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        itemsIndexed(items, key = { _, s -> s.id }) { i, s ->
+            val key = favoriteKey(playlist, s)
+            PosterCard(
+                s,
+                key in actions.favorites,
+                onClick = { actions.open(items, i) },
+                onLongClick = { actions.longPress(s, categoryName) },
+                onFocused = { onFocused(s) },
+                modifier = Modifier.fillMaxWidth().then(if (i == focusIndex) Modifier.focusRequester(focusRequester) else Modifier),
+                progress = actions.progress[key],
+                badge = actions.badges[key],
+            )
         }
     }
 }
@@ -250,7 +424,7 @@ private fun MediaRowView(row: MediaRow, playlist: Playlist, actions: HomeActions
                 if (s.type == ContentType.LIVE) {
                     ChannelCard(s, open, toggle, { onFocused(s) }, mod)
                 } else {
-                    PosterCard(s, favoriteKey(playlist, s) in actions.favorites, open, toggle, { onFocused(s) }, mod, progress = actions.progress[favoriteKey(playlist, s)])
+                    PosterCard(s, favoriteKey(playlist, s) in actions.favorites, open, toggle, { onFocused(s) }, mod, progress = actions.progress[favoriteKey(playlist, s)], badge = actions.badges[favoriteKey(playlist, s)])
                 }
             }
         }
@@ -368,5 +542,6 @@ private fun sortLabel(context: android.content.Context, sort: VodSort): String =
     VodSort.RECENT -> R.string.ui_recent
     VodSort.RATING -> R.string.ui_sort_rating
     VodSort.AZ -> R.string.ui_sort_az
+    VodSort.ZA -> R.string.ui_sort_za
     VodSort.YEAR -> R.string.ui_sort_year
 })
