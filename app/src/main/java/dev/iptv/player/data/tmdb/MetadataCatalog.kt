@@ -21,7 +21,7 @@ class MetadataCatalog(context: Context) {
     // Diffing ~20k titles against the index: low priority, the user never waits on it.
     suspend fun reconcile(playlist: Playlist, type: ContentType, content: Content) = withContext(dev.iptv.player.util.BackgroundWork.dispatcher) {
         if (type != ContentType.LIVE) dao.reconcile(playlist.id, type.name, content.items.map {
-            MetadataEntry(playlist.id, type.name, it.id, it.name, it.year, metadataIdentity(it))
+            MetadataEntry(playlist.id, type.name, it.id, it.name, it.year, metadataIdentity(it), tmdbId = it.tmdbId)
         })
     }
 

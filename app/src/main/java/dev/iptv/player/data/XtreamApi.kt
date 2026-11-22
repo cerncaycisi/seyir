@@ -85,6 +85,7 @@ class XtreamApi(
                 year = o.str("year").blankToNull(),
                 genre = o.str("genre").blankToNull(),
                 added = o.str("added")?.toLongOrNull(),
+                tmdbId = o.tmdbId(),
             )
         }
         ContentType.SERIES -> call("&action=get_series").objects().mapNotNull { o ->
@@ -102,6 +103,7 @@ class XtreamApi(
                 backdrop = o.firstStr("backdrop_path"),
                 genre = o.str("genre").blankToNull(),
                 added = o.str("last_modified")?.toLongOrNull(),
+                tmdbId = o.tmdbId(),
             )
         }
     }
@@ -121,6 +123,7 @@ class XtreamApi(
             trailer = info.str("youtube_trailer").blankToNull()?.let { youtubeId(it) },
             poster = (info.str("movie_image") ?: info.str("cover_big")).blankToNull(),
             durationSecs = info.str("duration_secs")?.toIntOrNull()?.takeIf { it > 0 },
+            tmdbId = info.tmdbId() ?: root.obj("movie_data")?.tmdbId(),
         )
     }
 
@@ -158,6 +161,7 @@ class XtreamApi(
             year = (info?.str("releaseDate") ?: info?.str("release_date"))?.take(4).blankToNull(),
             cast = info?.str("cast").blankToNull(),
             director = info?.str("director").blankToNull(),
+            tmdbId = info?.tmdbId(),
         )
     }
 
@@ -178,6 +182,7 @@ class XtreamApi(
 
 private fun JsonElement?.objects(): List<JsonObject> = (this as? JsonArray)?.mapNotNull { it as? JsonObject }.orEmpty()
 private fun JsonObject.str(key: String): String? = (this[key] as? JsonPrimitive)?.takeUnless { it is JsonNull }?.content
+private fun JsonObject.tmdbId(): Long? = (str("tmdb_id") ?: str("tmdb"))?.trim()?.toLongOrNull()?.takeIf { it > 0 }
 private fun JsonObject.obj(key: String): JsonObject? = this[key] as? JsonObject
 private fun String?.blankToNull(): String? = this?.takeIf { it.isNotBlank() }
 

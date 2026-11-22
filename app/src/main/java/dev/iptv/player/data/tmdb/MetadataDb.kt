@@ -2,6 +2,8 @@ package dev.iptv.player.data.tmdb
 
 import android.content.Context
 import androidx.room.*
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 import kotlinx.coroutines.flow.Flow
 
 /** No provider URLs or credentials: only title identity and its resolved public metadata. */
@@ -16,6 +18,7 @@ data class MetadataEntry(
     val identity: String,
     val resolved: Boolean = false,
     val info: String? = null,
+    val tmdbId: Long? = null,
 )
 
 data class MetadataCatalogKey(val playlistId: String, val type: String)
@@ -56,14 +59,22 @@ abstract class MetadataDao {
     }
 }
 
-@Database(entities = [MetadataEntry::class], version = 1, exportSchema = false)
+@Database(entities = [MetadataEntry::class], version = 2, exportSchema = false)
 abstract class MetadataDb : RoomDatabase() {
     abstract fun dao(): MetadataDao
 
     companion object {
+        private val MIGRATION_1_2 = object : Migration(1, 2) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE catalog_metadata ADD COLUMN tmdbId INTEGER")
+            }
+        }
+
         @Volatile private var instance: MetadataDb? = null
         fun get(context: Context): MetadataDb = instance ?: synchronized(this) {
             instance ?: Room.databaseBuilder(context.applicationContext, MetadataDb::class.java, "tmdb-catalog.db")
+                .addMigrations(MIGRATION_1_2)
+                .fallbackToDestructiveMigration()
                 .build().also { instance = it }
         }
     }

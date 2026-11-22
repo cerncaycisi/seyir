@@ -100,6 +100,7 @@ import dev.iptv.player.ui.PointerButton
 import dev.iptv.player.ui.pointerClick
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 private enum class Panel { None, Settings, Channels, Tracks }
@@ -241,9 +242,22 @@ private fun PlayerContent(repo: Repository, cfg: PlayerConfig, onBack: () -> Uni
                 val series = current.seriesId
                 if (series != null) {
                     val show = repo.content(playlist, ContentType.SERIES).items.firstOrNull { it.id == series }
-                    show?.let { repo.tmdb.originalLanguage(it.name, ContentType.SERIES, it.year) }
+                    val showTmdbId = show?.tmdbId ?: runCatching { repo.seriesInfo(playlist, series).tmdbId }.getOrNull()
+                    repo.tmdb.originalLanguage(show?.name ?: current.name, ContentType.SERIES, show?.year, tmdbId = showTmdbId)
                 } else {
-                    repo.tmdb.originalLanguage(current.name, ContentType.MOVIE, current.year)
+                    val playedSecs = runCatching {
+                        repo.history.entries.first().firstOrNull {
+                            it.playlistId == playlist.id && it.type == ContentType.MOVIE && it.id == current.id
+                        }?.durationMs?.takeIf { it > 0 }?.let { (it / 1000L).toInt() }
+                    }.getOrNull()
+                    val panel = runCatching { repo.vodInfo(playlist, current) }.getOrNull()
+                    repo.tmdb.originalLanguage(
+                        current.name,
+                        ContentType.MOVIE,
+                        panel?.year ?: current.year,
+                        tmdbId = panel?.tmdbId ?: current.tmdbId,
+                        durationSecs = playedSecs ?: panel?.durationSecs,
+                    )
                 }
             }
         } catch (e: kotlinx.coroutines.CancellationException) { throw e } catch (_: Exception) { null }

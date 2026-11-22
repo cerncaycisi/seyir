@@ -31,7 +31,7 @@ class MetadataWorker(context: Context, params: WorkerParameters) : CoroutineWork
             repeat(80) {
                 val batch = dao.pending(playlistId, type.name, 2)
                 if (batch.isEmpty()) return Result.success()
-                val answers = coroutineScope { batch.map { entry -> async { entry to repo.tmdb.resolve(entry.name, type, entry.year) } }.awaitAll() }
+                val answers = coroutineScope { batch.map { entry -> async { entry to repo.tmdb.resolve(entry.name, type, entry.year, tmdbId = entry.tmdbId) } }.awaitAll() }
                 var failed = false
                 for ((entry, result) in answers) {
                     if (result.completed) dao.resolve(playlistId, type.name, entry.id, entry.identity, result.info?.let { Json.encodeToString(it) })

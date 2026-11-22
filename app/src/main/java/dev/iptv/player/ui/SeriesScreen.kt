@@ -213,11 +213,12 @@ private fun SeriesDetail(repo: Repository, playlist: Playlist, seriesId: String,
                 // Provider gave no real episode names (empty or the same leftover everywhere): ask TMDB for them.
                 val providerNames = seasons[season].orEmpty().map { DisplayText.episodeTitle(it.title, info.name) }
                 val needNames = providerNames.any { it.isEmpty() } || (providerNames.size > 1 && providerNames.distinct().size == 1)
-                val tmdbNames by androidx.compose.runtime.produceState(emptyMap<Int, String>(), info.name, season, needNames) {
+                val tmdbNames by androidx.compose.runtime.produceState(emptyMap<Int, String>(), info.name, info.tmdbId, season, needNames) {
                     if (needNames) value = runCatching {
                         // The TMDB match was made with the provider's title, which can differ from the shown (TMDB) name.
-                        val providerTitle = repo.content(playlist, ContentType.SERIES).items.firstOrNull { it.id == seriesId }?.name ?: info.name
-                        repo.tmdb.seasonEpisodeNames(providerTitle, info.year, season)
+                        val item = repo.content(playlist, ContentType.SERIES).items.firstOrNull { it.id == seriesId }
+                        val providerTitle = item?.name ?: info.name
+                        repo.tmdb.seasonEpisodeNames(providerTitle, info.year, season, tmdbId = info.tmdbId ?: item?.tmdbId)
                     }.getOrDefault(emptyMap())
                 }
                 val epState = remember(season) { androidx.compose.foundation.lazy.LazyListState(episodes.indexOfFirst { e -> e.id == target?.let { t -> all[t.index].id } }.coerceAtLeast(0)) }

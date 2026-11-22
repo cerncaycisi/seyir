@@ -1,9 +1,10 @@
 # Seyir backlog
 
-Bu dosyada kullanıcının istekleri ve testlerde bulunan sorunlar tutulur. Biten maddeler işaretlenir, silinmez. Son güncelleme: 2026-11-22 (Canlı TV v2; sıradaki: TMDB tmdb_id eşleştirmesi, içerik logoları).
+Bu dosyada kullanıcının istekleri ve testlerde bulunan sorunlar tutulur. Biten maddeler işaretlenir, silinmez. Son güncelleme: 2026-11-22 (TMDB tmdb_id + süre eşleştirmesi; sıradaki: D-pad odak geçişleri denetimi, Ana Sayfa/Detay içerik logoları).
 
 ## P0 — Şu an açık
 
+- [ ] **D-pad (sağ/sol/yukarı/aşağı) odak geçişleri öngörülebilir değil** (kullanıcı, 2026-11-22): ekran genelinde yön tuşlarıyla gezinirken odak sürekli yanlış/beklenmeyen yerlere atlıyor. Tüm ekranlarda (Ana Sayfa, Canlı TV, Filmler/Diziler, Arama, Detay, Oynatıcı, sol menü) odak akışı baştan sona denetlenip deterministik hale getirilecek.
 - [x] **Sol menüde öğeler üst üste biniyor** (düzeltildi, TV'de doğrulandı 2026-11-22) (TV, kullanıcı geri bildirimi). Menü kapalıyken seçili Ana Sayfa göstergesi logoya değiyor. Menü açıkken öğeler üstte sıkışıyor, altta boş alan kalıyor.
   - Başlanan düzeltme (`HomeScreen.kt`, commit'lenmedi, TV'de doğrulanmadı):
     - Zorla verilen 42 dp yükseklik kaldırıldı; öğeler drawer'ın kendi 56 dp yüksekliğini kullanıyor.
@@ -50,8 +51,9 @@ Bu dosyada kullanıcının istekleri ve testlerde bulunan sorunlar tutulur. Bite
 
 ## P1 — Özellikler ve doğruluk
 
-- [ ] **TMDB eşleştirmesi — gerçek örnek (2026-11-22):** Panelde "Göz Açıp Kapayıncaya Kadar (2021)" adıyla duran yayın aslında "In the Blink of an Eye" (2026, İngilizce, 94 dk). Başlık ve yıl eşleştirmesi bunu Türk belgeseli (TMDB 957152) sanıyor. Sağlayıcının `tmdb_id` alanı ve süre karşılaştırması kullanılmalı.
-- [ ] **TMDB eşleştirmesi:** sağlayıcının `tmdb_id`'si (Xtream vod/series info) varsa birebir eşleşme için kullanılmalı. Listelerde eksik posterler de tamamlanmalı. (Codex'in 0.2.2/0.2.3 eşleştirme işi kontrol edilecek.)
+- [ ] **Dizi oynatıcısında "Önceki bölüm" ve yanlışlıkla basmayı önleme** (kullanıcı, 2026-11-22): "Sonraki bölüm" gibi "Önceki bölüm" de olmalı; ancak ikisi de yanlışlıkla kolayca basılmayacak şekilde konumlandırılmalı veya korunmalı (ör. ana odak yolundan uzakta, "Bölümler" paneli altında ya da onaylı/uzun basış).
+- [x] **TMDB eşleştirmesi — gerçek örnek (2026-11-22, TV'de doğrulandı):** Panelin kendisi "Göz Açıp Kapayıncaya Kadar (2021)" için yanlış TMDB verisi (`74 dk`, Okan Bayülgen / 957152) dönse bile gerçek oynatma süresi (`WatchHistory.durationMs` = `1 sa 34 dk`) ve süre doğrulamalı yıl/yılsız TMDB aramasıyla "In the Blink of an Eye" (2026, Bilim-Kurgu, Dram, TMDB `1032892`) doğru eşleştirildi.
+- [x] **TMDB eşleştirmesi (2026-11-22, doğrulandı):** Xtream liste/info yanıtlarındaki `tmdb_id`/`tmdb` alanı `Stream`/`SeriesInfo`/`VodInfo` ve Room (`ContentDb` v2, `MetadataDb` v2 `MIGRATION_1_2`) katmanlarına eklendi; birebir TMDB ID eşleşmesi, süre tutmazsa başlık/süre doğrulamasına düşme ve `withCatalogMetadata` ile listelerde eksik poster/backdrop/yıl tamamlama uygulandı. Not: "Farouk Omar" dizisinde sağlayıcı `tmdb_id` göndermediği için (`Dram, Belgesel`, özetsiz Xtream verisi) bu örnekte yine başlık eşleşmesine düşüyor.
 - [ ] Son seçilen kategori ve sıralama, uygulama yeniden açıldığında hatırlanmalı (Canlı/Film/Dizi).
 - [ ] Kategori gizleme: çoklu seçim (canlı/film/dizi). "Gruplarım": kullanıcının kendi grupları.
 - [ ] Tam ekran canlı yayın bilgi paneli (IBO tarzı): logo, şimdi/sonra, EPG, kilit, favori, altyazı, ses. Sağ/sol tuşları ile kanal değişimi.

@@ -50,6 +50,7 @@ data class Stream(
     /** Episode streams only: season and episode number (0 = unknown). */
     val season: Int = 0,
     val episode: Int = 0,
+    val tmdbId: Long? = null,
 )
 
 data class Content(val categories: List<Category>, val items: List<Stream>)
@@ -68,6 +69,7 @@ data class SeriesInfo(
     val cast: String? = null,
     val director: String? = null,
     val plotLanguage: String? = null,
+    val tmdbId: Long? = null,
 )
 
 data class VodInfo(
@@ -86,6 +88,7 @@ data class VodInfo(
     /** True when some fields were filled in from TMDB. */
     val fromTmdb: Boolean = false,
     val plotLanguage: String? = null,
+    val tmdbId: Long? = null,
 )
 
 /** Xtream `user_info` subset. [expiresAt] is epoch seconds, null for unlimited accounts. */

@@ -45,6 +45,7 @@ class ContentMapper(private val source: PlaylistSource, private val codec: Codec
         catchupDays = stream.catchupDays,
         catchupSource = stream.catchupSource?.let(codec::encrypt),
         ord = ord,
+        tmdbId = stream.tmdbId,
     )
 
     /** Throws if an encrypted field cannot be decrypted (key lost); callers treat that as a cache miss. */
@@ -65,6 +66,7 @@ class ContentMapper(private val source: PlaylistSource, private val codec: Codec
         catchup = entity.catchup,
         catchupDays = entity.catchupDays,
         catchupSource = entity.catchupSource?.let(codec::decrypt),
+        tmdbId = entity.tmdbId,
     )
 
     private fun sealUrl(url: String): String = when {

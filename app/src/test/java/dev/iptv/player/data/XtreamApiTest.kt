@@ -101,28 +101,33 @@ class XtreamApiTest {
     @Test
     fun vodStreamsHandleExtensionAndRating() = runBlocking {
         responses["get_vod_streams"] = """[
-            {"stream_id":1,"name":"A","container_extension":"mkv","rating":"7.456","year":"2020","category_id":"5"},
-            {"stream_id":"2","name":"B","container_extension":null,"rating":0,"category_id":5},
-            {"stream_id":3,"name":"C","rating":7.5,"rating_5based":3.5}]"""
+            {"stream_id":1,"name":"A","container_extension":"mkv","rating":"7.456","year":"2020","category_id":"5","tmdb_id":1032892},
+            {"stream_id":"2","name":"B","container_extension":null,"rating":0,"category_id":5,"tmdb":"0"},
+            {"stream_id":3,"name":"C","rating":7.5,"rating_5based":3.5,"tmdb":"4242"}]"""
         val items = api().streams(ContentType.MOVIE)
         assertEquals("$base/movie/test/test/1.mkv", items[0].url)
         assertEquals("7.5", items[0].rating)
+        assertEquals(1032892L, items[0].tmdbId)
         assertEquals("$base/movie/test/test/2.mp4", items[1].url)
         assertNull(items[1].rating)
+        assertNull(items[1].tmdbId)
         assertEquals("7.5", items[2].rating)
+        assertEquals(4242L, items[2].tmdbId)
     }
 
     @Test
     fun seriesListHandlesBackdropArrayAndStringIds() = runBlocking {
         responses["get_series"] = """[
-            {"series_id":7,"name":"S","cover":"c.jpg","backdrop_path":["b1.jpg","b2.jpg"],"releaseDate":"2019-05-01","category_id":"3"},
-            {"series_id":"8","name":"T","backdrop_path":"b.jpg","release_date":null,"category_id":3}]"""
+            {"series_id":7,"name":"S","cover":"c.jpg","backdrop_path":["b1.jpg","b2.jpg"],"releaseDate":"2019-05-01","category_id":"3","tmdb_id":"58887"},
+            {"series_id":"8","name":"T","backdrop_path":"b.jpg","release_date":null,"category_id":3,"tmdb":""}]"""
         val items = api().streams(ContentType.SERIES)
         assertEquals("7", items[0].id)
         assertEquals("b1.jpg", items[0].backdrop)
         assertEquals("2019", items[0].year)
+        assertEquals(58887L, items[0].tmdbId)
         assertEquals("b.jpg", items[1].backdrop)
         assertNull(items[1].year)
+        assertNull(items[1].tmdbId)
     }
 
     private fun ep(id: Any, season: Any, num: Any) =
@@ -131,13 +136,14 @@ class XtreamApiTest {
     @Test
     fun seriesInfoEpisodesAsObjectBySeason() = runBlocking {
         responses["get_series_info"] =
-            """{"info":{"name":"S","backdrop_path":[],"rating":"8"},"episodes":{"1":[${ep(11, 1, 1)},${ep("12", "1", "2")}],"2":[${ep(21, 2, 1)}]}}"""
+            """{"info":{"name":"S","backdrop_path":[],"rating":"8","tmdb_id":58887},"episodes":{"1":[${ep(11, 1, 1)},${ep("12", "1", "2")}],"2":[${ep(21, 2, 1)}]}}"""
         val info = api().seriesInfo("7")
         assertEquals(listOf("11", "12", "21"), info.episodes.map { it.id })
         assertEquals(listOf(1, 1, 2), info.episodes.map { it.season })
         assertEquals("$base/series/test/test/11.mp4", info.episodes[0].url)
         assertNull(info.backdrop)
         assertEquals("8.0", info.rating)
+        assertEquals(58887L, info.tmdbId)
     }
 
     @Test
@@ -158,12 +164,13 @@ class XtreamApiTest {
 
     @Test
     fun vodInfoToleratesNullsAndArrays() = runBlocking {
-        responses["get_vod_info"] = """{"info":{"plot":null,"description":"d","backdrop_path":["x.jpg"],"genre":"","duration":"01:30:00","releasedate":"2021-02-03","rating":"6"}}"""
+        responses["get_vod_info"] = """{"info":{"plot":null,"description":"d","backdrop_path":["x.jpg"],"genre":"","duration":"01:30:00","releasedate":"2021-02-03","rating":"6","tmdb_id":null},"movie_data":{"tmdb_id":"1032892"}}"""
         val info = api().vodInfo("1")!!
         assertEquals("d", info.plot)
         assertEquals("x.jpg", info.backdrop)
         assertNull(info.genre)
         assertEquals("2021", info.year)
+        assertEquals(1032892L, info.tmdbId)
         responses["get_vod_info"] = """[]"""
         assertNull(api().vodInfo("1"))
     }

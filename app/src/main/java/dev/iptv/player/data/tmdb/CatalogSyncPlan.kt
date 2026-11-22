@@ -3,9 +3,10 @@ package dev.iptv.player.data.tmdb
 import dev.iptv.player.data.Stream
 
 /** Only fields used to identify a TMDB title invalidate its result; URLs/order do not. */
-internal fun metadataIdentity(stream: Stream): String = metadataIdentity(stream.name, stream.year)
+internal fun metadataIdentity(stream: Stream): String = metadataIdentity(stream.name, stream.year, stream.tmdbId)
 
-internal fun metadataIdentity(name: String, yearHint: String?): String {
+internal fun metadataIdentity(name: String, yearHint: String?, tmdbId: Long? = null): String {
+    if (tmdbId != null && tmdbId > 0) return "tmdb:$tmdbId"
     val title = TitleCleaner.clean(name)
     val year = title.year ?: yearHint?.take(4)
     return "${title.title.lowercase(java.util.Locale.ROOT)}|${year.orEmpty()}"

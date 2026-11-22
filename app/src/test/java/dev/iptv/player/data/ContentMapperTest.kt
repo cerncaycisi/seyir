@@ -34,4 +34,13 @@ class ContentMapperTest {
         assertEquals(7, row.ord)
         assertEquals(stream, mapper.toStream(row))
     }
+
+    @Test
+    fun tmdbIdRoundTripsThroughContentMapper() {
+        val mapper = ContentMapper(PlaylistSource.Xtream("http://s:80", "user", "pw123"), codec)
+        val movie = Stream("9", "Movie", null, "http://s:80/movie/user/pw123/9.mp4", "1", ContentType.MOVIE, tmdbId = 1032892L)
+        val row = mapper.toEntity("p", movie, 0)
+        assertEquals(1032892L, row.tmdbId)
+        assertEquals(movie, mapper.toStream(row))
+    }
 }

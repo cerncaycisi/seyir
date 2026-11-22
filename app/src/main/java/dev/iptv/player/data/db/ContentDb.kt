@@ -40,6 +40,7 @@ data class StreamEntity(
     val catchupDays: Int,
     val catchupSource: String?,
     val ord: Int,
+    val tmdbId: Long? = null,
 )
 
 /** One row per playlist+type: when it was last fetched, plus the playlist's EPG URL (encrypted) for M3U lists. */
@@ -131,7 +132,7 @@ abstract class ContentDao {
     }
 }
 
-@Database(entities = [CategoryEntity::class, StreamEntity::class, SyncEntity::class], version = 1, exportSchema = false)
+@Database(entities = [CategoryEntity::class, StreamEntity::class, SyncEntity::class], version = 2, exportSchema = false)
 abstract class ContentDb : RoomDatabase() {
     abstract fun dao(): ContentDao
 

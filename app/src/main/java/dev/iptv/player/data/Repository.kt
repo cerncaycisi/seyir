@@ -346,6 +346,15 @@ class Repository(context: Context) {
  */
 suspend fun Repository.movieDetails(playlist: Playlist, stream: Stream): VodInfo {
     val panel = runCatching { vodInfo(playlist, stream) }.getOrNull()
+    val playedSecs = runCatching {
+        history.entries.first().firstOrNull {
+            it.playlistId == playlist.id && it.type == ContentType.MOVIE && it.id == stream.id
+        }?.durationMs?.takeIf { it > 0 }?.let { (it / 1000L).toInt() }
+    }.getOrNull()
+    val actualDurationSecs = playedSecs ?: panel?.durationSecs
+    val panelMismatched = playedSecs != null && panel?.durationSecs != null &&
+        !dev.iptv.player.data.tmdb.runtimeMatches(playedSecs, panel.durationSecs / 60)
+    val providerTmdbId = panel?.tmdbId ?: stream.tmdbId
     var info = VodInfo(
         plot = panel?.plot ?: stream.plot,
         backdrop = panel?.backdrop ?: stream.backdrop,
@@ -357,21 +366,23 @@ suspend fun Repository.movieDetails(playlist: Playlist, stream: Stream): VodInfo
         director = panel?.director,
         trailer = panel?.trailer,
         poster = panel?.poster ?: stream.logo,
-        durationSecs = panel?.durationSecs,
+        durationSecs = actualDurationSecs,
+        tmdbId = providerTmdbId,
     )
     if (tmdb.available()) {
-        tmdb.details(stream.name, ContentType.MOVIE, info.year)?.let { t ->
+        tmdb.details(stream.name, ContentType.MOVIE, info.year, tmdbId = providerTmdbId, durationSecs = actualDurationSecs)?.let { t ->
             info = info.copy(
                 plot = t.plot ?: info.plot,
                 plotLanguage = if (t.plot != null) t.plotLanguage else info.plotLanguage,
-                backdrop = info.backdrop ?: t.backdrop,
-                poster = info.poster ?: t.poster,
-                year = info.year ?: t.year,
+                backdrop = if (panelMismatched) t.backdrop ?: info.backdrop else info.backdrop ?: t.backdrop,
+                poster = if (panelMismatched) t.poster ?: info.poster else info.poster ?: t.poster,
+                year = t.year ?: info.year,
                 rating = t.rating ?: info.rating,
                 genre = t.genre ?: info.genre,
                 cast = t.cast ?: info.cast,
                 director = t.director ?: info.director,
                 fromTmdb = true,
+                tmdbId = t.tmdbId.takeIf { it > 0 } ?: providerTmdbId,
             )
         }
     }
@@ -381,16 +392,20 @@ suspend fun Repository.movieDetails(playlist: Playlist, stream: Stream): VodInfo
 /** Series info with missing plot / cover / backdrop filled from TMDB. */
 suspend fun Repository.seriesDetails(playlist: Playlist, seriesId: String): SeriesInfo {
     val info = seriesInfo(playlist, seriesId)
-    val t = tmdb.details(info.name, ContentType.SERIES, info.year) ?: return info
+    val listTmdbId = runCatching { content(playlist, ContentType.SERIES).items.firstOrNull { it.id == seriesId }?.tmdbId }.getOrNull()
+    val providerTmdbId = info.tmdbId ?: listTmdbId
+    val t = tmdb.details(info.name, ContentType.SERIES, info.year, tmdbId = providerTmdbId)
+        ?: return info.copy(tmdbId = providerTmdbId)
     return info.copy(
         plot = t.plot ?: info.plot,
         plotLanguage = if (t.plot != null) t.plotLanguage else info.plotLanguage,
         backdrop = info.backdrop ?: t.backdrop,
         cover = info.cover ?: t.poster,
-        year = info.year ?: t.year,
+        year = t.year ?: info.year,
         rating = t.rating ?: info.rating,
         genre = t.genre ?: info.genre,
         cast = t.cast ?: info.cast,
         director = t.director ?: info.director,
+        tmdbId = t.tmdbId.takeIf { it > 0 } ?: providerTmdbId,
     )
 }

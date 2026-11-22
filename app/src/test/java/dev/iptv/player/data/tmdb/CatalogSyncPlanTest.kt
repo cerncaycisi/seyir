@@ -25,4 +25,12 @@ class CatalogSyncPlanTest {
         assertEquals(metadataIdentity(stream), metadataIdentity(stream.copy(url = "new", rating = "9.1", categoryId = "2")))
         assertNotEquals(metadataIdentity(stream), metadataIdentity(stream.copy(name = "Tulsa King (2024)")))
     }
+
+    @Test fun tmdbIdFormsDistinctIdentityAndInvalidatesTitleOnlyEntry() {
+        val withoutId = Stream("1", "Farouk Omar", null, "", "1", ContentType.SERIES)
+        val withId = withoutId.copy(tmdbId = 58887L)
+        assertEquals("tmdb:58887", metadataIdentity(withId))
+        val plan = catalogSyncPlan(mapOf("1" to metadataIdentity(withoutId)), mapOf("1" to metadataIdentity(withId)))
+        assertEquals(setOf("1"), plan.changed)
+    }
 }

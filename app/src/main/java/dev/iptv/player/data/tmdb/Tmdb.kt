@@ -39,6 +39,7 @@ data class TmdbInfo(
     val plotLanguage: String? = null,
     /** ISO 639-1 original language (e.g. "en"); drives the "original audio" track choice. */
     val originalLanguage: String? = null,
+    val runtimeMins: Int? = null,
 ) {
     val isEmpty get() = tmdbId == 0L
 }
@@ -50,9 +51,24 @@ data class TmdbInfo(
  */
 data class TmdbResolution(val info: TmdbInfo?, val completed: Boolean)
 
-class Tmdb(context: Context, private val settings: SettingsStore, private val apiKey: String = BuildConfig.TMDB_API_KEY) {
-    private val oldDir = File(context.applicationContext.cacheDir, "tmdb-v3")
-    private val dir = File(context.applicationContext.filesDir, "tmdb-v3").apply { mkdirs() }
+private class TmdbHttpException(val code: Int) : IllegalStateException("TMDB HTTP $code")
+
+class Tmdb internal constructor(
+    private val oldDir: File?,
+    private val dir: File,
+    private val enabled: suspend () -> Boolean,
+    private val apiKey: String = BuildConfig.TMDB_API_KEY,
+    private val baseUrl: String = "https://api.themoviedb.org/3",
+) {
+    constructor(context: Context, settings: SettingsStore, apiKey: String = BuildConfig.TMDB_API_KEY) : this(
+        oldDir = File(context.applicationContext.cacheDir, "tmdb-v3"),
+        dir = File(context.applicationContext.filesDir, "tmdb-v3"),
+        enabled = { settings.get(Setting.TmdbEnabled) },
+        apiKey = apiKey,
+    )
+
+    init { dir.mkdirs() }
+
     private val lookupLocks = java.util.concurrent.ConcurrentHashMap<String, Mutex>()
     private val memory = java.util.concurrent.ConcurrentHashMap<String, TmdbInfo>()
     private val json = Json { ignoreUnknownKeys = true }
@@ -63,33 +79,55 @@ class Tmdb(context: Context, private val settings: SettingsStore, private val ap
 
     val configured: Boolean get() = apiKey.isNotBlank()
 
-    suspend fun available(): Boolean = configured && settings.get(Setting.TmdbEnabled)
+    suspend fun available(): Boolean = configured && enabled()
 
     suspend fun genres(type: ContentType): List<String> = withContext(Dispatchers.IO) {
         if (!available()) emptyList() else try { genreNames(if (type == ContentType.SERIES) "tv" else "movie").values.sorted() }
         catch (e: CancellationException) { throw e } catch (_: Exception) { emptyList() }
     }
 
-    suspend fun lookup(rawTitle: String, type: ContentType, yearHint: String? = null): TmdbInfo? = resolve(rawTitle, type, yearHint).info
+    suspend fun lookup(
+        rawTitle: String,
+        type: ContentType,
+        yearHint: String? = null,
+        tmdbId: Long? = null,
+        durationSecs: Int? = null,
+    ): TmdbInfo? = resolve(rawTitle, type, yearHint, tmdbId, durationSecs).info
 
-    suspend fun resolve(rawTitle: String, type: ContentType, yearHint: String? = null): TmdbResolution = withContext(Dispatchers.IO) {
+    suspend fun resolve(
+        rawTitle: String,
+        type: ContentType,
+        yearHint: String? = null,
+        tmdbId: Long? = null,
+        durationSecs: Int? = null,
+    ): TmdbResolution = withContext(Dispatchers.IO) {
         if (type == ContentType.LIVE || !available()) return@withContext TmdbResolution(null, false)
+        if (tmdbId != null && tmdbId > 0) {
+            val byId = runCatching { fetchById(tmdbId, type) }
+            byId.exceptionOrNull()?.let { if (it is CancellationException) throw it }
+            val hit = byId.getOrNull()
+            val runtimeMismatch = hit != null && type == ContentType.MOVIE && durationSecs != null && durationSecs >= 1800 &&
+                !runtimeMatches(durationSecs, hit.runtimeMins)
+            if (hit != null && !runtimeMismatch) return@withContext TmdbResolution(hit, true)
+            // Network/5xx errors retry later; a missing/404 or runtime-contradicted provider ID falls back to search.
+            if (byId.isFailure) return@withContext TmdbResolution(null, false)
+        }
         val cleaned = TitleCleaner.clean(rawTitle)
         if (cleaned.title.length < 2) return@withContext TmdbResolution(null, true)
         val year = cleaned.year ?: yearHint?.take(4)?.takeIf { it.length == 4 && it.all(Char::isDigit) }
-        val file = File(dir, hash("$type|${cleaned.title.lowercase()}|$year") + ".json")
+        val useDuration = type == ContentType.MOVIE && durationSecs != null && durationSecs >= 1800
+        val cacheKey = if (useDuration) {
+            "MOVIE_DUR|${cleaned.title.lowercase()}|$year|${durationSecs!! / 300}"
+        } else {
+            "$type|${cleaned.title.lowercase()}|$year"
+        }
+        val file = File(dir, hash(cacheKey) + ".json")
         lookupLocks.getOrPut(file.name) { Mutex() }.withLock {
             memory[file.name]?.let { return@withLock TmdbResolution(it.takeUnless { c -> c.isEmpty }, true) }
             readCache(file)?.let { memory[file.name] = it; return@withLock TmdbResolution(it.takeUnless { c -> c.isEmpty }, true) }
-            val result = withContext(Dispatchers.IO) {
-                runCatching {
-                    val tr = search(cleaned.title, year, type, "tr-TR")
-                    if (tr == null) search(cleaned.title, year, type, "en-US")
-                    else if (tr.plot == null) {
-                        val en = search(cleaned.title, year, type, "en-US")
-                        tr.copy(plot = en?.plot, plotLanguage = if (en?.plot != null) "en" else null)
-                    } else tr
-                }
+            val result = runCatching {
+                if (useDuration) resolveMovieByDuration(cleaned.title, year, durationSecs!!)
+                else resolveByTitle(cleaned.title, year, type)
             }
             // Only cache real answers; a network failure should be retried later.
             result.exceptionOrNull()?.let { if (it is CancellationException) throw it }
@@ -103,9 +141,18 @@ class Tmdb(context: Context, private val settings: SettingsStore, private val ap
      * ISO 639-1 original language of a title (e.g. "tr", "en"). Computed from the details endpoint (search hits lack
      * spoken languages) and cached once per title.
      */
-    suspend fun originalLanguage(rawTitle: String, type: ContentType, yearHint: String? = null): String? {
-        val basic = lookup(rawTitle, type, yearHint) ?: return null
+    suspend fun originalLanguage(
+        rawTitle: String,
+        type: ContentType,
+        yearHint: String? = null,
+        tmdbId: Long? = null,
+        durationSecs: Int? = null,
+    ): String? {
+        val basic = lookup(rawTitle, type, yearHint, tmdbId, durationSecs) ?: return null
         return withContext(Dispatchers.IO) {
+            if (basic.originalLanguage != null && File(dir, "id-$type-${basic.tmdbId}.json").exists()) {
+                return@withContext basic.originalLanguage
+            }
             val file = File(dir, "lang2-$type-${basic.tmdbId}.txt")
             if (file.exists()) return@withContext runCatching { file.readText().trim().ifEmpty { null } }.getOrNull()
             try {
@@ -121,8 +168,13 @@ class Tmdb(context: Context, private val settings: SettingsStore, private val ap
      * Episode titles of one season from TMDB (episode number → name), Turkish first, English for episodes
      * TMDB only names generically ("Bölüm 3"). Used when the provider gives no real episode names. Cached.
      */
-    suspend fun seasonEpisodeNames(seriesTitle: String, yearHint: String?, season: Int): Map<Int, String> {
-        val basic = lookup(seriesTitle, ContentType.SERIES, yearHint) ?: return emptyMap()
+    suspend fun seasonEpisodeNames(
+        seriesTitle: String,
+        yearHint: String?,
+        season: Int,
+        tmdbId: Long? = null,
+    ): Map<Int, String> {
+        val basic = lookup(seriesTitle, ContentType.SERIES, yearHint, tmdbId = tmdbId) ?: return emptyMap()
         return withContext(Dispatchers.IO) {
             val file = File(dir, "season2-${basic.tmdbId}-$season.json")
             readNames(file)?.let { return@withContext it }
@@ -148,8 +200,14 @@ class Tmdb(context: Context, private val settings: SettingsStore, private val ap
         runCatching { json.decodeFromString<Map<String, String>>(file.readText()).mapKeys { it.key.toInt() } }.getOrNull()
 
     /** Credits are fetched only for a detail/pause panel, never for every catalog item. */
-    suspend fun details(rawTitle: String, type: ContentType, yearHint: String? = null): TmdbInfo? {
-        val basic = lookup(rawTitle, type, yearHint) ?: return null
+    suspend fun details(
+        rawTitle: String,
+        type: ContentType,
+        yearHint: String? = null,
+        tmdbId: Long? = null,
+        durationSecs: Int? = null,
+    ): TmdbInfo? {
+        val basic = lookup(rawTitle, type, yearHint, tmdbId, durationSecs) ?: return null
         return withContext(Dispatchers.IO) {
             val file = File(dir, "credits-$type-${basic.tmdbId}.json")
             readCache(file)?.let { return@withContext it }
@@ -169,10 +227,10 @@ class Tmdb(context: Context, private val settings: SettingsStore, private val ap
     }
 
     private fun request(path: String, params: Map<String, String> = emptyMap()): JsonObject {
-        val url = "https://api.themoviedb.org/3$path".toHttpUrl().newBuilder().addQueryParameter("api_key", apiKey)
+        val url = "$baseUrl$path".toHttpUrl().newBuilder().addQueryParameter("api_key", apiKey)
             .apply { params.forEach { (k, v) -> addQueryParameter(k, v) } }.build()
         return http.newCall(Request.Builder().url(url).build()).execute().use { r ->
-            check(r.isSuccessful) { "TMDB HTTP ${r.code}" }
+            if (!r.isSuccessful) throw TmdbHttpException(r.code)
             json.parseToJsonElement(r.body?.string().orEmpty()) as JsonObject
         }
     }
@@ -189,9 +247,10 @@ class Tmdb(context: Context, private val settings: SettingsStore, private val ap
     }
 
     private fun migrate(file: File) {
+        val old = oldDir ?: return
         if (!file.exists()) {
-            val old = File(oldDir, file.name)
-            if (old.exists()) runCatching { old.copyTo(file) }
+            val prev = File(old, file.name)
+            if (prev.exists()) runCatching { prev.copyTo(file) }
         }
     }
 
@@ -200,23 +259,99 @@ class Tmdb(context: Context, private val settings: SettingsStore, private val ap
         return if (file.exists()) runCatching { json.decodeFromString<TmdbInfo>(file.readText()) }.getOrNull() else null
     }
 
+    private suspend fun fetchById(tmdbId: Long, type: ContentType): TmdbInfo? {
+        val file = File(dir, "id-$type-$tmdbId.json")
+        return lookupLocks.getOrPut(file.name) { Mutex() }.withLock {
+            memory[file.name]?.let { return@withLock it }
+            readCache(file)?.let { memory[file.name] = it; return@withLock it }
+            val kind = if (type == ContentType.SERIES) "tv" else "movie"
+            val tr = try {
+                request("/$kind/$tmdbId", mapOf("language" to "tr-TR"))
+            } catch (e: TmdbHttpException) {
+                if (e.code == 404) return@withLock null
+                throw e
+            }
+            var title = tr.str("title") ?: tr.str("name")
+            var plot = tr.str("overview")
+            var plotLang = if (plot != null) "tr" else null
+            if (plot == null) {
+                val en = runCatching { request("/$kind/$tmdbId", mapOf("language" to "en-US")) }.getOrNull()
+                if (en != null) {
+                    if (title == null) title = en.str("title") ?: en.str("name")
+                    en.str("overview")?.let { plot = it; plotLang = "en" }
+                }
+            }
+            val rating = tr.str("vote_average")?.toDoubleOrNull()?.takeIf { it > 0 }
+            val genre = (tr["genres"] as? JsonArray).orEmpty()
+                .mapNotNull { (it as? JsonObject)?.str("name") }
+                .joinToString(", ").ifBlank { null }
+            val spoken = (tr["spoken_languages"] as? JsonArray).orEmpty()
+                .mapNotNull { (it as? JsonObject)?.str("iso_639_1") }
+            val info = TmdbInfo(
+                tmdbId = tr.str("id")?.toLongOrNull() ?: tmdbId,
+                title = title,
+                plot = plot,
+                plotLanguage = plotLang,
+                poster = tr.str("poster_path")?.let { "$IMAGE_BASE/w500$it" },
+                backdrop = tr.str("backdrop_path")?.let { "$IMAGE_BASE/w1280$it" },
+                year = (tr.str("release_date") ?: tr.str("first_air_date"))?.take(4),
+                rating = rating?.let { String.format(java.util.Locale.US, "%.1f", it) },
+                genre = genre,
+                originalLanguage = pickOriginalLanguage(tr.str("original_language"), spoken),
+                runtimeMins = tr.str("runtime")?.toIntOrNull()?.takeIf { it > 0 },
+            )
+            runCatching { file.writeText(json.encodeToString(info)) }
+            memory[file.name] = info
+            info
+        }
+    }
+
+    private fun resolveByTitle(title: String, year: String?, type: ContentType): TmdbInfo? {
+        val tr = search(title, year, type, "tr-TR")
+        return if (tr == null) search(title, year, type, "en-US")
+        else if (tr.plot == null) {
+            val en = search(title, year, type, "en-US")
+            tr.copy(plot = en?.plot, plotLanguage = if (en?.plot != null) "en" else null)
+        } else tr
+    }
+
+    private suspend fun resolveMovieByDuration(title: String, year: String?, durationSecs: Int): TmdbInfo? {
+        val withYear = searchCandidates(title, year, ContentType.MOVIE, "tr-TR")
+            .ifEmpty { searchCandidates(title, year, ContentType.MOVIE, "en-US") }
+            .mapNotNull { it.str("id")?.toLongOrNull() }
+        pickBestByDuration(withYear, durationSecs)?.let { return it }
+        if (year == null) return null
+        val anyYear = searchCandidates(title, null, ContentType.MOVIE, "tr-TR")
+            .ifEmpty { searchCandidates(title, null, ContentType.MOVIE, "en-US") }
+            .mapNotNull { it.str("id")?.toLongOrNull() }
+        return pickBestByDuration(anyYear, durationSecs)
+    }
+
+    private suspend fun pickBestByDuration(ids: List<Long>, durationSecs: Int): TmdbInfo? {
+        val providerMins = durationSecs / 60.0
+        return ids.distinct().take(5)
+            .mapNotNull { fetchById(it, ContentType.MOVIE) }
+            .filter { runtimeMatches(durationSecs, it.runtimeMins) }
+            .minByOrNull { info -> info.runtimeMins?.let { kotlin.math.abs(providerMins - it) } ?: Double.MAX_VALUE }
+    }
+
+    private fun searchCandidates(title: String, year: String?, type: ContentType, language: String): List<JsonObject> {
+        val kind = if (type == ContentType.SERIES) "tv" else "movie"
+        val params = buildMap {
+            put("query", title)
+            put("language", language)
+            put("include_adult", "false")
+            year?.let { put(if (kind == "tv") "first_air_date_year" else "year", it) }
+        }
+        val results = request("/search/$kind", params)["results"] as? JsonArray ?: return emptyList()
+        return results.mapNotNull { it as? JsonObject }.filter { candidate ->
+            listOf("title", "name", "original_title", "original_name").any { sameTitle(title, candidate.str(it)) }
+        }
+    }
+
     private fun search(title: String, year: String?, type: ContentType, language: String): TmdbInfo? {
         val kind = if (type == ContentType.SERIES) "tv" else "movie"
-        val url = "https://api.themoviedb.org/3/search/$kind".toHttpUrl().newBuilder()
-            .addQueryParameter("api_key", apiKey)
-            .addQueryParameter("query", title)
-            .addQueryParameter("language", language)
-            .addQueryParameter("include_adult", "false")
-            .apply { year?.let { addQueryParameter(if (kind == "tv") "first_air_date_year" else "year", it) } }
-            .build()
-        val body = http.newCall(Request.Builder().url(url).build()).execute().use { r ->
-            if (!r.isSuccessful) error("TMDB HTTP ${r.code}")
-            r.body?.string().orEmpty()
-        }
-        val results = (json.parseToJsonElement(body) as? JsonObject)?.get("results") as? JsonArray ?: return null
-        val hit = results.mapNotNull { it as? JsonObject }.firstOrNull { candidate ->
-            listOf("title", "name", "original_title", "original_name").any { sameTitle(title, candidate.str(it)) }
-        } ?: return null
+        val hit = searchCandidates(title, year, type, language).firstOrNull() ?: return null
         fun str(key: String) = (hit[key] as? JsonPrimitive)?.content?.takeIf { it.isNotBlank() && it != "null" }
         val id = str("id")?.toLongOrNull() ?: return null
         val rating = str("vote_average")?.toDoubleOrNull()?.takeIf { it > 0 }
@@ -244,6 +379,14 @@ class Tmdb(context: Context, private val settings: SettingsStore, private val ap
 }
 
 private fun JsonObject.str(key: String): String? = (get(key) as? JsonPrimitive)?.content?.takeIf { it.isNotBlank() && it != "null" }
+
+/** True when [tmdbRuntimeMins] is close to [providerDurationSecs] (or either side has no runtime). */
+internal fun runtimeMatches(providerDurationSecs: Int?, tmdbRuntimeMins: Int?): Boolean {
+    if (providerDurationSecs == null || providerDurationSecs <= 0 || tmdbRuntimeMins == null || tmdbRuntimeMins <= 0) return true
+    val providerMins = providerDurationSecs / 60.0
+    val tolerance = maxOf(12.0, providerMins * 0.12)
+    return kotlin.math.abs(providerMins - tmdbRuntimeMins) <= tolerance
+}
 
 /**
  * TMDB's `original_language` is sometimes wrong for local productions (a Turkish documentary listed as "en"
