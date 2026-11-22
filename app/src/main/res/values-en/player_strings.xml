@@ -104,7 +104,10 @@
     <string name="play_vod_controls">◀ ▶  10 sec    ·    ▲  settings    ·    OK  play / pause</string>
     <string name="vod_scrub_hint">◀ ▶ scrub · OK jump · Back cancel</string>
     <string name="vod_ends_at">Ends %1$s</string>
+    <string name="vod_previous_episode">Previous episode</string>
     <string name="vod_next_episode">Next episode</string>
+    <string name="vod_confirm_previous">Press again: Previous</string>
+    <string name="vod_confirm_next">Press again: Next</string>
     <string name="vod_audio_subtitles">Audio and subtitles</string>
     <string name="vod_sheet_audio">Audio</string>
     <string name="vod_sheet_subtitles">Subtitles</string>
@@ -113,5 +116,6 @@
     <string name="vod_watching">You are watching</string>
     <string name="vod_paused_hint">OK resume · ▲ controls</string>
     <string name="live_controls_hint">▲▼ channel · ◀ list</string>
+    <string name="live_controls_active_hint">◀▶ navigate · Back hide</string>
     <string name="ui_no_programme_info">No programme info</string>
 </resources>

@@ -31,6 +31,7 @@ import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.SkipNext
+import androidx.compose.material.icons.rounded.SkipPrevious
 import androidx.compose.material.icons.rounded.Subtitles
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -72,6 +73,7 @@ import androidx.tv.material3.Text
 import dev.iptv.player.R
 import dev.iptv.player.ui.formatClock
 import dev.iptv.player.ui.pointerClick
+import kotlinx.coroutines.delay
 
 /*
  * Film/dizi oynatıcısı (tasarım v2, docs/BACKLOG.md "Tasarım v2"): zaman çubuğu ana kontrol, ekranda yalnızca
@@ -93,6 +95,10 @@ internal fun splitPlayerTitle(name: String): Pair<String, String?> {
 
 internal enum class PlayerControlFocus { PlayPause, Channels, Tracks, More }
 
+/** Pure helper: returns true only when an episode skip button was already armed recently within [windowMs]. */
+internal fun isEpisodeJumpConfirmed(armedAtMs: Long?, nowMs: Long, windowMs: Long = 4_000L): Boolean =
+    armedAtMs != null && nowMs - armedAtMs in 0..windowMs
+
 @Composable
 internal fun VodControls(
     name: String,
@@ -109,6 +115,7 @@ internal fun VodControls(
     onTracks: () -> Unit,
     modifier: Modifier = Modifier,
     focusTarget: PlayerControlFocus = PlayerControlFocus.PlayPause,
+    onPrevious: (() -> Unit)? = null,
 ) {
     val (title, subtitle) = remember(name) { splitPlayerTitle(name) }
     val playFocus = remember { FocusRequester() }
@@ -152,11 +159,27 @@ internal fun VodControls(
                         style = MaterialTheme.typography.labelLarge, color = InkMuted)
                     Spacer(Modifier.width(16.dp))
                 }
-                if (onNext != null) {
-                    PillButton(stringResource(R.string.vod_next_episode), Icons.Rounded.SkipNext, onNext)
-                    Spacer(Modifier.width(10.dp))
-                }
                 RoundIconButton(Icons.Rounded.Subtitles, stringResource(R.string.vod_audio_subtitles), onTracks, Modifier.focusRequester(tracksFocus))
+                if (onPrevious != null) {
+                    Spacer(Modifier.width(10.dp))
+                    GuardedEpisodeButton(
+                        label = stringResource(R.string.vod_previous_episode),
+                        confirmLabel = stringResource(R.string.vod_confirm_previous),
+                        icon = Icons.Rounded.SkipPrevious,
+                        onInteraction = onInteraction,
+                        onConfirm = onPrevious,
+                    )
+                }
+                if (onNext != null) {
+                    Spacer(Modifier.width(10.dp))
+                    GuardedEpisodeButton(
+                        label = stringResource(R.string.vod_next_episode),
+                        confirmLabel = stringResource(R.string.vod_confirm_next),
+                        icon = Icons.Rounded.SkipNext,
+                        onInteraction = onInteraction,
+                        onConfirm = onNext,
+                    )
+                }
             }
         }
     }
@@ -269,12 +292,26 @@ internal fun RoundIconButton(icon: ImageVector, description: String, onClick: ()
 }
 
 @Composable
-internal fun PillButton(label: String, icon: ImageVector, onClick: () -> Unit, modifier: Modifier = Modifier) {
+internal fun PillButton(
+    label: String,
+    icon: ImageVector,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    containerColor: Color = Chip,
+    contentColor: Color = Ink,
+    focusedContainerColor: Color = Ink,
+    focusedContentColor: Color = Color.Black,
+) {
     Surface(
         onClick = onClick,
         modifier = modifier.height(40.dp).pointerClick(onClick),
         shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(20.dp)),
-        colors = ClickableSurfaceDefaults.colors(containerColor = Chip, contentColor = Ink, focusedContainerColor = Ink, focusedContentColor = Color.Black),
+        colors = ClickableSurfaceDefaults.colors(
+            containerColor = containerColor,
+            contentColor = contentColor,
+            focusedContainerColor = focusedContainerColor,
+            focusedContentColor = focusedContentColor,
+        ),
         scale = ClickableSurfaceDefaults.scale(focusedScale = 1.05f),
     ) {
         Row(Modifier.fillMaxHeight().padding(start = 10.dp, end = 14.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -283,6 +320,42 @@ internal fun PillButton(label: String, icon: ImageVector, onClick: () -> Unit, m
             Text(label, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
         }
     }
+}
+
+@Composable
+private fun GuardedEpisodeButton(
+    label: String,
+    confirmLabel: String,
+    icon: ImageVector,
+    onInteraction: () -> Unit,
+    onConfirm: () -> Unit,
+) {
+    var armedAt by remember(label) { mutableStateOf<Long?>(null) }
+    val armed = armedAt != null
+    LaunchedEffect(armedAt) {
+        if (armedAt != null) {
+            delay(4_000)
+            armedAt = null
+        }
+    }
+    PillButton(
+        label = if (armed) confirmLabel else label,
+        icon = icon,
+        onClick = {
+            val now = System.currentTimeMillis()
+            if (isEpisodeJumpConfirmed(armedAt, now)) {
+                armedAt = null
+                onConfirm()
+            } else {
+                armedAt = now
+                onInteraction()
+            }
+        },
+        modifier = Modifier.onFocusChanged { if (!it.isFocused && !it.hasFocus) armedAt = null },
+        containerColor = if (armed) Amber else Chip,
+        contentColor = if (armed) Color.Black else Ink,
+        focusedContainerColor = if (armed) Amber else Ink,
+    )
 }
 
 /** Ses + altyazı + görünüm in one bottom sheet; the video keeps playing above it. Back closes. */

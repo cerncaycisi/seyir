@@ -866,6 +866,7 @@ private fun PlayerContent(repo: Repository, cfg: PlayerConfig, onBack: () -> Uni
                 onToggle = { if (player.playWhenReady) player.pause() else player.play(); showOverlay() },
                 onSeek = { player.seekTo(it); showOverlay() },
                 onInteraction = { controlsActive = true; showOverlay() },
+                onPrevious = if (current.type == ContentType.SERIES && index > 0) ({ saveProgress(); nextSeconds = 0; index-- }) else null,
                 onNext = if (current.type == ContentType.SERIES && index < items.lastIndex) ({ saveProgress(); nextSeconds = 0; index++ }) else null,
                 onTracks = { openPanelFromControls(Panel.Tracks, PlayerControlFocus.Tracks) },
                 focusTarget = controlFocus,

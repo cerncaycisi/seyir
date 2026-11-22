@@ -21,8 +21,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.Backspace
-import androidx.compose.material.icons.rounded.ChevronLeft
-import androidx.compose.material.icons.rounded.ChevronRight
+import androidx.compose.material.icons.rounded.ArrowDropDown
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -363,44 +362,24 @@ fun <T> PickerRow(
     modifier: Modifier = Modifier,
     subtitle: String? = null,
 ) {
-    val idx = options.indexOfFirst { it.first == value }.coerceAtLeast(0)
-    fun step(d: Int) = onChange(options[(idx + d + options.size) % options.size].first)
+    val label = options.firstOrNull { it.first == value }?.second
+        ?: options.firstOrNull()?.second.orEmpty()
     var open by remember { mutableStateOf(false) }
-    // OK or tap opens a list to pick from; left/right still step through the values as a shortcut.
+    // Open a modal dropdown list on OK/tap instead of cycling on Left/Right so D-pad Left returns to the sidebar.
     SettingRow(
-        title, modifier, subtitle, onClick = { open = true }, onLeft = { step(-1) }, onRight = { step(1) },
-        trailing = { ValueChip(options.getOrNull(idx)?.second.orEmpty(), true) },
+        title,
+        modifier,
+        subtitle,
+        onClick = { open = true },
+        trailing = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(label, style = MaterialTheme.typography.titleSmall, color = Palette.Primary, fontWeight = FontWeight.SemiBold, maxLines = 1)
+                Spacer(Modifier.width(4.dp))
+                Icon(Icons.Rounded.ArrowDropDown, contentDescription = null, tint = Palette.TextMuted, modifier = Modifier.size(22.dp))
+            }
+        },
     )
     if (open) ListPickerDialog(title, options, value, onSelect = { onChange(it); open = false }, onDismiss = { open = false })
-}
-
-@Composable
-fun StepperRow(
-    title: String,
-    value: Int,
-    range: IntRange,
-    step: Int,
-    format: (Int) -> String,
-    onChange: (Int) -> Unit,
-    modifier: Modifier = Modifier,
-    subtitle: String? = null,
-) {
-    fun move(d: Int) = onChange((value + d * step).coerceIn(range.first, range.last))
-    SettingRow(
-        title, modifier, subtitle,
-        onClick = { onChange(if (value + step > range.last) range.first else value + step) },
-        onLeft = { move(-1) }, onRight = { move(1) },
-        trailing = { ValueChip(format(value), true) },
-    )
-}
-
-@Composable
-fun ValueChip(text: String, arrows: Boolean = false) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        if (arrows) Icon(Icons.Rounded.ChevronLeft, contentDescription = null, tint = Palette.TextFaint, modifier = Modifier.size(20.dp))
-        Text(text, style = MaterialTheme.typography.titleSmall, color = Palette.Primary, fontWeight = FontWeight.SemiBold, maxLines = 1)
-        if (arrows) Icon(Icons.Rounded.ChevronRight, contentDescription = null, tint = Palette.TextFaint, modifier = Modifier.size(20.dp))
-    }
 }
 
 @Composable

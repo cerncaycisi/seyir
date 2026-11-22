@@ -44,6 +44,7 @@ import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.focusProperties
@@ -67,10 +68,10 @@ import kotlinx.coroutines.launch
 private enum class Page(val labelRes: Int) {
     GENERAL(R.string.ui_general),
     PLAYER(R.string.ui_player),
-    EPG(R.string.ui_epg),
     PARENTAL(R.string.ui_parental),
     PROFILES(R.string.ui_profiles),
     HIDDEN(R.string.ui_hidden),
+    ADVANCED(R.string.ui_advanced),
     ABOUT(R.string.ui_about),
 }
 
@@ -122,29 +123,56 @@ fun SettingsScreen(repo: Repository, onProfileSwitched: () -> Unit) {
             }
         }
         Spacer(Modifier.width(28.dp))
+        val backToMenu = { menuFocus[page.ordinal] }
         Box(Modifier.weight(1f).fillMaxHeight()) {
             when (page) {
-                Page.GENERAL -> GeneralPage(repo)
-                Page.PLAYER -> PlayerPage(repo)
-                Page.EPG -> EpgPage(repo)
-                Page.PARENTAL -> ParentalPage(repo)
-                Page.PROFILES -> ProfilesPage(repo, onProfileSwitched)
-                Page.HIDDEN -> HiddenPage(repo)
+                Page.GENERAL -> GeneralPage(repo, backToMenu)
+                Page.PLAYER -> PlayerPage(repo, backToMenu)
+                Page.PARENTAL -> ParentalPage(repo, backToMenu)
+                Page.PROFILES -> ProfilesPage(repo, onProfileSwitched, backToMenu)
+                Page.HIDDEN -> HiddenPage(repo, backToMenu)
+                Page.ADVANCED -> AdvancedPage(repo, backToMenu)
                 Page.ABOUT -> AboutPage()
             }
         }
     }
 }
 
+@OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
 @Composable
-private fun PageList(content: LazyListScope.() -> Unit) {
+private fun PageList(
+    onExitLeft: () -> FocusRequester = { FocusRequester.Default },
+    content: LazyListScope.() -> Unit,
+) {
     LazyColumn(
-        Modifier.fillMaxSize(),
+        Modifier
+            .fillMaxSize()
+            .focusProperties {
+                exit = { dir -> if (dir == FocusDirection.Left) onExitLeft() else FocusRequester.Default }
+            },
         verticalArrangement = Arrangement.spacedBy(8.dp),
         contentPadding = PaddingValues(top = 4.dp, bottom = 48.dp, start = 4.dp, end = 4.dp),
         content = content,
     )
 }
+
+@Composable
+private fun GroupHeader(title: String) {
+    Text(
+        title,
+        style = MaterialTheme.typography.labelLarge,
+        fontWeight = FontWeight.SemiBold,
+        color = Palette.TextMuted,
+        modifier = Modifier.padding(start = 4.dp, top = 8.dp, bottom = 2.dp),
+    )
+}
+
+/** Merges any previously saved custom value into sorted dropdown presets without duplicates. */
+internal fun presetIntOptions(
+    presets: List<Int>,
+    current: Int,
+    format: (Int) -> String,
+): List<Pair<Int, String>> = (presets + current).distinct().sorted().map { it to format(it) }
 
 private fun sectionOptions(uiContext: android.content.Context) = Section.entries.map { it.name to uiContext.getString(it.labelRes) }
 private fun languageOptions(uiContext: android.content.Context) = listOf("system" to uiContext.getString(R.string.ui_system), "tr" to "Türkçe", "en" to "English")
@@ -154,8 +182,24 @@ private fun audioLangOptions(uiContext: android.content.Context) = listOf(dev.ip
 private fun subtitleLangOptions(uiContext: android.content.Context) = listOf("" to uiContext.getString(R.string.ui_off)) + trackLanguageOptions
 private fun externalOptions(uiContext: android.content.Context) = listOf("" to uiContext.getString(R.string.ui_none), "vlc" to "VLC", "mx" to "MX Player")
 
+private val refreshPresets = listOf(0, 6, 12, 24, 48, 72)
+private val subtitleScalePresets = listOf(50, 75, 100, 125, 150, 175, 200)
+private val bufferPresets = listOf(5, 10, 15, 20, 30, 45, 60)
+private val epgOffsetPresets = (-720..720 step 30).toList()
+
+private fun formatTimeOffset(uiContext: android.content.Context, minutes: Int): String {
+    val sign = if (minutes > 0) "+" else if (minutes < 0) "−" else ""
+    val abs = kotlin.math.abs(minutes)
+    return if (minutes == 0) {
+        uiContext.getString(R.string.ui_none)
+    } else {
+        uiContext.getString(R.string.ui_offset_hours, sign, abs / 60) +
+            if (abs % 60 != 0) " " + uiContext.getString(R.string.ui_offset_minutes, abs % 60) else ""
+    }
+}
+
 @Composable
-private fun GeneralPage(repo: Repository) {
+private fun GeneralPage(repo: Repository, onExitLeft: () -> FocusRequester) {
     val uiContext = LocalContext.current
     val language = rememberPref(repo, Setting.Language)
     val clock = rememberPref(repo, Setting.Clock24h)
@@ -163,15 +207,19 @@ private fun GeneralPage(repo: Repository) {
     val section = rememberPref(repo, Setting.DefaultSection)
     val refresh = rememberPref(repo, Setting.AutoRefreshHours)
     val tmdb = rememberPref(repo, Setting.TmdbEnabled)
-    PageList {
+    PageList(onExitLeft) {
         item { PickerRow(uiContext.getString(R.string.ui_language), languageOptions(uiContext), language.value, language.set) }
         item { ToggleRow(uiContext.getString(R.string.ui_clock_24), clock.value, clock.set) }
         item { ToggleRow(uiContext.getString(R.string.ui_start_last), last.value, last.set, subtitle = uiContext.getString(R.string.ui_start_last_hint)) }
         item { PickerRow(uiContext.getString(R.string.ui_default_section), sectionOptions(uiContext), section.value, section.set) }
         item {
-            StepperRow(
-                uiContext.getString(R.string.ui_auto_refresh), refresh.value, 0..72, 6,
-                { if (it == 0) uiContext.getString(R.string.ui_off) else uiContext.getString(R.string.ui_refresh_hours, it) }, refresh.set,
+            PickerRow(
+                uiContext.getString(R.string.ui_auto_refresh),
+                presetIntOptions(refreshPresets, refresh.value) {
+                    if (it == 0) uiContext.getString(R.string.ui_off) else uiContext.getString(R.string.ui_refresh_hours, it)
+                },
+                refresh.value,
+                refresh.set,
                 subtitle = uiContext.getString(R.string.ui_refresh_frequency),
             )
         }
@@ -180,49 +228,62 @@ private fun GeneralPage(repo: Repository) {
 }
 
 @Composable
-private fun PlayerPage(repo: Repository) {
+private fun PlayerPage(repo: Repository, onExitLeft: () -> FocusRequester) {
     val uiContext = LocalContext.current
     val aspect = rememberPref(repo, Setting.AspectMode)
     val audio = rememberPref(repo, Setting.PreferredAudioLanguage)
     val sub = rememberPref(repo, Setting.PreferredSubtitleLanguage)
     val subScale = rememberPref(repo, Setting.SubtitleScale)
     val subStyle = rememberPref(repo, Setting.SubtitleStyle)
-    val buffer = rememberPref(repo, Setting.BufferSeconds)
-    val ua = rememberPref(repo, Setting.UserAgent)
-    val reconnect = rememberPref(repo, Setting.AutoReconnect)
-    val external = rememberPref(repo, Setting.ExternalPlayer)
-    val fps = rememberPref(repo, Setting.MatchFrameRate)
-    PageList {
+    PageList(onExitLeft) {
         item { PickerRow(uiContext.getString(R.string.ui_aspect), aspectOptions(uiContext), aspect.value, aspect.set) }
         item { PickerRow(uiContext.getString(R.string.ui_audio_language), audioLangOptions(uiContext), audio.value, audio.set) }
         item { PickerRow(uiContext.getString(R.string.ui_subtitle_language), subtitleLangOptions(uiContext), sub.value, sub.set) }
         item { PickerRow(uiContext.getString(R.string.sub_style_title), dev.iptv.player.player.SubtitleStyle.entries.map { it.key to uiContext.getString(it.labelRes) }, subStyle.value, subStyle.set) }
         item { dev.iptv.player.player.SubtitlePreview(dev.iptv.player.player.SubtitleStyle.fromKey(subStyle.value), subScale.value) }
-        item { StepperRow(uiContext.getString(R.string.ui_subtitle_size), subScale.value, 50..200, 10, { uiContext.getString(R.string.ui_percentage, it) }, subScale.set) }
-        item { StepperRow(uiContext.getString(R.string.ui_buffer), buffer.value, 5..60, 5, { uiContext.getString(R.string.ui_seconds, it) }, buffer.set) }
-        item { TextSettingRow("User-Agent", ua.value, "IPTVPlayer/0.1", ua.set) }
-        item { ToggleRow(uiContext.getString(R.string.ui_reconnect), reconnect.value, reconnect.set, subtitle = uiContext.getString(R.string.ui_reconnect_hint)) }
-        item { PickerRow(uiContext.getString(R.string.ui_external_player), externalOptions(uiContext), external.value, external.set, subtitle = uiContext.getString(R.string.ui_external_hint)) }
-        item { ToggleRow(uiContext.getString(R.string.ui_frame_rate), fps.value, fps.set, subtitle = uiContext.getString(R.string.ui_frame_rate_hint)) }
+        item {
+            PickerRow(
+                uiContext.getString(R.string.ui_subtitle_size),
+                presetIntOptions(subtitleScalePresets, subScale.value) { uiContext.getString(R.string.ui_percentage, it) },
+                subScale.value,
+                subScale.set,
+            )
+        }
     }
 }
 
 @Composable
-private fun EpgPage(repo: Repository) {
+private fun AdvancedPage(repo: Repository, onExitLeft: () -> FocusRequester) {
     val uiContext = LocalContext.current
-    val url = rememberPref(repo, Setting.EpgUrlOverride)
-    val offset = rememberPref(repo, Setting.EpgOffsetMinutes)
-    PageList {
-        item { TextSettingRow(uiContext.getString(R.string.ui_epg_url), url.value, uiContext.getString(R.string.ui_epg_default), url.set) }
+    val buffer = rememberPref(repo, Setting.BufferSeconds)
+    val ua = rememberPref(repo, Setting.UserAgent)
+    val reconnect = rememberPref(repo, Setting.AutoReconnect)
+    val external = rememberPref(repo, Setting.ExternalPlayer)
+    val fps = rememberPref(repo, Setting.MatchFrameRate)
+    val epgUrl = rememberPref(repo, Setting.EpgUrlOverride)
+    val epgOffset = rememberPref(repo, Setting.EpgOffsetMinutes)
+    PageList(onExitLeft) {
+        item { GroupHeader(uiContext.getString(R.string.ui_advanced_player_group)) }
         item {
-            StepperRow(
-                uiContext.getString(R.string.ui_time_offset), offset.value, -720..720, 30,
-                { m ->
-                    val sign = if (m > 0) "+" else if (m < 0) "−" else ""
-                    val a = kotlin.math.abs(m)
-                    if (m == 0) uiContext.getString(R.string.ui_none) else uiContext.getString(R.string.ui_offset_hours, sign, a / 60) + if (a % 60 != 0) " " + uiContext.getString(R.string.ui_offset_minutes, a % 60) else ""
-                },
-                offset.set,
+            PickerRow(
+                uiContext.getString(R.string.ui_buffer),
+                presetIntOptions(bufferPresets, buffer.value) { uiContext.getString(R.string.ui_seconds, it) },
+                buffer.value,
+                buffer.set,
+            )
+        }
+        item { TextSettingRow("User-Agent", ua.value, "IPTVPlayer/0.1", ua.set) }
+        item { ToggleRow(uiContext.getString(R.string.ui_reconnect), reconnect.value, reconnect.set, subtitle = uiContext.getString(R.string.ui_reconnect_hint)) }
+        item { PickerRow(uiContext.getString(R.string.ui_external_player), externalOptions(uiContext), external.value, external.set, subtitle = uiContext.getString(R.string.ui_external_hint)) }
+        item { ToggleRow(uiContext.getString(R.string.ui_frame_rate), fps.value, fps.set, subtitle = uiContext.getString(R.string.ui_frame_rate_hint)) }
+        item { GroupHeader(uiContext.getString(R.string.ui_advanced_epg_group)) }
+        item { TextSettingRow(uiContext.getString(R.string.ui_epg_url), epgUrl.value, uiContext.getString(R.string.ui_epg_default), epgUrl.set) }
+        item {
+            PickerRow(
+                uiContext.getString(R.string.ui_time_offset),
+                presetIntOptions(epgOffsetPresets, epgOffset.value) { formatTimeOffset(uiContext, it) },
+                epgOffset.value,
+                epgOffset.set,
                 subtitle = uiContext.getString(R.string.ui_time_offset_hint),
             )
         }
@@ -246,7 +307,7 @@ private sealed interface PinTask {
 }
 
 @Composable
-private fun ParentalPage(repo: Repository) {
+private fun ParentalPage(repo: Repository, onExitLeft: () -> FocusRequester) {
     val uiContext = LocalContext.current
     val scope = rememberCoroutineScope()
     val prefs: ContentPrefs = repo.prefs
@@ -261,7 +322,7 @@ private fun ParentalPage(repo: Repository) {
         if (!hasPin || ParentalSession.unlocked) action() else task = PinTask.Verify(action)
     }
 
-    PageList {
+    PageList(onExitLeft) {
         item {
             SettingRow(
                 if (hasPin) uiContext.getString(R.string.ui_pin_change) else uiContext.getString(R.string.ui_pin_set),
@@ -321,7 +382,7 @@ private fun ParentalPage(repo: Repository) {
 // ---- Hidden / locked -----------------------------------------------------------------------------
 
 @Composable
-private fun HiddenPage(repo: Repository) {
+private fun HiddenPage(repo: Repository, onExitLeft: () -> FocusRequester) {
     val uiContext = LocalContext.current
     val scope = rememberCoroutineScope()
     val rules by repo.prefs.rules.collectAsState(initial = dev.iptv.player.data.ContentRules())
@@ -337,7 +398,7 @@ private fun HiddenPage(repo: Repository) {
     val cats = rules.hiddenCategories.toList().sortedBy { label(it) }
     val locked = rules.lockedCategories.toList().sortedBy { label(it) }
 
-    PageList {
+    PageList(onExitLeft) {
         if (channels.isEmpty() && cats.isEmpty() && locked.isEmpty()) {
             item { Text(uiContext.getString(R.string.ui_hidden_empty), style = MaterialTheme.typography.bodyMedium, color = Palette.TextMuted, modifier = Modifier.padding(8.dp)) }
         }
@@ -393,7 +454,7 @@ private fun AboutPage() {
 // ---- Profiles ------------------------------------------------------------------------------------
 
 @Composable
-private fun ProfilesPage(repo: Repository, onSwitched: () -> Unit) {
+private fun ProfilesPage(repo: Repository, onSwitched: () -> Unit, onExitLeft: () -> FocusRequester) {
     val uiContext = LocalContext.current
     val profiles by repo.profiles.profiles.collectAsState(initial = emptyList())
     val active by ProfileStore.activeIdFlow.collectAsState()
@@ -413,7 +474,7 @@ private fun ProfilesPage(repo: Repository, onSwitched: () -> Unit) {
 
     val current = editing
     if (current == null) {
-        PageList {
+        PageList(onExitLeft) {
             items(profiles, key = { it.id }) { p ->
                 SettingRow(
                     p.name,

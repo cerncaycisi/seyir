@@ -157,7 +157,11 @@ internal fun LiveControls(
                     onRecord,
                 )
                 Spacer(Modifier.weight(1f))
-                Text(stringResource(R.string.live_controls_hint), style = MaterialTheme.typography.labelMedium, color = Color(0x80F5F5F7))
+                Text(
+                    stringResource(if (active) R.string.live_controls_active_hint else R.string.live_controls_hint),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = Color(0x80F5F5F7),
+                )
                 Spacer(Modifier.width(16.dp))
                 onTracks?.let {
                     RoundIconButton(Icons.Rounded.Subtitles, stringResource(R.string.vod_audio_subtitles), it, Modifier.focusRequester(tracksFocus))

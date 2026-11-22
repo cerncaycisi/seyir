@@ -104,7 +104,10 @@
     <string name="play_vod_controls">◀ ▶  10 sn    ·    ▲  ayarlar    ·    OK  oynat / duraklat</string>
     <string name="vod_scrub_hint">◀ ▶ sar · OK git · Geri vazgeç</string>
     <string name="vod_ends_at">Bitiş %1$s</string>
+    <string name="vod_previous_episode">Önceki bölüm</string>
     <string name="vod_next_episode">Sonraki bölüm</string>
+    <string name="vod_confirm_previous">Tekrar bas: Önceki</string>
+    <string name="vod_confirm_next">Tekrar bas: Sonraki</string>
     <string name="vod_audio_subtitles">Ses ve altyazı</string>
     <string name="vod_sheet_audio">Ses</string>
     <string name="vod_sheet_subtitles">Altyazı</string>
@@ -113,5 +116,6 @@
     <string name="vod_watching">İzliyorsun</string>
     <string name="vod_paused_hint">OK devam · ▲ kontroller</string>
     <string name="live_controls_hint">▲▼ kanal · ◀ liste</string>
+    <string name="live_controls_active_hint">◀▶ gezin · Geri gizle</string>
     <string name="ui_no_programme_info">Program bilgisi yok</string>
 </resources>

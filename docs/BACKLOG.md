@@ -1,6 +1,6 @@
 # Seyir backlog
 
-Bu dosyada kullanıcının istekleri ve testlerde bulunan sorunlar tutulur. Biten maddeler işaretlenir, silinmez. Son güncelleme: 2026-11-22 (D-pad odak geçişleri + oynatıcı Geri/odak dönüşü; sıradaki: Ana Sayfa/Detay içerik logoları, canlı/VOD ayrımı).
+Bu dosyada kullanıcının istekleri ve testlerde bulunan sorunlar tutulur. Biten maddeler işaretlenir, silinmez. Son güncelleme: 2026-11-22 (Ayarlar açılır liste + Gelişmiş sekmesi, korumalı Önceki/Sonraki bölüm, canlı ipucu; sıradaki: Ana Sayfa/Detay TMDB içerik logoları).
 
 ## P0 — Şu an açık
 
@@ -11,10 +11,7 @@ Bu dosyada kullanıcının istekleri ve testlerde bulunan sorunlar tutulur. Bite
     - Öğeler arası 8 dp boşluk var.
     - Bölümler dikeyde ortalandı.
   - Not: Bu yapıyla release derlenip TV'ye `install -r` başlatıldı, ancak kullanıcı işlemi yarıda kesti. TV'de hangi sürümün kurulu olduğu belirsiz.
-- [ ] **Canlı yayın ve film/dizi oynatıcısı ayrılmalı** (kullanıcı). İki oynatıcının arayüzü ve ayarları farklı olmalı.
-  - Canlı yayın: kanal listesi, EPG şimdi/sonra, kanal değiştirme, kayıt, ses ve altyazı. Zaman çubuğu, hız ve "baştan başla" olmamalı.
-  - Film/dizi: aranabilir zaman çubuğu, sonraki bölüm, hız, altyazı stili/boyutu, içerik bilgisi.
-  - Ayar panelinde de yalnızca o türe uygun seçenekler görünmeli.
+- [x] **Canlı yayın ve film/dizi oynatıcısı ayrılmalı** (2026-11-22, TV'de doğrulandı): `LiveControls` (`Kanal listesi`, `Kaydet`, `Ses ve altyazı`, `Diğer`, EPG şimdi/sonra; zaman çubuğu/hız/"baştan başla" yok) ve `VodControls` (zaman çubuğu, `Ses ve altyazı`, korumalı `Önceki`/`Sonraki bölüm`) ile `PlayerSettingsPanel` canlı/VOD menüleri ayrı akışlara oturtuldu.
 - [ ] **Görsel kimlik ve "sözde modern" arayüz** (kullanıcı). Mevcut arayüz temiz ama sıradan, hazır açık kaynak arayüzü gibi, gerçekten modern değil. Logo da beğenilmiyor.
   - Yeni logo ve marka: isim, renk, tipografi.
   - Cesur bir tasarım dili: katmanlı derinlik, büyük görseller, hareket ve geçişler, odak efektleri.
@@ -44,14 +41,14 @@ Bu dosyada kullanıcının istekleri ve testlerde bulunan sorunlar tutulur. Bite
     - 1408 kanallık liste.
   - Yapılacaklar: manifest'e `profileable` ekleyip simpleperf/Perfetto ile profil almak. Gerekirse önizlemeyi ayardan kapatılabilir yapmak.
   - Cihaz: TCL Smart TV Pro, rtd6748, armeabi-v7a, 1,8 GB RAM, Android 12, 60 Hz.
-- [ ] **Varsayılan ses ve altyazı** (kullanıcı, 2026-11-22): ses varsayılan olarak içeriğin orijinal dili, altyazı varsayılan olarak Türkçe olmalı. Kullanıcı bir içerikte değiştirirse o seçim korunmalı.
-- [ ] **Ayarlar ekranı:** satırlar hâlâ "< değer >" şeklinde değer çeviriyor (Dil, Varsayılan bölüm, Ses/Altyazı dili, Altyazı stili…). Kullanıcı açılır liste istedi. "User-Agent" ve "Tampon süresi" gibi teknik ayarlar "Gelişmiş" altına taşınmalı. Rehber kaldırıldığı halde ayarlarda "EPG" sayfası duruyor; adı/yeri gözden geçirilmeli.
-- [ ] **Oynatıcı ayarları paneli:** satırların solunda boş ikon alanı var. İkon eklenmeli ya da boşluk kaldırılmalı.
+- [x] **Varsayılan ses ve altyazı** (2026-11-22, TV'de doğrulandı): Ses varsayılanı "Orijinal dil", altyazı varsayılanı "Türkçe" olarak uygulandı; gerçek içeriklerde (bkz. aşağıdaki TV e2e notları) ve Ayarlar → Oynatıcı ekranında doğrulandı.
+- [x] **Ayarlar ekranı:** (2026-11-22, TV'de doğrulandı) Tüm satırlardaki `< değer >` okları kaldırılıp açılır liste (`ListPickerDialog` + `ArrowDropDown`) yapısına geçildi; Sol tuş değer kaydırmak yerine kenar menüye dönüyor. Teknik oynatıcı ayarları (`Tampon süresi`, `User-Agent`, yeniden bağlanma, harici oynatıcı, kare hızı) ve `EPG` ayarları yeni **Gelişmiş** sekmesi altında gruplandı.
+- [x] **Oynatıcı ayarları paneli:** (`PlayerSettingsPanel.kt`, `PanelRow` / `checkSlot`) Menü satırları sol ikonlarıyla hizalandı; yalnızca seçim işaretli alt listelerde tik alanı ayrılıyor, ana menüde boş ikon boşluğu bırakılmıyor.
 - [x] **Canlı oynatıcıda Geri tuşu:** (2026-11-22, TV'de doğrulandı) `onPreviewKeyEvent` `Key.Back` akışı paneller ve açık kontroller (`panel → kontroller → çıkış`) için birleştirildi; `Kanal listesi` → `Geri` → `Kanal listesi` odağı → `Geri` → kontrollerin tek basışta kapanması → `Geri` → çıkış ve doğrudan panel (`DPAD_LEFT`) kapatmada hayalet kontrol çıkmaması TV'de doğrulandı.
 
 ## P1 — Özellikler ve doğruluk
 
-- [ ] **Dizi oynatıcısında "Önceki bölüm" ve yanlışlıkla basmayı önleme** (kullanıcı, 2026-11-22): "Sonraki bölüm" gibi "Önceki bölüm" de olmalı; ancak ikisi de yanlışlıkla kolayca basılmayacak şekilde konumlandırılmalı veya korunmalı (ör. ana odak yolundan uzakta, "Bölümler" paneli altında ya da onaylı/uzun basış).
+- [x] **Dizi oynatıcısında "Önceki bölüm" ve yanlışlıkla basmayı önleme** (2026-11-22, TV'de doğrulandı): `VodControls` sırası `Duraklat` → `Ses ve altyazı` → `Önceki bölüm` → `Sonraki bölüm` olarak düzenlendi; iki bölüm düğmesi de 4 sn pencereli çift basış onayı (`Tekrar bas: Önceki` / `Sonraki` kehribar vurgu + odak ayrılınca sıfırlama) ile korunuyor. Tek basışta geçmediği, odak ayrılınca sıfırlandığı ve çift basışta önceki bölüme geçtiği TV'de doğrulandı.
 - [x] **TMDB eşleştirmesi — gerçek örnek (2026-11-22, TV'de doğrulandı):** Panelin kendisi "Göz Açıp Kapayıncaya Kadar (2021)" için yanlış TMDB verisi (`74 dk`, Okan Bayülgen / 957152) dönse bile gerçek oynatma süresi (`WatchHistory.durationMs` = `1 sa 34 dk`) ve süre doğrulamalı yıl/yılsız TMDB aramasıyla "In the Blink of an Eye" (2026, Bilim-Kurgu, Dram, TMDB `1032892`) doğru eşleştirildi.
 - [x] **TMDB eşleştirmesi (2026-11-22, doğrulandı):** Xtream liste/info yanıtlarındaki `tmdb_id`/`tmdb` alanı `Stream`/`SeriesInfo`/`VodInfo` ve Room (`ContentDb` v2, `MetadataDb` v2 `MIGRATION_1_2`) katmanlarına eklendi; birebir TMDB ID eşleşmesi, süre tutmazsa başlık/süre doğrulamasına düşme ve `withCatalogMetadata` ile listelerde eksik poster/backdrop/yıl tamamlama uygulandı. Not: "Farouk Omar" dizisinde sağlayıcı `tmdb_id` göndermediği için (`Dram, Belgesel`, özetsiz Xtream verisi) bu örnekte yine başlık eşleşmesine düşüyor.
 - [ ] Son seçilen kategori ve sıralama, uygulama yeniden açıldığında hatırlanmalı (Canlı/Film/Dizi).
@@ -127,7 +124,7 @@ Kullanıcı kararları:
 Logo ayrıca çalışılacak; şu an sade bir göz-oynat işareti.
 - [x] Oynatıcı v2 (film/dizi) uygulandı — 2026-11-22, TV'de doğrulandı. Eksik: "Bölümler" paneli, sararken küçük resim önizleme (trick-play görselleri yok), Inter Tight yazı tipi.
 - [x] Canlı yayın kontrolleri v2 diline geçti (2026-11-22, TV'de doğrulandı): kanal kimliği + CANLI rozeti, şu anki program ilerlemesi ve "Sonra", oynat/duraklat (timeshift), Kanal listesi, Kaydet, Ses-altyazı (seçenek varsa), Diğer. Eski kontrol çubuğu ve SeekBar silindi.
-- [ ] Canlı: "▲▼ kanal" ipucu kontroller açıkken yanıltıcı (o anda ▲▼ odak taşıyor); kanal listesi paneli (`ChannelListPanel`) v2 diline taşındı (2026-11-22), tam ekran bilgi paneli ve ▲▼ ipucu kaldı.
+- [ ] Canlı: aktif kontroller açıkken ipucu `◀▶ gezin · Geri gizle` olarak güncellendi (`▲▼ kanal · ◀ liste` yalnızca pasif bilgi şeridinde kalıyor, 2026-11-22 TV'de doğrulandı); kanal listesi paneli (`ChannelListPanel`) v2 diline taşındı, tam ekran bilgi paneli kaldı.
 - [x] Ana Sayfa v2 (2026-11-22, TV'de doğrulandı): kenardan kenara arka plan görseli (yalnızca sağ üst alan, önbellekli katman), odaklanan içeriği izleyen başlık bloğu (★ puan, yıl, tür, 2 satır özet), "İzlemeye devam et" için 16:9 kartlar + kehribar ilerleme. Performans aynı senaryoda: eski %5 / 28 ms → yeni %8 / 23 ms ortanca.
 - [ ] Ana Sayfa: içerik logoları (TMDB title logo) yerine şu an metin başlık; üst menü (tasarımdaki ortalanmış hap menü) henüz sol menü; kanal kartları baş harfli kutular.
 - [~] Detay v2 büyük ölçüde (2026-11-22, TV'de doğrulandı): beyaz ana düğme / yarı saydam diğerleri, büyük başlık, kehribar puan + noktalı bilgi satırı (MetaLine), "Hz Omer.S01.E01" gibi bölüm adları temizleniyor (hepsi aynıysa "Bölüm N"). Kalan: TMDB logo başlık, bölüm kartlarında görsel.

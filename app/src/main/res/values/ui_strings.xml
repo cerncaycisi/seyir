@@ -117,6 +117,9 @@
     <string name="ui_parental">Ebeveyn kontrolü</string>
     <string name="ui_profiles">Profiller</string>
     <string name="ui_hidden">Gizlenenler</string>
+    <string name="ui_advanced">Gelişmiş</string>
+    <string name="ui_advanced_player_group">Oynatıcı ve ağ</string>
+    <string name="ui_advanced_epg_group">Program bilgisi (EPG)</string>
     <string name="ui_about">Hakkında</string>
     <string name="ui_settings">Ayarlar</string>
     <string name="ui_system">Sistem</string>
