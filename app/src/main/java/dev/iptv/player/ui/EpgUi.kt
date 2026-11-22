@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -24,6 +25,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
@@ -34,6 +36,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -197,8 +200,10 @@ fun PastBroadcastsDialog(playlist: Playlist, stream: Stream, onPlay: (Programme)
         value = epg.past(playlist.id, stream, Catchup.days(stream)).filter { Catchup.playable(playlist, stream, it, EpgService.nowSec()) }
     }
     val first = remember { FocusRequester() }
+    val days = remember(list) { list?.let { pastByDay(it, java.util.TimeZone.getDefault()) }.orEmpty() }
+    var day by remember(list) { mutableIntStateOf(0) }
     LaunchedEffect(list) { if (!list.isNullOrEmpty()) runCatching { first.requestFocus() } }
-    DialogPanel(520.dp, onDismiss) {
+    DialogPanel(560.dp, onDismiss) {
         Text(uiContext.getString(R.string.ui_past), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Palette.Text)
         Text(
             uiContext.getString(R.string.ui_past_days, stream.name, Catchup.days(stream)),
@@ -209,10 +214,20 @@ fun PastBroadcastsDialog(playlist: Playlist, stream: Stream, onPlay: (Programme)
         when {
             l == null -> Text(uiContext.getString(R.string.ui_loading), color = Palette.TextMuted)
             l.isEmpty() -> Text(uiContext.getString(R.string.ui_past_empty), style = MaterialTheme.typography.bodyMedium, color = Palette.TextFaint)
-            else -> LazyColumn(Modifier.heightIn(max = 300.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                items(l.size, key = { l[it].start }) { i ->
-                    val p = l[i]
-                    EpgButton("${formatDayTime(p.start)}   ${p.title}", { onDismiss(); onPlay(p) }, if (i == 0) Modifier.focusRequester(first) else Modifier)
+            else -> {
+                // Days as tabs (newest first); focusing a day shows its programmes, like a TV guide's day strip.
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    items(days.size, key = { days[it].first }) { i ->
+                        DayChip(dayLabel(days[i].first, days[i].second.first().start), i == day, onSelect = { day = i })
+                    }
+                }
+                Spacer(Modifier.height(10.dp))
+                val shown = days.getOrNull(day)?.second.orEmpty()
+                LazyColumn(Modifier.heightIn(max = 300.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    items(shown.size, key = { shown[it].start }) { i ->
+                        val p = shown[i]
+                        EpgButton("${formatClock(p.start)}   ${p.title}", { onDismiss(); onPlay(p) }, if (i == 0) Modifier.focusRequester(first) else Modifier)
+                    }
                 }
             }
         }
@@ -244,6 +259,48 @@ fun ReminderHost() {
                 current = null
             }, Modifier.weight(1f).focusRequester(watch), primary = true)
             EpgButton(uiContext.getString(R.string.ui_close), { current = null }, Modifier.weight(1f))
+        }
+    }
+}
+
+/** Local calendar day number of [epochSeconds] (days since 1970 in [zone]); no java.time below API 26. */
+internal fun localDay(epochSeconds: Long, zone: java.util.TimeZone): Long {
+    val ms = epochSeconds * 1000
+    return Math.floorDiv(ms + zone.getOffset(ms), 86_400_000L)
+}
+
+/** Programmes grouped by local day, newest day first, each day newest programme first. */
+internal fun pastByDay(list: List<Programme>, zone: java.util.TimeZone): List<Pair<Long, List<Programme>>> =
+    list.groupBy { localDay(it.start, zone) }
+        .toSortedMap(compareByDescending { it })
+        .map { (d, ps) -> d to ps.sortedByDescending { it.start } }
+
+@Composable
+private fun dayLabel(day: Long, sampleEpoch: Long): String {
+    val context = LocalContext.current
+    val today = localDay(EpgService.nowSec(), java.util.TimeZone.getDefault())
+    return when (day) {
+        today -> context.getString(R.string.ui_today)
+        today - 1 -> context.getString(R.string.ui_yesterday)
+        else -> SimpleDateFormat("EEE d", context.resources.configuration.locales[0]).format(Date(sampleEpoch * 1000))
+    }
+}
+
+@Composable
+private fun DayChip(label: String, selected: Boolean, onSelect: () -> Unit) {
+    Surface(
+        onClick = onSelect,
+        modifier = Modifier.height(34.dp).onFocusChanged { if (it.isFocused && !selected) onSelect() }.pointerClick(onSelect),
+        shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(17.dp)),
+        colors = ClickableSurfaceDefaults.colors(
+            containerColor = if (selected) Palette.Primary.copy(alpha = 0.35f) else Palette.SurfaceHigh,
+            contentColor = Palette.Text,
+            focusedContainerColor = Color(0xFFF5F5F7),
+            focusedContentColor = Color(0xFF07080A),
+        ),
+    ) {
+        Row(Modifier.height(34.dp).padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(label, style = MaterialTheme.typography.labelLarge, fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal, maxLines = 1)
         }
     }
 }

@@ -54,9 +54,9 @@ Bu dosyada kullanıcının istekleri ve testlerde bulunan sorunlar tutulur. Bite
 - [x] **Son seçilen kategori ve sıralama, uygulama yeniden açıldığında hatırlanmalı (Canlı/Film/Dizi)** (2026-11-22, TV'de doğrulandı): `SettingsStore` (`browse_prefs_json` / `BrowseMemory`) üzerinden profil ve playlist bazında (`Filmler`, `Diziler`, `Canlı TV`) son seçilen kategori + sıralama kaydedilip açılışta geri yükleniyor (`force-stop` sonrası TV'de doğrulandı); ayrıca `visibleEntryIndex` + `SafeFocusRequester` ile hızlı kategori/sıralama geçişindeki `FocusRequester is not initialized` çökmesi giderildi.
 - [ ] Kategori gizleme: çoklu seçim (canlı/film/dizi). "Gruplarım": kullanıcının kendi grupları.
 - [ ] Tam ekran canlı yayın bilgi paneli (IBO tarzı): logo, şimdi/sonra, EPG, kilit, favori, altyazı, ses. Sağ/sol tuşları ile kanal değişimi.
-- [ ] Catch-up için gün listesi.
+- [x] Catch-up gün listesi (2026-11-22, Claude): "Geçmiş yayınlar" penceresinde üstte gün sekmeleri (Bugün, Dün, Cmt 21…), altında o günün programları yeniden eskiye. Gün sınırı yerel saate göre (birim testli). TV'de arşivli kanal bulunamadığı için görsel olarak doğrulanmadı.
 - [ ] Canlı yayın akış formatı seçimi (TS/HLS).
-- [ ] İzleme geçmişinden seçerek silme.
+- [x] İzleme geçmişinden seçerek silme: zaten vardı (kart üzerinde uzun bas → "Geçmişten kaldır"; toplu silme "Son İzlenenler" kategorisinde).
 - [ ] Liste/ızgara görünümü arasında geçiş.
 - [ ] Kanal logoları: sağlayıcı vermediğinde baş harf gösteriliyor. EPG logosu veya başka bir kaynak düşünülebilir.
 - [x] **Android TV "Play Next" satırında logosu olmayan içerikler boş kart olarak görünüyor. Yedek görsel kullanılmalı** (2026-11-22, birim testle doğrulandı): `WatchNextPublisher` (`resolveWatchNextPoster`) logosu eksik içeriklerde `android.resource://.../banner` (16:9) yedeğine düşüyor.

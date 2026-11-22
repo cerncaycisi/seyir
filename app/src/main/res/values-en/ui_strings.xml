@@ -208,6 +208,8 @@
     <string name="ui_account_expiry">Expires: %1$s</string>
     <string name="ui_account_connections">Connections: %1$d/%2$d</string>
     <string name="ui_past_days">%1$s · last %2$d days</string>
+    <string name="ui_today">Today</string>
+    <string name="ui_yesterday">Yesterday</string>
     <string name="ui_search_no_match">No content matches “%1$s”</string>
     <string name="ui_playlist_delete">Delete “%1$s”?</string>
     <string name="ui_sort_default">Default</string>
