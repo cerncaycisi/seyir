@@ -655,8 +655,21 @@ private fun PlayerContent(repo: Repository, cfg: PlayerConfig, onBack: () -> Uni
     val subtitleSearch = remember(index) {
         if (!OpenSubtitles.enabled || live) null else object : SubtitleSearch {
             override suspend fun search(): List<SubtitleHit> {
-                val langs = listOf(cfg.subtitleLanguage.lowercase(), "en").filter { it.length in 2..3 && it != "off" }.distinct()
-                return OpenSubtitles.search(current.name, current.year, langs.ifEmpty { listOf("en") })
+                val langs = listOf(cfg.subtitleLanguage.lowercase(), "en").filter { it.length in 2..3 && it != "off" }.distinct().ifEmpty { listOf("en") }
+                // Exact match by TMDB id (episodes: show id + season + episode); title search only as a fallback.
+                val id = runCatching {
+                    val series = current.seriesId
+                    if (series != null) {
+                        val show = repo.content(playlist, ContentType.SERIES).items.firstOrNull { it.id == series }
+                        show?.tmdbId?.takeIf { it > 0 }
+                            ?: runCatching { repo.seriesInfo(playlist, series).tmdbId }.getOrNull()?.takeIf { it > 0 }
+                            ?: show?.let { repo.tmdb.lookup(it.name, ContentType.SERIES, it.year)?.tmdbId }
+                    } else {
+                        current.tmdbId?.takeIf { it > 0 } ?: repo.tmdb.lookup(current.name, ContentType.MOVIE, current.year)?.tmdbId
+                    }
+                }.getOrNull()?.takeIf { it > 0 }
+                val exact = if (id != null) runCatching { OpenSubtitles.searchByTmdb(id, current.season, current.episode, langs) }.getOrDefault(emptyList()) else emptyList()
+                return exact.ifEmpty { OpenSubtitles.search(splitPlayerTitle(current.name).first, current.year, langs) }
             }
 
             override suspend fun download(hit: SubtitleHit): Boolean {
@@ -679,6 +692,23 @@ private fun PlayerContent(repo: Repository, cfg: PlayerConfig, onBack: () -> Uni
             }
         }
     }
+
+    // Gömülü altyazıda tercih edilen dil (varsayılan Türkçe) yoksa OpenSubtitles'tan en çok indirilen
+    // eşleşmeyi bir kez otomatik getir. Elle seçim yapıldıysa (subtitleAuto=false) dokunma.
+    var autoSubTried by remember(current.id) { mutableStateOf(false) }
+    LaunchedEffect(tracks, current.id) {
+        val pref = normalizeLanguage(cfg.subtitleLanguage) ?: return@LaunchedEffect
+        val search = subtitleSearch ?: return@LaunchedEffect
+        if (live || autoSubTried || !subtitleAuto || tracks.groups.none { it.type == C.TRACK_TYPE_AUDIO }) return@LaunchedEffect
+        autoSubTried = true
+        val hasPref = tracks.groups.filter { it.type == C.TRACK_TYPE_TEXT }
+            .any { g -> (0 until g.length).any { normalizeLanguage(g.getTrackFormat(it).language) == pref } }
+        if (hasPref) return@LaunchedEffect
+        val hit = runCatching { search.search() }.getOrNull()
+            ?.filter { normalizeLanguage(it.language) == pref }?.maxByOrNull { it.downloads } ?: return@LaunchedEffect
+        runCatching { search.download(hit) }
+    }
+
 
     Box(
         Modifier

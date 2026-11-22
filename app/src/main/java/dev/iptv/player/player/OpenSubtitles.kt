@@ -72,6 +72,29 @@ object OpenSubtitles {
         parseHits(data)
     }
 
+    /**
+     * Exact search by TMDB id: a movie by `tmdb_id`, an episode by its show's `parent_tmdb_id` + season + episode.
+     * Far more precise than a title query (episode names like "Show · S1B2 · Title" found nothing useful).
+     */
+    suspend fun searchByTmdb(tmdbId: Long, season: Int, episode: Int, languages: List<String>): List<SubtitleHit> = withContext(Dispatchers.IO) {
+        val episodeSearch = season > 0 && episode > 0
+        // The API wants lower-case, alphabetically ordered parameters.
+        val url = "$BASE/subtitles".toHttpUrl().newBuilder()
+            .apply { if (episodeSearch) addQueryParameter("episode_number", episode.toString()) }
+            .addQueryParameter("languages", languages.joinToString(",").lowercase())
+            .apply {
+                if (episodeSearch) {
+                    addQueryParameter("parent_tmdb_id", tmdbId.toString())
+                    addQueryParameter("season_number", season.toString())
+                } else {
+                    addQueryParameter("tmdb_id", tmdbId.toString())
+                }
+            }
+            .build()
+        val data = execute(request(url.toString()).get().build())["data"] as? JsonArray ?: return@withContext emptyList()
+        parseHits(data)
+    }
+
     internal fun parseHits(data: JsonArray): List<SubtitleHit> = data.mapNotNull { el ->
         val attrs = (el as? JsonObject)?.get("attributes") as? JsonObject ?: return@mapNotNull null
         val fileId = (attrs["files"] as? JsonArray)?.firstOrNull()?.let { (it as? JsonObject)?.get("file_id") }
