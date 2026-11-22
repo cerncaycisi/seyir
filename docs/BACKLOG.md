@@ -69,7 +69,7 @@ Bu dosyada kullanıcının istekleri ve testlerde bulunan sorunlar tutulur. Bite
 ## Teknik ve altyapı
 
 - [ ] Release keystore tanımlanmalı (şu an release, debug anahtarıyla imzalanıyor).
-- [ ] CI: `setup-java` v5'e geçilmeli.
+- [x] CI: eylemler güncel ana sürümlere taşındı (checkout v7, setup-java v6, setup-gradle v6, upload-artifact v7; Node 20 uyarıları gitti).
 - [ ] `docs/QA-2026-11-21.md` içindeki eskimiş satır düzeltilmeli.
 - [ ] Test notu: TV'de video katmanı ekran görüntüsüne yansımıyor. Oynatma durumu `dumpsys media_session` ile doğrulanmalı.
 
