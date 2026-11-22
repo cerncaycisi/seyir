@@ -258,9 +258,11 @@ fun HomeScreen(
                     // Entering the menu lands on the current section instead of the nearest item.
                     .focusProperties { enter = { navFocus[section.ordinal] } }
                     .onFocusChanged { drawerFocused = it.hasFocus },
-                verticalArrangement = Arrangement.spacedBy(2.dp),
+                // Items keep the drawer's own 56 dp height: forcing 42 dp made the selected pill overlap its
+                // neighbours and the logo. Sections sit centred in the free space (4 entries, plenty of room).
+                verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                Row(Modifier.padding(start = 8.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                Row(Modifier.padding(start = 12.dp, top = 8.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                     BrandMark(32.dp)
                     if (open) {
                         Spacer(Modifier.width(12.dp))
@@ -277,12 +279,13 @@ fun HomeScreen(
                         }
                     }
                 }
+                Spacer(Modifier.weight(1f))
                 Section.entries.forEach { s ->
                     NavigationDrawerItem(
                         selected = s == section,
                         onClick = { selectSection(s) },
                         leadingContent = { Icon(s.icon, contentDescription = null) },
-                        modifier = Modifier.height(42.dp).focusRequester(navFocus[s.ordinal]).pointerClick({ selectSection(s) }),
+                        modifier = Modifier.focusRequester(navFocus[s.ordinal]).pointerClick({ selectSection(s) }),
                     ) { Text(s.label) }
                 }
                 Spacer(Modifier.weight(1f))
@@ -290,7 +293,7 @@ fun HomeScreen(
                     selected = false,
                     onClick = onSettings,
                     leadingContent = { Icon(Icons.Rounded.Settings, contentDescription = context.getString(R.string.play_settings)) },
-                    modifier = Modifier.height(42.dp).pointerClick(onSettings),
+                    modifier = Modifier.pointerClick(onSettings),
                 ) { Text(context.getString(R.string.play_settings)) }
                 NavigationDrawerItem(
                     selected = false,
@@ -299,7 +302,7 @@ fun HomeScreen(
                         onPlaylists()
                     },
                     leadingContent = { Icon(Icons.AutoMirrored.Rounded.PlaylistPlay, contentDescription = context.getString(R.string.play_playlists)) },
-                    modifier = Modifier.height(42.dp).pointerClick({ scope.launch { repo.refresh(playlist.id) }; onPlaylists() }),
+                    modifier = Modifier.pointerClick({ scope.launch { repo.refresh(playlist.id) }; onPlaylists() }),
                 ) { Text(context.getString(R.string.play_playlists)) }
             }
         },
