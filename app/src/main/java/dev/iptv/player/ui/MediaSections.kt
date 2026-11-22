@@ -449,8 +449,9 @@ internal fun HeaderButton(label: String, icon: ImageVector, onClick: () -> Unit,
         colors = ClickableSurfaceDefaults.colors(
             containerColor = Palette.Surface,
             contentColor = Palette.Text,
-            focusedContainerColor = Palette.Live,
-            focusedContentColor = Color.White,
+            // Design v2: focus is white with dark text everywhere (it was the red Live colour here).
+            focusedContainerColor = Color(0xFFF5F5F7),
+            focusedContentColor = Color(0xFF07080A),
         ),
         scale = ClickableSurfaceDefaults.scale(focusedScale = 1.04f),
     ) {

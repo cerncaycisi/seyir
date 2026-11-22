@@ -143,3 +143,4 @@ Logo ayrıca çalışılacak; şu an sade bir göz-oynat işareti.
 - [x] Canlı TV odak görünürlüğü (2026-11-22, Claude, TV'de doğrulandı): kategoride OK zaten listeye geçiriyor (gezinme doğruydu); asıl sorun "İzle" düğmesinin odakta değilken de beyaz olmasıydı. Canlı TV'de artık ikincil renkte, yalnızca odaklanınca beyazlaşıyor. Film/dizi sayfasında birincil beyaz kaldı.
 - [x] Canlı oynatıcı kontrol çubuğu bulunamıyordu (2026-11-22, kullanıcı): kanal değişince beliren çubuk odaklanmıyor, ipucu OK'den bahsetmiyordu. İpucu artık "OK kontroller · ▲▼ kanal · ◀ liste". ▼ bilerek kanal değiştirmeye devam ediyor (art arda kanal gezme bozulmasın diye).
 - [x] CI kırmızıydı (2026-11-22): lint 4 hata veriyordu (androidx kısıtlı sabitleri, produceState yanlış alarmı). Düzeltildi, CI yeşil.
+- [x] Üst düğmeler (Ara, Kayıtlar) odakta kırmızı oluyordu; artık uygulamanın geri kalanı gibi beyaz zemin, koyu yazı (2026-11-22, TV'de doğrulandı).
