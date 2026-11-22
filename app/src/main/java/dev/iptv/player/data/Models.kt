@@ -55,7 +55,16 @@ data class Stream(
 
 data class Content(val categories: List<Category>, val items: List<Stream>)
 
-data class Episode(val id: String, val title: String, val season: Int, val number: Int, val url: String)
+data class Episode(
+    val id: String,
+    val title: String,
+    val season: Int,
+    val number: Int,
+    val url: String,
+    val still: String? = null,
+    val overview: String? = null,
+    val duration: String? = null,
+)
 
 data class SeriesInfo(
     val name: String,

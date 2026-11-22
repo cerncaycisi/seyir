@@ -166,39 +166,49 @@ class Tmdb internal constructor(
     }
 
     /**
-     * Episode titles of one season from TMDB (episode number → name), Turkish first, English for episodes
-     * TMDB only names generically ("Bölüm 3"). Used when the provider gives no real episode names. Cached.
+     * Episode metadata of one season from TMDB (episode number → title, `w300` still URL, runtime mins),
+     * Turkish first, English for episodes TMDB only names generically ("Bölüm 3"). Cached per season.
      */
+    suspend fun seasonEpisodes(
+        seriesTitle: String,
+        yearHint: String?,
+        season: Int,
+        tmdbId: Long? = null,
+    ): Map<Int, TmdbEpisodeInfo> {
+        val basic = lookup(seriesTitle, ContentType.SERIES, yearHint, tmdbId = tmdbId) ?: return emptyMap()
+        return withContext(Dispatchers.IO) {
+            val file = File(dir, "season3-${basic.tmdbId}-$season.json")
+            readSeasonCache(file)?.let { return@withContext it }
+            try {
+                fun fetchRaw(lang: String): List<JsonObject> =
+                    (request("/tv/${basic.tmdbId}/season/$season", mapOf("language" to lang))["episodes"] as? JsonArray).orEmpty()
+                        .mapNotNull { it as? JsonObject }
+                val tr = fetchRaw("tr-TR")
+                val needsEn = tr.isEmpty() || tr.any { e ->
+                    val name = e.str("name")?.trim()
+                    name.isNullOrEmpty() || genericEpisodeTitle.matches(name)
+                }
+                val en = if (needsEn) runCatching { fetchRaw("en-US") }.getOrDefault(emptyList()) else emptyList()
+                val parsed = parseTmdbSeasonEpisodes(tr, en)
+                runCatching { file.writeText(json.encodeToString(parsed.mapKeys { it.key.toString() })) }
+                parsed
+            } catch (e: CancellationException) { throw e } catch (_: Exception) { emptyMap() }
+        }
+    }
+
+    /** Episode titles of one season from TMDB (episode number → name). */
     suspend fun seasonEpisodeNames(
         seriesTitle: String,
         yearHint: String?,
         season: Int,
         tmdbId: Long? = null,
-    ): Map<Int, String> {
-        val basic = lookup(seriesTitle, ContentType.SERIES, yearHint, tmdbId = tmdbId) ?: return emptyMap()
-        return withContext(Dispatchers.IO) {
-            val file = File(dir, "season2-${basic.tmdbId}-$season.json")
-            readNames(file)?.let { return@withContext it }
-            try {
-                fun names(lang: String): Map<Int, String> =
-                    (request("/tv/${basic.tmdbId}/season/$season", mapOf("language" to lang))["episodes"] as? JsonArray).orEmpty()
-                        .mapNotNull { it as? JsonObject }
-                        .mapNotNull { e -> e.str("episode_number")?.toIntOrNull()?.let { n -> e.str("name")?.let { n to it } } }
-                        .toMap()
-                // "Bölüm 3", "3. Bölüm", "Episode 3": placeholders, not titles.
-                val generic = Regex("""(?i)^\s*(\d+\.?\s*(bölüm|episode)|(bölüm|episode)\s*\d+)\s*$""")
-                val tr = names("tr-TR")
-                val en = if (tr.values.any { generic.matches(it) }) names("en-US") else emptyMap()
-                val merged = tr.mapValues { (n, t) -> if (generic.matches(t)) en[n]?.takeUnless { generic.matches(it) } ?: t else t }
-                    .filterValues { !generic.matches(it) }
-                runCatching { file.writeText(json.encodeToString(merged.mapKeys { it.key.toString() })) }
-                merged
-            } catch (e: CancellationException) { throw e } catch (_: Exception) { emptyMap() }
-        }
-    }
+    ): Map<Int, String> =
+        seasonEpisodes(seriesTitle, yearHint, season, tmdbId)
+            .mapNotNull { (n, ep) -> ep.name?.let { n to it } }
+            .toMap()
 
-    private fun readNames(file: File): Map<Int, String>? = if (!file.exists()) null else
-        runCatching { json.decodeFromString<Map<String, String>>(file.readText()).mapKeys { it.key.toInt() } }.getOrNull()
+    private fun readSeasonCache(file: File): Map<Int, TmdbEpisodeInfo>? = if (!file.exists()) null else
+        runCatching { json.decodeFromString<Map<String, TmdbEpisodeInfo>>(file.readText()).mapKeys { it.key.toInt() } }.getOrNull()
 
     /** Credits are fetched only for a detail/pause panel, never for every catalog item. */
     suspend fun details(
@@ -398,6 +408,42 @@ class Tmdb internal constructor(
 
     internal companion object {
         const val IMAGE_BASE = "https://image.tmdb.org/t/p"
+    }
+}
+
+@Serializable
+data class TmdbEpisodeInfo(
+    val name: String? = null,
+    val still: String? = null,
+    val runtimeMins: Int? = null,
+)
+
+private val genericEpisodeTitle = Regex("""(?i)^\s*(\d+\.?\s*(bölüm|episode)|(bölüm|episode)\s*\d+)\s*$""")
+
+/**
+ * Merges TMDB Turkish and English `/season/{n}` episode objects into normalized per-episode metadata.
+ * Placeholder titles like "1. Bölüm" or "Episode 2" fall back to the English title (or null if generic).
+ */
+internal fun parseTmdbSeasonEpisodes(
+    tr: List<JsonObject>,
+    en: List<JsonObject> = emptyList(),
+): Map<Int, TmdbEpisodeInfo> {
+    val trMap = tr.mapNotNull { o -> o.str("episode_number")?.toIntOrNull()?.let { it to o } }.toMap()
+    val enMap = en.mapNotNull { o -> o.str("episode_number")?.toIntOrNull()?.let { it to o } }.toMap()
+    return (trMap.keys + enMap.keys).associateWith { number ->
+        val trObj = trMap[number]
+        val enObj = enMap[number]
+        val trName = trObj?.str("name")?.trim()?.takeIf { it.isNotEmpty() }
+        val enName = enObj?.str("name")?.trim()?.takeIf { it.isNotEmpty() }
+        val name = trName?.takeUnless { genericEpisodeTitle.matches(it) }
+            ?: enName?.takeUnless { genericEpisodeTitle.matches(it) }
+        val stillPath = trObj?.str("still_path") ?: enObj?.str("still_path")
+        val runtime = (trObj?.str("runtime")?.toIntOrNull() ?: enObj?.str("runtime")?.toIntOrNull())?.takeIf { it > 0 }
+        TmdbEpisodeInfo(
+            name = name,
+            still = stillPath?.let { "${Tmdb.IMAGE_BASE}/w300$it" },
+            runtimeMins = runtime,
+        )
     }
 }
 

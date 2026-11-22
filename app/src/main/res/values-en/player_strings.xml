@@ -109,6 +109,8 @@
     <string name="vod_confirm_previous">Press again: Previous</string>
     <string name="vod_confirm_next">Press again: Next</string>
     <string name="vod_audio_subtitles">Audio and subtitles</string>
+    <string name="vod_episodes">Episodes</string>
+    <string name="vod_now_playing">Now playing</string>
     <string name="vod_sheet_audio">Audio</string>
     <string name="vod_sheet_subtitles">Subtitles</string>
     <string name="vod_sheet_look">Appearance</string>

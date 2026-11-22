@@ -103,7 +103,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
-private enum class Panel { None, Settings, Channels, Tracks }
+private enum class Panel { None, Settings, Channels, Tracks, Episodes }
 
 private const val MAX_RECONNECTS = 10
 private const val NEXT_EPISODE_WINDOW_MS = 10_000L
@@ -869,6 +869,7 @@ private fun PlayerContent(repo: Repository, cfg: PlayerConfig, onBack: () -> Uni
                 onPrevious = if (current.type == ContentType.SERIES && index > 0) ({ saveProgress(); nextSeconds = 0; index-- }) else null,
                 onNext = if (current.type == ContentType.SERIES && index < items.lastIndex) ({ saveProgress(); nextSeconds = 0; index++ }) else null,
                 onTracks = { openPanelFromControls(Panel.Tracks, PlayerControlFocus.Tracks) },
+                onEpisodes = if (current.type == ContentType.SERIES && items.size > 1) ({ openPanelFromControls(Panel.Episodes, PlayerControlFocus.Episodes) }) else null,
                 focusTarget = controlFocus,
             )
             Text(
@@ -996,6 +997,33 @@ private fun PlayerContent(repo: Repository, cfg: PlayerConfig, onBack: () -> Uni
                 onClose = ::closePanel,
                 modifier = Modifier.align(Alignment.BottomCenter),
             )
+            Panel.Episodes -> {
+                val history by repo.history.entries.collectAsState(initial = emptyList())
+                val progressById = remember(history, current.seriesId, playlist.id) {
+                    history.filter { it.seriesId == current.seriesId && it.playlistId == playlist.id }
+                        .associate { it.id to (if (it.finished) 1f else it.fraction) }
+                }
+                EpisodesPanel(
+                    items = items,
+                    currentIndex = index,
+                    progressById = progressById,
+                    onPick = { targetIdx ->
+                        if (targetIdx != index) {
+                            saveProgress()
+                            nextSeconds = 0
+                            controlsActive = false
+                            dismissPanel()
+                            index = targetIdx
+                        } else {
+                            controlsActive = false
+                            overlay = false
+                            dismissPanel()
+                        }
+                    },
+                    onClose = ::closePanel,
+                    modifier = Modifier.align(Alignment.CenterEnd),
+                )
+            }
             Panel.None -> Unit
         }
     }

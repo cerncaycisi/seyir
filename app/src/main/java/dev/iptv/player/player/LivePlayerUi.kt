@@ -77,7 +77,7 @@ internal fun LiveControls(
         if (active) {
             withFrameNanos { }
             val target = when (focusTarget) {
-                PlayerControlFocus.PlayPause -> first
+                PlayerControlFocus.PlayPause, PlayerControlFocus.Episodes -> first
                 PlayerControlFocus.Channels -> channelsFocus
                 PlayerControlFocus.Tracks -> if (onTracks != null) tracksFocus else first
                 PlayerControlFocus.More -> moreFocus

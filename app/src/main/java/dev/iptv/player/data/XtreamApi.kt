@@ -144,9 +144,16 @@ class XtreamApi(
             val id = o.str("id") ?: return@mapNotNull null
             val number = o.str("episode_num")?.toIntOrNull() ?: 0
             val ext = o.str("container_extension").blankToNull() ?: "mp4"
+            val epInfo = o.obj("info")
             Episode(
-                id, o.str("title").blankToNull() ?: episodeTitle(number), o.str("season")?.toIntOrNull() ?: 1, number,
-                "$base/series/$user/$pass/$id.$ext",
+                id = id,
+                title = o.str("title").blankToNull() ?: episodeTitle(number),
+                season = o.str("season")?.toIntOrNull() ?: 1,
+                number = number,
+                url = "$base/series/$user/$pass/$id.$ext",
+                still = (epInfo?.str("movie_image") ?: o.str("movie_image")).blankToNull(),
+                overview = (epInfo?.str("plot") ?: epInfo?.str("overview")).blankToNull(),
+                duration = epInfo?.str("duration").blankToNull(),
             )
         }.sortedWith(compareBy({ it.season }, { it.number }))
         val info = root.obj("info")

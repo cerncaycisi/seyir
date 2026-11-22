@@ -33,6 +33,7 @@ import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.SkipNext
 import androidx.compose.material.icons.rounded.SkipPrevious
 import androidx.compose.material.icons.rounded.Subtitles
+import androidx.compose.material.icons.rounded.VideoLibrary
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -93,7 +94,7 @@ internal fun splitPlayerTitle(name: String): Pair<String, String?> {
     return if (i <= 0) name to null else name.substring(0, i) to name.substring(i + 3)
 }
 
-internal enum class PlayerControlFocus { PlayPause, Channels, Tracks, More }
+internal enum class PlayerControlFocus { PlayPause, Channels, Tracks, Episodes, More }
 
 /** Pure helper: returns true only when an episode skip button was already armed recently within [windowMs]. */
 internal fun isEpisodeJumpConfirmed(armedAtMs: Long?, nowMs: Long, windowMs: Long = 4_000L): Boolean =
@@ -116,15 +117,21 @@ internal fun VodControls(
     modifier: Modifier = Modifier,
     focusTarget: PlayerControlFocus = PlayerControlFocus.PlayPause,
     onPrevious: (() -> Unit)? = null,
+    onEpisodes: (() -> Unit)? = null,
 ) {
     val (title, subtitle) = remember(name) { splitPlayerTitle(name) }
     val playFocus = remember { FocusRequester() }
     val tracksFocus = remember { FocusRequester() }
+    val episodesFocus = remember { FocusRequester() }
     var scrubTarget by remember { mutableStateOf<Long?>(null) }
     LaunchedEffect(active, focusTarget) {
         if (active) {
             withFrameNanos { }
-            val target = if (focusTarget == PlayerControlFocus.Tracks) tracksFocus else playFocus
+            val target = when (focusTarget) {
+                PlayerControlFocus.Tracks -> tracksFocus
+                PlayerControlFocus.Episodes -> episodesFocus
+                else -> playFocus
+            }
             runCatching { target.requestFocus() }
         }
     }
@@ -160,6 +167,10 @@ internal fun VodControls(
                     Spacer(Modifier.width(16.dp))
                 }
                 RoundIconButton(Icons.Rounded.Subtitles, stringResource(R.string.vod_audio_subtitles), onTracks, Modifier.focusRequester(tracksFocus))
+                if (onEpisodes != null) {
+                    Spacer(Modifier.width(10.dp))
+                    PillButton(stringResource(R.string.vod_episodes), Icons.Rounded.VideoLibrary, onEpisodes, Modifier.focusRequester(episodesFocus))
+                }
                 if (onPrevious != null) {
                     Spacer(Modifier.width(10.dp))
                     GuardedEpisodeButton(

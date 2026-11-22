@@ -85,6 +85,7 @@ import dev.iptv.player.data.seriesContinue
 import dev.iptv.player.data.Stream
 import dev.iptv.player.data.favoriteKey
 import dev.iptv.player.data.seriesDetails
+import dev.iptv.player.data.tmdb.TmdbEpisodeInfo
 import kotlinx.coroutines.launch
 
 @Composable
@@ -110,7 +111,18 @@ private fun SeriesDetail(repo: Repository, playlist: Playlist, seriesId: String,
     // Every episode as a playable stream; ids and series id let history and deep links find them again.
     val all = remember(uiContext, info) {
         info.episodes.map { e ->
-            Stream(e.id, uiContext.getString(R.string.ui_episode_name, info.name, e.season, e.number, DisplayText.episodeTitle(e.title, info.name).ifEmpty { uiContext.getString(R.string.ui_episode_number, e.number) }), info.cover, e.url, "", ContentType.SERIES, seriesId = seriesId, season = e.season, episode = e.number)
+            Stream(
+                id = e.id,
+                name = uiContext.getString(R.string.ui_episode_name, info.name, e.season, e.number, DisplayText.episodeTitle(e.title, info.name).ifEmpty { uiContext.getString(R.string.ui_episode_number, e.number) }),
+                logo = info.cover,
+                url = e.url,
+                categoryId = "",
+                type = ContentType.SERIES,
+                backdrop = e.still ?: info.backdrop,
+                seriesId = seriesId,
+                season = e.season,
+                episode = e.number,
+            )
         }
     }
     val seriesStream = remember(info) { Stream(seriesId, info.name, info.cover, "", "", ContentType.SERIES) }
@@ -143,7 +155,7 @@ private fun SeriesDetail(repo: Repository, playlist: Playlist, seriesId: String,
     val primary = remember { FocusRequester() }
     val seasonKeys = remember(seasons) { seasons.keys.toList() }
     val seasonState = rememberLazyListState(seasonKeys.indexOf(season).coerceAtLeast(0))
-    val selectedSeasonFocus = remember { FocusRequester() }
+    val selectedSeasonFocus = remember { SafeFocusRequester() }
     val selectedSeasonVisible by remember(seasonKeys, season) {
         derivedStateOf {
             season in seasonKeys && seasonState.layoutInfo.visibleItemsInfo.any { it.key == season }
@@ -183,7 +195,7 @@ private fun SeriesDetail(repo: Repository, playlist: Playlist, seriesId: String,
                             when (dir) {
                                 FocusDirection.Right ->
                                     if (seasons.isEmpty()) FocusRequester.Cancel
-                                    else if (selectedSeasonVisible) selectedSeasonFocus
+                                    else if (selectedSeasonVisible) selectedSeasonFocus.target
                                     else FocusRequester.Default
                                 FocusDirection.Left, FocusDirection.Up, FocusDirection.Down -> FocusRequester.Cancel
                                 else -> FocusRequester.Default
@@ -242,14 +254,15 @@ private fun SeriesDetail(repo: Repository, playlist: Playlist, seriesId: String,
                     episodes.indexOfFirst { e -> e.id == target?.let { t -> all[t.index].id } }.coerceAtLeast(0)
                 }
                 val epState = remember(season) { androidx.compose.foundation.lazy.LazyListState(targetEpIndex) }
-                val epEntryFocus = remember { FocusRequester() }
+                val epEntryFocus = remember { SafeFocusRequester() }
                 var lastFocusedEp by remember(season) { mutableStateOf<Int?>(null) }
                 val epEntryIndex by remember(season, episodes, targetEpIndex) {
                     derivedStateOf {
-                        val visible = epState.layoutInfo.visibleItemsInfo
-                        lastFocusedEp?.takeIf { idx -> visible.any { it.index == idx } }
-                            ?: targetEpIndex.takeIf { idx -> visible.any { it.index == idx } }
-                            ?: visible.firstOrNull()?.index
+                        visibleEntryIndex(
+                            visibleIndices = epState.layoutInfo.visibleItemsInfo.map { it.index },
+                            itemCount = episodes.size,
+                            preferred = lastFocusedEp ?: targetEpIndex,
+                        )
                     }
                 }
                 // Middle: seasons as a vertical list; OK / tap selects.
@@ -258,11 +271,11 @@ private fun SeriesDetail(repo: Repository, playlist: Playlist, seriesId: String,
                         .width(120.dp)
                         .fillMaxHeight()
                         .lazyFocusBoundary(
-                            enterTarget = { if (selectedSeasonVisible) selectedSeasonFocus else FocusRequester.Default },
+                            enterTarget = { if (selectedSeasonVisible) selectedSeasonFocus.target else FocusRequester.Default },
                             exitTarget = { dir ->
                                 when (dir) {
                                     FocusDirection.Left -> primary
-                                    FocusDirection.Right -> if (epEntryIndex != null) epEntryFocus else FocusRequester.Cancel
+                                    FocusDirection.Right -> if (epEntryIndex >= 0) epEntryFocus.target else FocusRequester.Cancel
                                     FocusDirection.Up, FocusDirection.Down -> FocusRequester.Cancel
                                     else -> FocusRequester.Default
                                 }
@@ -276,53 +289,62 @@ private fun SeriesDetail(repo: Repository, playlist: Playlist, seriesId: String,
                         SeasonChip(
                             uiContext.getString(R.string.ui_season, n),
                             n == season,
-                            Modifier.fillMaxWidth().then(if (n == season) Modifier.focusRequester(selectedSeasonFocus) else Modifier),
+                            Modifier.fillMaxWidth().then(if (n == season) selectedSeasonFocus.attach() else Modifier),
                         ) { chosenSeason = n }
                     }
                 }
-                // Right: episodes of the selected season, scrolled to the continue target.
-                // Provider gave no real episode names (empty or the same leftover everywhere): ask TMDB for them.
-                val providerNames = seasons[season].orEmpty().map { DisplayText.episodeTitle(it.title, info.name) }
-                val needNames = providerNames.any { it.isEmpty() } || (providerNames.size > 1 && providerNames.distinct().size == 1)
-                val tmdbNames by androidx.compose.runtime.produceState(emptyMap<Int, String>(), info.name, info.tmdbId, season, needNames) {
-                    if (needNames) value = runCatching {
-                        // The TMDB match was made with the provider's title, which can differ from the shown (TMDB) name.
-                        val item = repo.content(playlist, ContentType.SERIES).items.firstOrNull { it.id == seriesId }
-                        val providerTitle = item?.name ?: info.name
-                        repo.tmdb.seasonEpisodeNames(providerTitle, info.year, season, tmdbId = info.tmdbId ?: item?.tmdbId)
-                    }.getOrDefault(emptyMap())
+                // Right: episodes of the selected season, enriched with TMDB episode stills/titles/runtimes.
+                val tmdbEpisodes by produceState(emptyMap<Int, TmdbEpisodeInfo>(), info.name, info.tmdbId, season) {
+                    value = emptyMap()
+                    if (repo.tmdb.available()) {
+                        value = runCatching {
+                            // The TMDB match was made with the provider's title, which can differ from the shown (TMDB) name.
+                            val item = repo.content(playlist, ContentType.SERIES).items.firstOrNull { it.id == seriesId }
+                            val providerTitle = item?.name ?: info.name
+                            repo.tmdb.seasonEpisodes(providerTitle, info.year, season, tmdbId = info.tmdbId ?: item?.tmdbId)
+                        }.getOrDefault(emptyMap())
+                    }
                 }
                 LazyColumn(
                     Modifier
                         .weight(1f)
                         .fillMaxHeight()
                         .lazyFocusBoundary(
-                            enterTarget = { if (epEntryIndex != null) epEntryFocus else FocusRequester.Default },
+                            enterTarget = { if (epEntryIndex >= 0) epEntryFocus.target else FocusRequester.Default },
                             exitTarget = { dir ->
                                 when (dir) {
-                                    FocusDirection.Left -> if (selectedSeasonVisible) selectedSeasonFocus else FocusRequester.Default
+                                    FocusDirection.Left -> if (selectedSeasonVisible) selectedSeasonFocus.target else FocusRequester.Default
                                     FocusDirection.Right, FocusDirection.Up, FocusDirection.Down -> FocusRequester.Cancel
                                     else -> FocusRequester.Default
                                 }
                             },
                         ),
                     state = epState,
-                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
                     contentPadding = PaddingValues(vertical = 4.dp, horizontal = 4.dp),
                 ) {
-                    // When every episode carries the same leftover name (provider "Hz Omer.S01.E01" style), show "Bölüm N".
+                    // When every episode carries the same leftover name (provider "Hz Omer.S01.E01" style), fill from TMDB or "Bölüm N".
                     val cleaned = seasons[season].orEmpty().map { DisplayText.episodeTitle(it.title, info.name) }
                     val uninformative = cleaned.size > 1 && cleaned.distinct().size == 1
                     itemsIndexed(episodes, key = { _, e -> e.id }) { i, e ->
                         val ep = seasons[season]?.getOrNull(i)
+                        val epNumber = ep?.number ?: (i + 1)
+                        val tmdbEp = tmdbEpisodes[epNumber]
+                        val epTitle = (if (uninformative) "" else cleaned.getOrNull(i).orEmpty())
+                            .ifEmpty { tmdbEp?.name.orEmpty() }
+                            .ifEmpty { uiContext.getString(R.string.ui_episode_number, epNumber) }
+                        val stillUrl = tmdbEp?.still ?: ep?.still ?: info.backdrop
+                        val durationLabel = tmdbEp?.runtimeMins?.let { uiContext.getString(R.string.ui_duration_minutes, it) }
+                            ?: ep?.duration?.takeIf { it.isNotBlank() && it != "0" && it != "00:00:00" }
+                        val allIndex = all.indexOfFirst { it.id == e.id }.coerceAtLeast(0)
                         EpisodeRow(
-                            number = ep?.number ?: (i + 1),
-                            title = (if (uninformative) "" else cleaned.getOrNull(i).orEmpty())
-                                .ifEmpty { tmdbNames[ep?.number ?: (i + 1)].orEmpty() }
-                                .ifEmpty { uiContext.getString(R.string.ui_episode_number, ep?.number ?: (i + 1)) },
+                            number = epNumber,
+                            title = epTitle,
+                            stillUrl = stillUrl,
+                            durationLabel = durationLabel,
                             progress = progressById[e.id],
-                            onClick = { if (resumeById[e.id] != null) pendingEpisode = i else onPlay(episodes, i) },
-                            modifier = if (i == epEntryIndex) Modifier.focusRequester(epEntryFocus) else Modifier,
+                            onClick = { if (resumeById[e.id] != null) pendingEpisode = allIndex else onPlay(all, allIndex) },
+                            modifier = if (i == epEntryIndex) epEntryFocus.attach() else Modifier,
                             onFocused = { lastFocusedEp = i },
                         )
                     }
@@ -331,13 +353,13 @@ private fun SeriesDetail(repo: Repository, playlist: Playlist, seriesId: String,
         }
     }
     pendingEpisode?.let { i ->
-        val e = episodes[i]
+        val e = all[i]
         ResumeDialog(
             positionMs = resumeById[e.id] ?: 0L,
-            onResume = { pendingEpisode = null; onPlay(episodes, i) },
+            onResume = { pendingEpisode = null; onPlay(all, i) },
             onRestart = {
                 pendingEpisode = null
-                scope.launch { repo.store.savePosition(favoriteKey(playlist, e), 0) }.invokeOnCompletion { onPlay(episodes, i) }
+                scope.launch { repo.store.savePosition(favoriteKey(playlist, e), 0) }.invokeOnCompletion { onPlay(all, i) }
             },
             onDismiss = { pendingEpisode = null },
         )
@@ -384,6 +406,8 @@ private fun Modifier.lazyFocusBoundary(
 private fun EpisodeRow(
     number: Int,
     title: String,
+    stillUrl: String?,
+    durationLabel: String?,
     progress: Float?,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
@@ -396,7 +420,7 @@ private fun EpisodeRow(
         onClick = onClick,
         modifier = modifier
             .fillMaxWidth()
-            .height(52.dp)
+            .height(84.dp)
             .pointerClick(onClick)
             .onFocusChanged {
                 val now = it.isFocused || it.hasFocus
@@ -413,26 +437,90 @@ private fun EpisodeRow(
         border = ClickableSurfaceDefaults.border(focusedBorder = Border(BorderStroke(2.dp, Color(0xFFF5F5F7)), shape = shape)),
         scale = ClickableSurfaceDefaults.scale(focusedScale = 1.02f),
     ) {
-        Row(Modifier.fillMaxSize().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(
+            Modifier.fillMaxSize().padding(horizontal = 10.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
             Box(
-                Modifier.size(32.dp).clip(CircleShape).background(if (focused) Color(0xFFF2B544) else Palette.SurfaceHigh),
+                Modifier
+                    .width(128.dp)
+                    .height(72.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(Palette.SurfaceHigh),
                 contentAlignment = Alignment.Center,
             ) {
+                Text("$number", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Palette.TextMuted)
+                if (stillUrl != null) {
+                    AsyncImage(
+                        model = stillUrl,
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                }
+                Box(
+                    Modifier
+                        .fillMaxSize()
+                        .background(Brush.verticalGradient(0.4f to Color.Transparent, 1f to Color(0x99000000))),
+                )
                 if (focused) {
-                    Icon(Icons.Rounded.PlayArrow, contentDescription = null, tint = Color.White)
-                } else {
-                    Text("$number", style = MaterialTheme.typography.titleSmall, color = Palette.TextMuted)
+                    Box(
+                        Modifier.size(28.dp).clip(CircleShape).background(Color(0xFFF2B544)),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(Icons.Rounded.PlayArrow, contentDescription = null, tint = Color.Black, modifier = Modifier.size(18.dp))
+                    }
+                }
+                if (progress != null && progress > 0.01f && progress < WATCHED_FRACTION) {
+                    Box(
+                        Modifier
+                            .align(Alignment.BottomStart)
+                            .fillMaxWidth()
+                            .height(3.dp)
+                            .background(Color(0x66000000)),
+                    ) {
+                        Box(
+                            Modifier
+                                .fillMaxHeight()
+                                .fillMaxWidth(progress.coerceIn(0f, 1f))
+                                .background(Palette.Accent),
+                        )
+                    }
                 }
             }
-            Spacer(Modifier.width(16.dp))
-            Text(title, modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            if (progress != null) {
-                Spacer(Modifier.width(12.dp))
-                if (progress >= WATCHED_FRACTION) {
-                    Icon(Icons.Rounded.CheckCircle, contentDescription = uiContext.getString(R.string.ui_watched), tint = Palette.Accent, modifier = Modifier.size(22.dp))
-                } else if (progress > 0.01f) {
-                    ProgressBar(progress, Modifier.width(64.dp))
+            Column(
+                Modifier.weight(1f).padding(horizontal = 14.dp),
+                verticalArrangement = Arrangement.Center,
+            ) {
+                Text(
+                    title,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = if (focused) FontWeight.SemiBold else FontWeight.Medium,
+                    color = if (focused) Color.White else Palette.Text,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                val epLabel = uiContext.getString(R.string.ui_episode_number, number)
+                val metaLine = listOfNotNull(epLabel.takeUnless { title.equals(epLabel, ignoreCase = true) }, durationLabel)
+                    .joinToString(" · ")
+                if (metaLine.isNotEmpty()) {
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        metaLine,
+                        style = MaterialTheme.typography.labelMedium,
+                        color = Palette.TextMuted,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
                 }
+            }
+            if (progress != null && progress >= WATCHED_FRACTION) {
+                Icon(
+                    Icons.Rounded.CheckCircle,
+                    contentDescription = uiContext.getString(R.string.ui_watched),
+                    tint = Palette.Accent,
+                    modifier = Modifier.padding(end = 6.dp).size(22.dp),
+                )
             }
         }
     }

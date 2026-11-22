@@ -109,6 +109,8 @@
     <string name="vod_confirm_previous">Tekrar bas: Önceki</string>
     <string name="vod_confirm_next">Tekrar bas: Sonraki</string>
     <string name="vod_audio_subtitles">Ses ve altyazı</string>
+    <string name="vod_episodes">Bölümler</string>
+    <string name="vod_now_playing">Oynatılıyor</string>
     <string name="vod_sheet_audio">Ses</string>
     <string name="vod_sheet_subtitles">Altyazı</string>
     <string name="vod_sheet_look">Görünüm</string>

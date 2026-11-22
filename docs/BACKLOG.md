@@ -1,6 +1,6 @@
 # Seyir backlog
 
-Bu dosyada kullanıcının istekleri ve testlerde bulunan sorunlar tutulur. Biten maddeler işaretlenir, silinmez. Son güncelleme: 2026-11-22 (Ana Sayfa/Detay TMDB başlık logoları + son kategori/sıralama hatırlama; sıradaki: Ana Sayfa üst menü / bölüm kart görselleri).
+Bu dosyada kullanıcının istekleri ve testlerde bulunan sorunlar tutulur. Biten maddeler işaretlenir, silinmez. Son güncelleme: 2026-11-22 (Dizi Detay bölüm kartı görselleri + oynatıcı Bölümler paneli + Play Next yedek görsel; sıradaki: Ana Sayfa üst hap menü / kategori gizleme).
 
 ## P0 — Şu an açık
 
@@ -59,7 +59,7 @@ Bu dosyada kullanıcının istekleri ve testlerde bulunan sorunlar tutulur. Bite
 - [ ] İzleme geçmişinden seçerek silme.
 - [ ] Liste/ızgara görünümü arasında geçiş.
 - [ ] Kanal logoları: sağlayıcı vermediğinde baş harf gösteriliyor. EPG logosu veya başka bir kaynak düşünülebilir.
-- [ ] Android TV "Play Next" satırında logosu olmayan içerikler boş kart olarak görünüyor. Yedek görsel kullanılmalı.
+- [x] **Android TV "Play Next" satırında logosu olmayan içerikler boş kart olarak görünüyor. Yedek görsel kullanılmalı** (2026-11-22, birim testle doğrulandı): `WatchNextPublisher` (`resolveWatchNextPoster`) logosu eksik içeriklerde `android.resource://.../banner` (16:9) yedeğine düşüyor.
 
 ## P2 — Platformlar
 
@@ -122,12 +122,12 @@ Kullanıcı kararları:
 - Filmde ve canlı yayında önceki/sonraki düğmesi olmasın; −10/+10 düğmesi olmasın.
 
 Logo ayrıca çalışılacak; şu an sade bir göz-oynat işareti.
-- [x] Oynatıcı v2 (film/dizi) uygulandı — 2026-11-22, TV'de doğrulandı. Eksik: "Bölümler" paneli, sararken küçük resim önizleme (trick-play görselleri yok), Inter Tight yazı tipi.
+- [x] Oynatıcı v2 (film/dizi) uygulandı — 2026-11-22, TV'de doğrulandı ("Bölümler" sağ yan paneli çoklu sezon seçici, oynatılıyor göstergesi ve tam dizi kuyruğuyla eklendi ve `The Last of Us` üzerinde Geri odak dönüşü + bölüm değiştirme dahil TV'de doğrulandı). Kalan: sararken küçük resim önizleme (trick-play görselleri yok), Inter Tight yazı tipi.
 - [x] Canlı yayın kontrolleri v2 diline geçti (2026-11-22, TV'de doğrulandı): kanal kimliği + CANLI rozeti, şu anki program ilerlemesi ve "Sonra", oynat/duraklat (timeshift), Kanal listesi, Kaydet, Ses-altyazı (seçenek varsa), Diğer. Eski kontrol çubuğu ve SeekBar silindi.
 - [ ] Canlı: aktif kontroller açıkken ipucu `◀▶ gezin · Geri gizle` olarak güncellendi (`▲▼ kanal · ◀ liste` yalnızca pasif bilgi şeridinde kalıyor, 2026-11-22 TV'de doğrulandı); kanal listesi paneli (`ChannelListPanel`) v2 diline taşındı, tam ekran bilgi paneli kaldı.
 - [x] Ana Sayfa v2 (2026-11-22, TV'de doğrulandı): kenardan kenara arka plan görseli (yalnızca sağ üst alan, önbellekli katman), odaklanan içeriği izleyen başlık bloğu (★ puan, yıl, tür, 2 satır özet), "İzlemeye devam et" için 16:9 kartlar + kehribar ilerleme. Performans aynı senaryoda: eski %5 / 28 ms → yeni %8 / 23 ms ortanca.
 - [~] Ana Sayfa (2026-11-22): `TitleLogoOrText` + `pickTmdbLogo` (`tr > en > nötr`, SVG hariç raster, `details-v2` önbellek) ile hero bloğuna TMDB başlık logosu eklendi ve logo yoksa anında metin başlığa düşülüyor. Kalan: üst menü (tasarımdaki ortalanmış hap menü, şu an sol menü), kanal kartları baş harfli kutular.
-- [~] Detay v2 büyük ölçüde (2026-11-22, TV'de doğrulandı): beyaz ana düğme / yarı saydam diğerleri, büyük başlık / TMDB logo başlık (`TitleLogoOrText` — TV'de Film Detay `The Sparks Brothers` ve Dizi Detay `The Last of Us` üzerinde doğrulandı), kehribar puan + noktalı bilgi satırı (MetaLine), "Hz Omer.S01.E01" gibi bölüm adları temizleniyor (hepsi aynıysa "Bölüm N"). Kalan: bölüm kartlarında görsel.
+- [x] Detay v2 tamamlandı (2026-11-22, TV'de doğrulandı): beyaz ana düğme / yarı saydam diğerleri, TMDB logo başlık (`TitleLogoOrText` — Film Detay `The Sparks Brothers` ve Dizi Detay `The Last of Us`), kehribar puan + `MetaLine`, temiz bölüm adları + TMDB `/season/{n}` 16:9 bölüm görselleri ve süreleri (`The Last of Us` üzerinde TV'de doğrulandı).
 - [x] Uygulama genelinde odak beyaz (yazı siyah), seçim/ilerleme kehribar: kartlar, kategoriler, açılır listeler, oynatıcı panelleri, sezon/bölüm satırları (2026-11-22).
 - [x] Canlı TV v2 (2026-11-22, TV'de doğrulandı): sağ üst 16:9 arka plan önizleme + önbellekli karartma katmanı (`RESIZE_MODE_FILL` ile dikey taşma/çizgi düzeltildi), üst başlık satırı, beyaz odaklı kanal satırları + CANLI rozeti, sağ alt ŞİMDİ/Sonra bloğu ve eylem düğmeleri. Ölçüm: kanal listesi %9,45 / 16 ms, kategoriler %28,22 / 42 ms.
 - [ ] Logo ve ikon

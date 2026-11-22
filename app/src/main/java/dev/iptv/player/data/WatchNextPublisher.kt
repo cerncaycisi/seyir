@@ -74,6 +74,7 @@ class WatchNextPublisher(private val context: Context) {
     private fun build(e: HistoryEntry): WatchNextProgram {
         val seriesId = e.seriesId
         val link = if (seriesId != null) DeepLinks.series(e.playlistId, seriesId) else DeepLinks.movie(e.playlistId, e.id)
+        val (posterUri, aspectRatio) = resolveWatchNextPoster(e.logo, context.packageName, dev.iptv.player.R.drawable.banner)
         val builder = WatchNextProgram.Builder()
             .setType(
                 if (seriesId != null) TvContractCompat.WatchNextPrograms.TYPE_TV_SERIES
@@ -84,14 +85,27 @@ class WatchNextPublisher(private val context: Context) {
             .setTitle(e.name)
             .setLastPlaybackPositionMillis(e.positionMs.toInt())
             .setDurationMillis(e.durationMs.toInt())
-            .setPosterArtAspectRatio(TvContractCompat.PreviewPrograms.ASPECT_RATIO_2_3)
+            .setPosterArtAspectRatio(aspectRatio)
+            .setPosterArtUri(Uri.parse(posterUri))
             .setIntentUri(link)
             .setInternalProviderId(e.key)
-        e.logo?.let { runCatching { builder.setPosterArtUri(Uri.parse(it)) } }
         return builder.build()
     }
 
     private companion object {
         const val MAX_ITEMS = 10
+    }
+}
+
+internal fun resolveWatchNextPoster(
+    logo: String?,
+    packageName: String,
+    fallbackDrawableId: Int,
+): Pair<String, Int> {
+    val clean = logo?.trim()?.takeIf { it.isNotEmpty() }
+    return if (clean != null) {
+        clean to TvContractCompat.PreviewPrograms.ASPECT_RATIO_2_3
+    } else {
+        "android.resource://$packageName/$fallbackDrawableId" to TvContractCompat.PreviewPrograms.ASPECT_RATIO_16_9
     }
 }
