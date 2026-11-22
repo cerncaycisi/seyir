@@ -60,8 +60,8 @@ object XmltvParser {
             if (e == XmlPullParser.END_TAG && p.name == "programme") break
             if (e != XmlPullParser.START_TAG) continue
             when (p.name) {
-                "title" -> if (title == null) title = safeText(p).trim() else skip(p)
-                "desc" -> if (desc == null) desc = safeText(p).trim() else skip(p)
+                "title" -> if (title == null) title = dev.iptv.player.data.DisplayText.decodeEntities(safeText(p)).trim() else skip(p)
+                "desc" -> if (desc == null) desc = dev.iptv.player.data.DisplayText.decodeEntities(safeText(p)).trim() else skip(p)
                 "category" -> if (category == null) category = safeText(p).trim() else skip(p)
                 else -> skip(p)
             }

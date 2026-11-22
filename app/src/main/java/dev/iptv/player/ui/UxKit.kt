@@ -123,7 +123,10 @@ class CardAction(
     val onClick: () -> Unit,
 )
 
-/** Long-press action card. Cancel takes the initial focus so a stray OK never changes anything. */
+/**
+ * Long-press action card. The OK release of the long press that opened it is swallowed (a click needs a
+ * fresh OK press), so focus can start on the first action; with a destructive action it starts on Cancel.
+ */
 @Composable
 fun ActionCard(
     title: String,
@@ -133,21 +136,31 @@ fun ActionCard(
     onDismiss: () -> Unit,
 ) {
     val cancelFocus = remember { FocusRequester() }
+    val firstFocus = remember { FocusRequester() }
+    val firstIndex = actions.indexOfFirst { it.enabled }
+    val startOnCancel = firstIndex < 0 || actions.any { it.destructive }
+    var armed by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
         withFrameNanos { }
-        runCatching { cancelFocus.requestFocus() }
+        runCatching { (if (startOnCancel) cancelFocus else firstFocus).requestFocus() }
     }
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Column(
-            Modifier.width(380.dp).clip(RoundedCornerShape(20.dp)).background(Palette.Surface).padding(24.dp),
+            Modifier.width(380.dp).clip(RoundedCornerShape(20.dp)).background(Palette.Surface).padding(24.dp)
+                .onPreviewKeyEvent { e ->
+                    val ok = e.key == Key.DirectionCenter || e.key == Key.Enter || e.key == Key.NumPadEnter
+                    // Auto-repeat downs of the still-held long press must not arm it.
+                    if (ok && e.type == KeyEventType.KeyDown && e.nativeKeyEvent.repeatCount == 0) armed = true
+                    ok && e.type == KeyEventType.KeyUp && !armed
+                },
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Text(title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = Palette.Text, maxLines = 2)
             if (subtitle != null) Text(subtitle, style = MaterialTheme.typography.bodySmall, color = Palette.TextMuted)
             Spacer(Modifier.height(4.dp))
-            actions.forEach { a ->
+            actions.forEachIndexed { i, a ->
                 if (a.enabled) {
-                    TvButton(a.label, { a.onClick() }, Modifier.fillMaxWidth(), a.icon, a.destructive)
+                    TvButton(a.label, { a.onClick() }, Modifier.fillMaxWidth().then(if (i == firstIndex) Modifier.focusRequester(firstFocus) else Modifier), a.icon, a.destructive)
                 } else {
                     Text(a.label, style = MaterialTheme.typography.bodySmall, color = Palette.TextFaint, modifier = Modifier.padding(vertical = 4.dp))
                 }

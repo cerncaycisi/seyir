@@ -175,7 +175,7 @@ class XtreamApi(
     suspend fun shortEpg(streamId: String): List<EpgEntry> =
         (call("&action=get_short_epg&stream_id=${enc(streamId)}&limit=2") as? JsonObject)?.get("epg_listings").objects().mapNotNull { o ->
             EpgEntry(
-                title = decodeBase64(o.str("title").orEmpty()),
+                title = DisplayText.decodeEntities(decodeBase64(o.str("title").orEmpty())),
                 start = o.str("start_timestamp")?.toLongOrNull() ?: return@mapNotNull null,
                 end = o.str("stop_timestamp")?.toLongOrNull() ?: return@mapNotNull null,
             )

@@ -245,7 +245,15 @@ class EpgService private constructor(context: Context) {
 
     // region queries (all times shifted by the user's EPG offset)
 
-    private fun shifted(p: Programme) = if (offsetSec == 0L) p else p.copy(start = p.start + offsetSec, stop = p.stop + offsetSec)
+    // Every read passes here: apply the EPG time offset and decode HTML entities that rows stored
+    // before parse-time decoding existed may still carry ("0---gt;100").
+    private fun shifted(p: Programme): Programme {
+        val text = p.copy(
+            title = dev.iptv.player.data.DisplayText.decodeEntities(p.title),
+            description = p.description?.let(dev.iptv.player.data.DisplayText::decodeEntities),
+        )
+        return if (offsetSec == 0L) text else text.copy(start = p.start + offsetSec, stop = p.stop + offsetSec)
+    }
 
     /** All stored programmes for an XMLTV channel (offset applied), sorted by start. Cached. */
     suspend fun programmes(channelId: String): List<Programme> {

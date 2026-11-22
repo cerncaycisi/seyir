@@ -2,6 +2,29 @@ package dev.iptv.player.data
 
 /** Cleanup for provider-supplied titles that are shown verbatim in the UI. */
 object DisplayText {
+    private val namedEntity = Regex("""&(amp|lt|gt|quot|apos|nbsp);""")
+    private val numericEntity = Regex("""&#(x?)([0-9a-fA-F]{1,6});""")
+    // "&" already lost upstream ("0---gt;100"): only when no letter precedes it, so a real word is never touched.
+    private val bareEntity = Regex("""(?<![\p{L}&])(gt|lt);""")
+    private val entityChars = mapOf("amp" to "&", "lt" to "<", "gt" to ">", "quot" to "\"", "apos" to "'", "nbsp" to " ")
+
+    /** Decodes HTML entities in EPG text, including double-encoded ones ("&amp;gt;") some feeds send. */
+    fun decodeEntities(text: String): String {
+        if (';' !in text) return text
+        var t = text
+        // A few rounds undo double/triple encoding ("&amp;amp;gt;").
+        for (round in 0 until 3) {
+            val before = t
+            t = numericEntity.replace(t) { m ->
+                val code = m.groupValues[2].toIntOrNull(if (m.groupValues[1].isEmpty()) 10 else 16)
+                if (code == null || code !in 1..0x10FFFF) m.value else String(Character.toChars(code))
+            }
+            t = namedEntity.replace(t) { entityChars.getValue(it.groupValues[1]) }
+            if (t == before) break
+        }
+        return bareEntity.replace(t) { if (it.groupValues[1] == "gt") ">" else "<" }
+    }
+
     private val placeholderTitles = setOf(
         "no data", "no information", "no info", "no epg", "no program", "no programme",
         "n/a", "na", "tba", "tbd", "-", "--", "?", "unknown", "program bilgisi yok",

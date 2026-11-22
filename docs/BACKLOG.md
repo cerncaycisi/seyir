@@ -146,5 +146,5 @@ Logo ayrıca çalışılacak; şu an sade bir göz-oynat işareti.
 - [x] CI kırmızıydı (2026-11-22): lint 4 hata veriyordu (androidx kısıtlı sabitleri, produceState yanlış alarmı). Düzeltildi, CI yeşil.
 - [x] Üst düğmeler (Ara, Kayıtlar) odakta kırmızı oluyordu; artık uygulamanın geri kalanı gibi beyaz zemin, koyu yazı (2026-11-22, TV'de doğrulandı).
 - [x] Ayarlar ekranı design v2'ye taşındı (2026-11-22, TV'de doğrulandı): odaklı satır beyaz zemin + koyu yazı, açık anahtarlar ve seçili değerler amber. Uygulamadaki mavi "Primary" rengi amber oldu (diyalog düğmeleri, giriş alanları, çoklu izleme çerçevesi, rozetler); amber üstündeki yazılar koyu.
-- [ ] EPG başlıklarında HTML kodları çözülmüyor: NTV'de "0---gt;100" görünüyor (`&amp;gt;` iki kez kodlanmış). Başlık ve açıklamalarda HTML varlıkları çözülmeli (2026-11-22, TV).
-- [ ] Uzun basma menüsünde (ActionCard) odak en alttaki "Vazgeç"te başlıyor; seçenek menülerinde ilk seçenekte başlamalı (silme onaylarında Vazgeç'te kalabilir) (2026-11-22, TV).
+- [x] EPG başlıklarında HTML kodları (2026-11-22, TV'de doğrulandı): "0---gt;100" artık "0--->100". Ayrıştırırken ve veritabanından okurken çözülüyor (eski kayıtlar da düzelir); iki kez kodlanmış ve "&" kaybolmuş biçimler dahil, harften sonra gelen "gt;" dokunulmuyor (birim testli).
+- [x] Uzun basma menüsü (2026-11-22, TV'de doğrulandı): odak artık ilk seçenekte; menüyü açan uzun basışın tuştan kalkışı yok sayılıyor (yeni bir OK gerekiyor), böylece yanlışlıkla seçim olmuyor. Silme onaylarında odak Vazgeç'te.
