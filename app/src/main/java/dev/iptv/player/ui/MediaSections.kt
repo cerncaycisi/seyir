@@ -417,7 +417,7 @@ fun MediaRows(
         contentPadding = PaddingValues(bottom = 48.dp),
     ) {
         // Keyed by title: a row appearing above (e.g. favourites loading) must not recreate the focused row.
-        itemsIndexed(rows, key = { _, row -> row.title }) { r, row ->
+        itemsIndexed(rows, key = { _, row -> row.title }, contentType = { _, row -> rowContentType(row) }) { r, row ->
             val target = when (r) {
                 restoreRow -> row.items.indexOfFirst { it.id == restore.itemId }
                 initialRow -> 0
@@ -453,12 +453,17 @@ private fun MediaRowView(row: MediaRow, playlist: Playlist, actions: HomeActions
             horizontalArrangement = Arrangement.spacedBy(14.dp),
             contentPadding = PaddingValues(vertical = 10.dp, horizontal = 6.dp),
         ) {
-            itemsIndexed(row.items) { i, s ->
+            // Typed items let the row reuse card compositions while scrolling instead of building new ones.
+            itemsIndexed(row.items, contentType = { _, s -> if (s.type == ContentType.LIVE) 0 else if (row.direct) 1 else 2 }) { i, s ->
                 val mod = if (i == target) Modifier.focusRequester(requester) else Modifier
                 val open = { if (row.direct) actions.resume(s) else actions.open(row.items, i) }
                 val toggle = { actions.longPress(s, row.categoryName) }
                 if (s.type == ContentType.LIVE) {
                     ChannelCard(s, open, toggle, { if (i == target) targetFocused = true; onFocused(s) }, mod)
+                } else if (row.direct) {
+                    // "İzlemeye devam et": wide stills with progress, like streaming services (design v2).
+                    LandscapeCard(s, open, toggle, { if (i == target) targetFocused = true; onFocused(s) }, mod,
+                        progress = actions.progress[favoriteKey(playlist, s)], badge = actions.badges[favoriteKey(playlist, s)])
                 } else {
                     PosterCard(s, favoriteKey(playlist, s) in actions.favorites, open, toggle, { if (i == target) targetFocused = true; onFocused(s) }, mod, progress = actions.progress[favoriteKey(playlist, s)], badge = actions.badges[favoriteKey(playlist, s)])
                 }
@@ -642,4 +647,11 @@ private fun buildVodView(
     val genres = genresOf(raw).take(24)
     val genreSel = genre
     return VodView(categories, selected, raw, genres, genreSel, sortStreams(filterByGenre(raw, genreSel), sort))
+}
+
+/** Rows of the same card kind can reuse each other's compositions when the column scrolls. */
+private fun rowContentType(row: MediaRow): Int = when {
+    row.direct -> 1
+    row.items.firstOrNull()?.type == ContentType.LIVE -> 0
+    else -> 2
 }

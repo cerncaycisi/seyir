@@ -307,7 +307,9 @@ fun HomeScreen(
             }
         },
     ) {
-        Box(Modifier.fillMaxSize().padding(start = 84.dp, top = 20.dp, end = 28.dp)) {
+        // Home draws its backdrop edge to edge and pads its own content; other sections get the usual margins.
+        val fullBleed = section == Section.HOME && !recordings && searchType == null
+        Box(Modifier.fillMaxSize().then(if (fullBleed) Modifier else Modifier.padding(start = 84.dp, top = 20.dp, end = 28.dp))) {
             key(section, playlist.id) {
                 when {
                     recordings -> RecordingsSection(repo, playlist, onPlay)

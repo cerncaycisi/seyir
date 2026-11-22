@@ -465,3 +465,54 @@ fun LoadingState(modifier: Modifier = Modifier) {
         }
     }
 }
+
+/** 16:9 still card for "continue watching": backdrop, thin amber progress, title (and episode badge) below. */
+@Composable
+fun LandscapeCard(
+    stream: Stream,
+    onClick: () -> Unit,
+    onLongClick: () -> Unit,
+    onFocused: () -> Unit,
+    modifier: Modifier = Modifier,
+    progress: Float? = null,
+    badge: String? = null,
+) {
+    var focused by remember { mutableStateOf(false) }
+    val shape = RoundedCornerShape(10.dp)
+    Column(Modifier.width(210.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Surface(
+            onClick = onClick,
+            onLongClick = onLongClick,
+            modifier = modifier.fillMaxWidth().aspectRatio(16f / 9f).pointerClick(onClick, onLongClick)
+                .onFocusChanged { focused = it.isFocused || it.hasFocus; if (focused) onFocused() },
+            shape = ClickableSurfaceDefaults.shape(shape),
+            colors = ClickableSurfaceDefaults.colors(containerColor = Palette.SurfaceHigh, focusedContainerColor = Palette.SurfaceHigh),
+            border = ClickableSurfaceDefaults.border(focusedBorder = Border(BorderStroke(3.dp, Color.White), shape = shape)),
+            scale = ClickableSurfaceDefaults.scale(focusedScale = 1.06f),
+        ) {
+            Box(Modifier.fillMaxSize()) {
+                val image = stream.backdrop ?: stream.logo
+                if (image != null) {
+                    AsyncImage(model = image, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+                } else {
+                    Box(Modifier.fillMaxSize().background(tileBrush(stream.name)), contentAlignment = Alignment.Center) {
+                        Text(stream.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Color.White,
+                            maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(12.dp))
+                    }
+                }
+                badge?.let {
+                    Text(it, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = Color.White,
+                        modifier = Modifier.align(Alignment.TopStart).padding(8.dp).clip(RoundedCornerShape(4.dp))
+                            .background(Color(0xB3000000)).padding(horizontal = 6.dp, vertical = 2.dp))
+                }
+                if (progress != null && progress > 0f) {
+                    Box(Modifier.align(Alignment.BottomStart).fillMaxWidth().height(3.dp).background(Color(0x40FFFFFF))) {
+                        Box(Modifier.fillMaxHeight().fillMaxWidth(progress.coerceIn(0f, 1f)).background(Color(0xFFF2B544)))
+                    }
+                }
+            }
+        }
+        Text(stream.name, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold,
+            color = if (focused) Palette.Text else Palette.TextMuted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
+}
