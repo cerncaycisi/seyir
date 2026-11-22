@@ -93,6 +93,11 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.unit.dp
 import dev.iptv.player.data.Content
 import dev.iptv.player.data.ContentRules
@@ -309,19 +314,28 @@ private fun VodBrowser(
                 Icons.Rounded.Search,
                 onSearch,
                 Modifier.focusRequester(searchFocus).focusProperties {
-                    left = FocusRequester.Cancel
+                    up = actions.menuFocus()
+                    left = actions.menuFocus()
                     right = if (showClear && clearFocus.isAttached) clearFocus.requester else viewFocus
                     down = if (catVisible()) selectedReq.target else FocusRequester.Default
                 },
             )
             Spacer(Modifier.height(8.dp))
             LazyColumn(
-                Modifier.focusProperties {
+                Modifier.onPreviewKeyEvent { ev ->
+                    if (ev.type == KeyEventType.KeyDown && ev.key == Key.DirectionLeft) {
+                        runCatching { actions.menuFocus().requestFocus() }
+                        true
+                    } else {
+                        false
+                    }
+                }.focusProperties {
                     // Entering the list from the grid lands on the selected category, not the nearest row.
                     enter = { if (catVisible()) selectedReq.target else FocusRequester.Default }
                     exit = { dir ->
                         when (dir) {
                             FocusDirection.Up -> searchFocus
+                            FocusDirection.Left -> actions.menuFocus()
                             FocusDirection.Right -> if (shown.isNotEmpty() && gridEntry.isAttached) gridEntry.requester else sortFocus
                             else -> FocusRequester.Default
                         }
@@ -361,6 +375,7 @@ private fun VodBrowser(
                         Icons.Rounded.DeleteSweep,
                         onClick = { confirmClear = true },
                         modifier = clearFocus.attach().focusProperties {
+                            up = actions.menuFocus()
                             left = searchFocus
                             right = viewFocus
                             down = if (shown.isNotEmpty() && gridEntry.isAttached) gridEntry.requester else FocusRequester.Cancel
@@ -373,6 +388,7 @@ private fun VodBrowser(
                     if (listView) Icons.Rounded.GridView else Icons.AutoMirrored.Rounded.ViewList,
                     onClick = { scope.launch { repo.settings.set(Setting.VodListView, !listView) } },
                     modifier = Modifier.focusRequester(viewFocus).focusProperties {
+                        up = actions.menuFocus()
                         left = if (showClear && clearFocus.isAttached) clearFocus.requester else searchFocus
                         right = sortFocus
                         down = if (shown.isNotEmpty() && gridEntry.isAttached) gridEntry.requester else FocusRequester.Cancel
@@ -384,6 +400,7 @@ private fun VodBrowser(
                     sort,
                     { sort = it },
                     Modifier.focusRequester(sortFocus).focusProperties {
+                        up = actions.menuFocus()
                         left = viewFocus
                         right = genreFocus
                         down = if (shown.isNotEmpty() && gridEntry.isAttached) gridEntry.requester else FocusRequester.Cancel
@@ -397,6 +414,7 @@ private fun VodBrowser(
                         genreSel,
                         { genre = it },
                         Modifier.focusRequester(genreFocus).focusProperties {
+                            up = actions.menuFocus()
                             left = sortFocus
                             right = FocusRequester.Cancel
                             down = if (shown.isNotEmpty() && gridEntry.isAttached) gridEntry.requester else FocusRequester.Cancel
@@ -639,8 +657,16 @@ private fun MediaRowView(
     Column {
         SectionTitle(row.title, "${row.items.size}")
         LazyRow(
-            modifier = Modifier.focusProperties {
+            modifier = Modifier.onPreviewKeyEvent { ev ->
+                if (ev.type == KeyEventType.KeyDown && ev.key == Key.DirectionLeft && lastFocused <= 0) {
+                    runCatching { actions.menuFocus().requestFocus() }
+                    true
+                } else {
+                    false
+                }
+            }.focusProperties {
                 enter = { entryReq.target }
+                exit = { dir -> if (dir == FocusDirection.Left) actions.menuFocus() else FocusRequester.Default }
             },
             state = rowState,
             horizontalArrangement = Arrangement.spacedBy(14.dp),

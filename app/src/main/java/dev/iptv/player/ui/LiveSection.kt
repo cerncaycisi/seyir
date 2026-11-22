@@ -61,6 +61,11 @@ import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.CompositingStrategy
@@ -272,7 +277,7 @@ private fun LiveBrowser(
             Box(Modifier.fillMaxSize().background(hScrim))
             Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().fillMaxHeight(0.48f).background(vScrim))
         }
-        Column(Modifier.fillMaxSize().padding(start = 84.dp, top = 20.dp, end = 28.dp)) {
+        Column(Modifier.fillMaxSize().padding(start = 48.dp, top = 74.dp, end = 48.dp)) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text(uiContext.getString(R.string.ui_live_tv), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = Palette.Text)
                 Text(
@@ -288,7 +293,8 @@ private fun LiveBrowser(
                     Icons.Rounded.Search,
                     onSearch,
                     Modifier.focusRequester(searchFocus).focusProperties {
-                        left = FocusRequester.Cancel
+                        up = actions.menuFocus()
+                        left = actions.menuFocus()
                         right = recordingsFocus
                         down = firstVisibleFocus.target
                     },
@@ -298,6 +304,7 @@ private fun LiveBrowser(
                     Icons.Rounded.FiberManualRecord,
                     onRecordings,
                     Modifier.focusRequester(recordingsFocus).focusProperties {
+                        up = actions.menuFocus()
                         left = searchFocus
                         right = sortFocus
                         down = firstVisibleFocus.target
@@ -309,6 +316,7 @@ private fun LiveBrowser(
                     sort,
                     { sort = it },
                     Modifier.focusRequester(sortFocus).focusProperties {
+                        up = actions.menuFocus()
                         left = recordingsFocus
                         right = FocusRequester.Cancel
                         down = if (watchFocus.isAttached) watchFocus.requester else firstVisibleFocus.target
@@ -318,11 +326,19 @@ private fun LiveBrowser(
             Spacer(Modifier.height(12.dp))
             Row(Modifier.weight(1f).fillMaxWidth()) {
                 LazyColumn(
-                    Modifier.width(150.dp).fillMaxHeight().focusProperties {
+                    Modifier.width(150.dp).fillMaxHeight().onPreviewKeyEvent { ev ->
+                        if (ev.type == KeyEventType.KeyDown && ev.key == Key.DirectionLeft) {
+                            runCatching { actions.menuFocus().requestFocus() }
+                            true
+                        } else {
+                            false
+                        }
+                    }.focusProperties {
                         enter = { if (catVisible()) categoryFocus.target else FocusRequester.Default }
                         exit = { dir ->
                             when (dir) {
                                 FocusDirection.Up -> searchFocus
+                                FocusDirection.Left -> actions.menuFocus()
                                 FocusDirection.Right -> firstVisibleFocus.target
                                 else -> FocusRequester.Default
                             }

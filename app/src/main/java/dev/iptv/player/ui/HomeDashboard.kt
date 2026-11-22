@@ -97,24 +97,9 @@ fun HomeSection(repo: Repository, playlist: Playlist, actions: HomeActions, focu
     var shownHero by remember { mutableStateOf<Featured?>(null) }
     Box(Modifier.fillMaxSize()) {
     shownHero?.let { HomeBackdrop(repo, playlist, it) }
-    Column(Modifier.fillMaxSize().padding(start = 84.dp, top = 20.dp, end = 28.dp)) {
-        Row(Modifier.fillMaxWidth().padding(bottom = 4.dp), verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Column(Modifier.weight(1f)) {
-                Text(playlist.name, style = MaterialTheme.typography.titleMedium, color = Palette.Text,
-                    maxLines = 1, overflow = TextOverflow.Ellipsis)
-                refreshMessage?.let { Text(it, style = MaterialTheme.typography.labelMedium, color = Palette.TextMuted) }
-            }
-            PointerOutlinedButton(
-                enabled = !refreshing,
-                modifier = Modifier.focusProperties { left = FocusRequester.Cancel },
-                onClick = {
-                    dev.iptv.player.data.RefreshWorker.request(repo.appContext, playlist.id)
-                },
-            ) {
-                Icon(Icons.Rounded.Refresh, contentDescription = null, modifier = Modifier.size(20.dp))
-                Text(uiContext.getString(if (refreshing) R.string.ux_refreshing else R.string.ux_refresh), Modifier.padding(start = 8.dp))
-            }
+    Column(Modifier.fillMaxSize().padding(start = 48.dp, top = 66.dp, end = 48.dp)) {
+        refreshMessage?.let {
+            Text(it, style = MaterialTheme.typography.labelMedium, color = Palette.TextMuted, modifier = Modifier.padding(bottom = 4.dp))
         }
         when (val s = if (history == null) Load.Loading else state) {
             Load.Loading -> LoadingState()

@@ -16,9 +16,13 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.PlaylistPlay
 import androidx.compose.material.icons.rounded.CalendarViewWeek
@@ -31,6 +35,7 @@ import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material.icons.rounded.KeyboardArrowUp
+import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.automirrored.rounded.PlaylistAdd
 import dev.iptv.player.data.ChannelGroups
 import androidx.compose.material.icons.rounded.Favorite
@@ -74,13 +79,12 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.tv.material3.DrawerValue
+import androidx.compose.ui.draw.clip
+import androidx.tv.material3.ClickableSurfaceDefaults
 import androidx.tv.material3.Icon
 import androidx.tv.material3.MaterialTheme
-import androidx.tv.material3.ModalNavigationDrawer
-import androidx.tv.material3.NavigationDrawerItem
+import androidx.tv.material3.Surface
 import androidx.tv.material3.Text
-import androidx.tv.material3.rememberDrawerState
 import dev.iptv.player.data.ContentRules
 import dev.iptv.player.data.ContentType
 import dev.iptv.player.data.ParentalSession
@@ -130,6 +134,8 @@ class HomeActions(
     val groups: List<dev.iptv.player.data.ChannelGroup> = emptyList(),
     /** Long-press on a group entry in the Live category list (id, name). */
     val groupLongPress: (String, String) -> Unit = { _, _ -> },
+    /** Focus requester for the active section pill in the top navigation bar. */
+    val menuFocus: () -> FocusRequester = { FocusRequester.Default },
 )
 
 private sealed interface ActionTarget {
@@ -220,16 +226,20 @@ fun HomeScreen(
         requireUnlock = { a -> if (rules.unlocked || hasPin.isEmpty()) a() else pendingUnlock = a },
         groups = groups,
         groupLongPress = { id, name -> target = ActionTarget.Group(id, name) },
+        menuFocus = { navFocus[section.ordinal] },
     )
+
+    val refreshWork by remember(repo, playlist.id) {
+        dev.iptv.player.data.RefreshWorker.observe(repo.appContext, playlist.id)
+    }.collectAsState(initial = null)
+    val refreshing = refreshWork?.state?.isFinished == false
 
     // OK on a menu entry moves focus into that section (its own first-focus logic runs again);
     // picking the section already shown just steps deterministically into its primary focus target.
-    val drawerState = rememberDrawerState(DrawerValue.Closed)
     var contentFocusTrigger by remember { mutableIntStateOf(0) }
     fun selectSection(s: Section) {
         searchType = null
         recordings = false
-        drawerState.setValue(DrawerValue.Closed)
         if (s == section) {
             contentFocusTrigger++
         } else {
@@ -238,16 +248,15 @@ fun HomeScreen(
             section = s
         }
     }
-    // Back walks outwards like other TV apps: content → menu → Home → "exit?" instead of closing the app at once.
+    // Back walks outwards like other TV apps: content → top menu → Home → "exit?" instead of closing the app at once.
     // Registered before the sections compose, so their own Back handlers (dialogs, edits) win.
-    var drawerFocused by remember { mutableStateOf(false) }
+    var navBarFocused by remember { mutableStateOf(false) }
     var confirmExit by remember { mutableStateOf(false) }
     BackHandler {
         when {
-            searchType != null -> { searchType = null; initialFocus = true; drawerState.setValue(DrawerValue.Closed) }
-            recordings -> { recordings = false; initialFocus = true; drawerState.setValue(DrawerValue.Closed) }
-            !drawerFocused -> {
-                drawerState.setValue(DrawerValue.Open)
+            searchType != null -> { searchType = null; initialFocus = true }
+            recordings -> { recordings = false; initialFocus = true }
+            !navBarFocused -> {
                 runCatching { navFocus[section.ordinal].requestFocus() }
             }
             section != Section.HOME -> {
@@ -269,93 +278,120 @@ fun HomeScreen(
         )
     }
 
-    ModalNavigationDrawer(
-        drawerState = drawerState,
-        scrimBrush = Brush.horizontalGradient(listOf(Palette.Background.copy(alpha = 0.92f), Color.Transparent)),
-        drawerContent = { value ->
-            val open = value == DrawerValue.Open
-            LaunchedEffect(open) {
-                if (open && !initialFocus) runCatching { navFocus[section.ordinal].requestFocus() }
-            }
-            Column(
-                Modifier
-                    .fillMaxHeight()
-                    .background(if (open) Palette.Surface else Palette.Background)
-                    .padding(horizontal = 8.dp, vertical = 8.dp)
-                    .verticalScroll(rememberScrollState())
-                    // Entering the menu lands on the current section instead of the nearest item.
-                    .focusProperties { enter = { navFocus[section.ordinal] } }
-                    .onPreviewKeyEvent { ev ->
-                        if (ev.type == KeyEventType.KeyDown && ev.key == Key.DirectionRight && open) {
-                            drawerState.setValue(DrawerValue.Closed)
-                            contentFocusTrigger++
-                            true
-                        } else false
-                    }
-                    .onFocusChanged { drawerFocused = it.hasFocus },
-                // Items keep the drawer's own 56 dp height: forcing 42 dp made the selected pill overlap its
-                // neighbours and the logo. Sections sit centred in the free space (4 entries, plenty of room).
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                Row(Modifier.padding(start = 12.dp, top = 8.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    BrandMark(32.dp)
-                    if (open) {
-                        Spacer(Modifier.width(12.dp))
-                        Column {
-                            Text(stringResource(R.string.app_name), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Palette.Text)
-                            Text(
-                                playlist.name,
-                                style = MaterialTheme.typography.labelMedium,
-                                color = Palette.TextMuted,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier.width(160.dp),
-                            )
-                        }
-                    }
-                }
-                Spacer(Modifier.weight(1f))
-                Section.entries.forEach { s ->
-                    NavigationDrawerItem(
-                        selected = s == section,
-                        onClick = { selectSection(s) },
-                        leadingContent = { Icon(s.icon, contentDescription = null) },
-                        modifier = Modifier.focusRequester(navFocus[s.ordinal]).pointerClick({ selectSection(s) }),
-                    ) { Text(s.label) }
-                }
-                Spacer(Modifier.weight(1f))
-                NavigationDrawerItem(
-                    selected = false,
-                    onClick = onSettings,
-                    leadingContent = { Icon(Icons.Rounded.Settings, contentDescription = context.getString(R.string.play_settings)) },
-                    modifier = Modifier.pointerClick(onSettings),
-                ) { Text(context.getString(R.string.play_settings)) }
-                NavigationDrawerItem(
-                    selected = false,
-                    onClick = {
-                        scope.launch { repo.refresh(playlist.id) }
-                        onPlaylists()
-                    },
-                    leadingContent = { Icon(Icons.AutoMirrored.Rounded.PlaylistPlay, contentDescription = context.getString(R.string.play_playlists)) },
-                    modifier = Modifier.pointerClick({ scope.launch { repo.refresh(playlist.id) }; onPlaylists() }),
-                ) { Text(context.getString(R.string.play_playlists)) }
-            }
-        },
-    ) {
-        // Home and Live draw their backdrop edge to edge and pad their own content; other sections get the usual margins.
+    Box(Modifier.fillMaxSize().background(Palette.Background)) {
+        // Home and Live draw their backdrop edge to edge and pad their own content; other sections sit below the top bar.
         val fullBleed = (section == Section.HOME || section == Section.LIVE) && !recordings && searchType == null
-        Box(Modifier.fillMaxSize().then(if (fullBleed) Modifier else Modifier.padding(start = 84.dp, top = 20.dp, end = 28.dp))) {
+        Box(
+            Modifier
+                .fillMaxSize()
+                .then(if (fullBleed) Modifier else Modifier.padding(start = 48.dp, top = 74.dp, end = 48.dp)),
+        ) {
             key(section, playlist.id) {
                 when {
                     recordings -> RecordingsSection(repo, playlist, onPlay)
                     searchType != null -> SearchSection(repo, playlist, actions, initialQuery = initialSearchQuery, type = searchType!!, focusTrigger = contentFocusTrigger)
                     else -> when (section) {
                         Section.HOME -> HomeSection(repo, playlist, actions, focusTrigger = contentFocusTrigger)
-                        Section.LIVE -> LiveSection(repo, playlist, actions, onSearch = { drawerState.setValue(DrawerValue.Closed); searchType = ContentType.LIVE; initialFocus = true }, onRecordings = { drawerState.setValue(DrawerValue.Closed); recordings = true }, focusTrigger = contentFocusTrigger)
-                        Section.MOVIES -> VodSection(repo, playlist, ContentType.MOVIE, actions, onSearch = { drawerState.setValue(DrawerValue.Closed); searchType = ContentType.MOVIE; initialFocus = true }, focusTrigger = contentFocusTrigger)
-                        Section.SERIES -> VodSection(repo, playlist, ContentType.SERIES, actions, onSearch = { drawerState.setValue(DrawerValue.Closed); searchType = ContentType.SERIES; initialFocus = true }, focusTrigger = contentFocusTrigger)
+                        Section.LIVE -> LiveSection(repo, playlist, actions, onSearch = { searchType = ContentType.LIVE; initialFocus = true }, onRecordings = { recordings = true }, focusTrigger = contentFocusTrigger)
+                        Section.MOVIES -> VodSection(repo, playlist, ContentType.MOVIE, actions, onSearch = { searchType = ContentType.MOVIE; initialFocus = true }, focusTrigger = contentFocusTrigger)
+                        Section.SERIES -> VodSection(repo, playlist, ContentType.SERIES, actions, onSearch = { searchType = ContentType.SERIES; initialFocus = true }, focusTrigger = contentFocusTrigger)
                     }
                 }
+            }
+        }
+
+        // Design v2 centered floating top pill menu with brand mark on the left and utilities on the right.
+        Row(
+            Modifier
+                .align(Alignment.TopCenter)
+                .fillMaxWidth()
+                .padding(horizontal = 48.dp, vertical = 14.dp)
+                .focusProperties { enter = { navFocus[section.ordinal] } }
+                .onPreviewKeyEvent { ev ->
+                    if (ev.type == KeyEventType.KeyDown && ev.key == Key.DirectionDown) {
+                        contentFocusTrigger++
+                        true
+                    } else false
+                }
+                .onFocusChanged { navBarFocused = it.hasFocus },
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Row(
+                Modifier.width(240.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                BrandMark(28.dp)
+                Spacer(Modifier.width(10.dp))
+                Text(
+                    stringResource(R.string.app_name),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = Palette.Text,
+                    maxLines = 1,
+                )
+                Text(
+                    " · ${playlist.name}",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = Palette.TextMuted,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                Row(
+                    Modifier
+                        .clip(RoundedCornerShape(50))
+                        .background(Color(0xD910131A))
+                        .padding(horizontal = 6.dp, vertical = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Section.entries.forEach { s ->
+                        val activeTab = s == section && !recordings && searchType == null
+                        TopNavPill(
+                            label = s.label,
+                            selected = activeTab,
+                            onClick = { selectSection(s) },
+                            modifier = Modifier
+                                .focusRequester(navFocus[s.ordinal])
+                                .focusProperties {
+                                    up = FocusRequester.Cancel
+                                    if (s.ordinal == 0) left = FocusRequester.Cancel
+                                },
+                        )
+                    }
+                }
+            }
+            Row(
+                Modifier.width(240.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                TopNavIconPill(
+                    icon = Icons.Rounded.Refresh,
+                    description = context.getString(if (refreshing) R.string.ux_refreshing else R.string.ux_refresh),
+                    enabled = !refreshing,
+                    modifier = Modifier.focusProperties { up = FocusRequester.Cancel },
+                    onClick = { dev.iptv.player.data.RefreshWorker.request(repo.appContext, playlist.id) },
+                )
+                TopNavIconPill(
+                    icon = Icons.AutoMirrored.Rounded.PlaylistPlay,
+                    description = context.getString(R.string.play_playlists),
+                    modifier = Modifier.focusProperties { up = FocusRequester.Cancel },
+                    onClick = {
+                        scope.launch { repo.refresh(playlist.id) }
+                        onPlaylists()
+                    },
+                )
+                TopNavIconPill(
+                    icon = Icons.Rounded.Settings,
+                    description = context.getString(R.string.play_settings),
+                    modifier = Modifier.focusProperties {
+                        up = FocusRequester.Cancel
+                        right = FocusRequester.Cancel
+                    },
+                    onClick = onSettings,
+                )
             }
         }
     }
@@ -544,6 +580,68 @@ private fun HomeOverlays(
     }
     if (pendingUnlock != null) {
         PinVerifyDialog(repo.prefs, onVerified = { val a = pendingUnlock; clearUnlock(); a() }, onDismiss = clearUnlock)
+    }
+}
+
+@Composable
+private fun TopNavPill(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        onClick = onClick,
+        modifier = modifier.height(36.dp).pointerClick(onClick),
+        shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(18.dp)),
+        colors = ClickableSurfaceDefaults.colors(
+            containerColor = if (selected) Color(0x24F2B544) else Color.Transparent,
+            contentColor = if (selected) Color(0xFFF2B544) else Palette.TextMuted,
+            focusedContainerColor = Color(0xFFF5F5F7),
+            focusedContentColor = Color(0xFF07080A),
+        ),
+        scale = ClickableSurfaceDefaults.scale(focusedScale = 1.04f),
+    ) {
+        Box(
+            Modifier.fillMaxHeight().padding(horizontal = 16.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                label,
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = if (selected) FontWeight.Bold else FontWeight.SemiBold,
+                maxLines = 1,
+            )
+        }
+    }
+}
+
+@Composable
+private fun TopNavIconPill(
+    icon: ImageVector,
+    description: String,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    onClick: () -> Unit,
+) {
+    Surface(
+        onClick = onClick,
+        enabled = enabled,
+        modifier = modifier.size(38.dp).pointerClick(onClick),
+        shape = ClickableSurfaceDefaults.shape(CircleShape),
+        colors = ClickableSurfaceDefaults.colors(
+            containerColor = Color(0xD910131A),
+            contentColor = Palette.TextMuted,
+            focusedContainerColor = Color(0xFFF5F5F7),
+            focusedContentColor = Color(0xFF07080A),
+            disabledContainerColor = Color(0x8010131A),
+            disabledContentColor = Palette.TextFaint,
+        ),
+        scale = ClickableSurfaceDefaults.scale(focusedScale = 1.06f),
+    ) {
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Icon(icon, contentDescription = description, modifier = Modifier.size(18.dp))
+        }
     }
 }
 
