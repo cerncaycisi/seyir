@@ -383,6 +383,7 @@ suspend fun Repository.movieDetails(playlist: Playlist, stream: Stream): VodInfo
                 director = t.director ?: info.director,
                 fromTmdb = true,
                 tmdbId = t.tmdbId.takeIf { it > 0 } ?: providerTmdbId,
+                logo = t.logo ?: info.logo,
             )
         }
     }
@@ -407,5 +408,6 @@ suspend fun Repository.seriesDetails(playlist: Playlist, seriesId: String): Seri
         cast = t.cast ?: info.cast,
         director = t.director ?: info.director,
         tmdbId = t.tmdbId.takeIf { it > 0 } ?: providerTmdbId,
+        logo = t.logo ?: info.logo,
     )
 }

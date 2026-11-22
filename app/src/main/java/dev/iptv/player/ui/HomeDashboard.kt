@@ -198,7 +198,7 @@ private fun rememberHeroInfo(repo: Repository, playlist: Playlist, stream: Strea
         value = when (stream.type) {
             ContentType.MOVIE -> runCatching { repo.movieDetails(playlist, stream) }.getOrNull()
             ContentType.SERIES -> runCatching { repo.seriesDetails(playlist, stream.id) }.getOrNull()?.let {
-                VodInfo(plot = it.plot, backdrop = it.backdrop, genre = it.genre, duration = null, year = it.year, rating = it.rating)
+                VodInfo(plot = it.plot, backdrop = it.backdrop, genre = it.genre, duration = null, year = it.year, rating = it.rating, logo = it.logo)
             }
             else -> null
         }
@@ -248,8 +248,14 @@ private fun FeaturedHero(repo: Repository, playlist: Playlist, featured: Feature
             Text(uiContext.getString(R.string.ui_resume).uppercase(), style = MaterialTheme.typography.labelMedium,
                 fontWeight = FontWeight.Bold, color = Color(0xFFF2B544))
         }
-        Text(stream.name, style = MaterialTheme.typography.displaySmall, fontWeight = FontWeight.ExtraBold, color = Palette.Text,
-            maxLines = 1, overflow = TextOverflow.Ellipsis)
+        TitleLogoOrText(
+            title = stream.name,
+            logoUrl = info?.logo,
+            textStyle = MaterialTheme.typography.displaySmall,
+            maxLogoHeight = 64.dp,
+            maxLogoWidth = 340.dp,
+            maxLines = 1,
+        )
         val meta = listOfNotNull(info?.year ?: stream.year, info?.genre ?: stream.genre)
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
             (info?.rating ?: stream.rating)?.takeIf { it.isNotBlank() }?.let {

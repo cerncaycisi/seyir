@@ -40,6 +40,7 @@ data class TmdbInfo(
     /** ISO 639-1 original language (e.g. "en"); drives the "original audio" track choice. */
     val originalLanguage: String? = null,
     val runtimeMins: Int? = null,
+    val logo: String? = null,
 ) {
     val isEmpty get() = tmdbId == 0L
 }
@@ -209,19 +210,41 @@ class Tmdb internal constructor(
     ): TmdbInfo? {
         val basic = lookup(rawTitle, type, yearHint, tmdbId, durationSecs) ?: return null
         return withContext(Dispatchers.IO) {
-            val file = File(dir, "credits-$type-${basic.tmdbId}.json")
+            val file = File(dir, "details-v2-$type-${basic.tmdbId}.json")
             readCache(file)?.let { return@withContext it }
             try {
                 val kind = if (type == ContentType.SERIES) "tv" else "movie"
-                val root = request("/$kind/${basic.tmdbId}", mapOf("language" to "tr-TR", "append_to_response" to "credits"))
+                val root = request(
+                    "/$kind/${basic.tmdbId}",
+                    mapOf(
+                        "language" to "tr-TR",
+                        "append_to_response" to "credits,images",
+                        "include_image_language" to "tr,en,null",
+                    ),
+                )
                 val credits = root["credits"] as? JsonObject
                 val cast = (credits?.get("cast") as? JsonArray).orEmpty().mapNotNull { (it as? JsonObject)?.str("name") }.take(12)
                 val director = (credits?.get("crew") as? JsonArray).orEmpty().mapNotNull { it as? JsonObject }
                     .filter { it.str("job") == "Director" }.mapNotNull { it.str("name") }.distinct()
-                basic.copy(plot = root.str("overview") ?: basic.plot,
+                val logos = ((root["images"] as? JsonObject)?.get("logos") as? JsonArray).orEmpty()
+                    .mapNotNull { it as? JsonObject }
+                    .mapNotNull { l ->
+                        val path = l.str("file_path") ?: return@mapNotNull null
+                        TmdbLogoCandidate(
+                            filePath = path,
+                            language = l.str("iso_639_1"),
+                            voteAverage = l.str("vote_average")?.toDoubleOrNull() ?: 0.0,
+                            width = l.str("width")?.toIntOrNull() ?: 0,
+                            aspectRatio = l.str("aspect_ratio")?.toDoubleOrNull() ?: 0.0,
+                        )
+                    }
+                basic.copy(
+                    plot = root.str("overview") ?: basic.plot,
                     plotLanguage = if (root.str("overview") != null) "tr" else basic.plotLanguage,
-                    cast = cast.joinToString(", ").ifBlank { null }, director = director.joinToString(", ").ifBlank { null })
-                    .also { file.writeText(json.encodeToString(it)) }
+                    cast = cast.joinToString(", ").ifBlank { null },
+                    director = director.joinToString(", ").ifBlank { null },
+                    logo = pickTmdbLogo(logos) ?: basic.logo,
+                ).also { file.writeText(json.encodeToString(it)) }
             } catch (e: CancellationException) { throw e } catch (_: Exception) { basic }
         }
     }
@@ -373,9 +396,40 @@ class Tmdb internal constructor(
     private fun hash(s: String) =
         MessageDigest.getInstance("SHA-1").digest(s.toByteArray()).joinToString("") { "%02x".format(it) }
 
-    private companion object {
+    internal companion object {
         const val IMAGE_BASE = "https://image.tmdb.org/t/p"
     }
+}
+
+internal data class TmdbLogoCandidate(
+    val filePath: String,
+    val language: String?,
+    val voteAverage: Double,
+    val width: Int,
+    val aspectRatio: Double,
+)
+
+/**
+ * Picks the best horizontal raster title logo URL (`w500`) from TMDB `/images` results.
+ * Priority: wide raster (`aspectRatio >= 1.2`, no `.svg`) -> language (`tr > en > neutral > other`) -> rating -> width.
+ */
+internal fun pickTmdbLogo(logos: List<TmdbLogoCandidate>): String? {
+    val raster = logos.filter { it.filePath.isNotBlank() && !it.filePath.endsWith(".svg", ignoreCase = true) }
+    if (raster.isEmpty()) return null
+    val pool = raster.filter { it.aspectRatio >= 1.2 }.ifEmpty { raster }
+    val best = pool.minWithOrNull(
+        compareBy<TmdbLogoCandidate> { logoLanguageRank(it.language) }
+            .thenByDescending { it.voteAverage }
+            .thenByDescending { it.width },
+    ) ?: return null
+    return "${Tmdb.IMAGE_BASE}/w500${best.filePath}"
+}
+
+private fun logoLanguageRank(language: String?): Int = when {
+    language.equals("tr", ignoreCase = true) -> 0
+    language.equals("en", ignoreCase = true) -> 1
+    language.isNullOrBlank() -> 2
+    else -> 3
 }
 
 private fun JsonObject.str(key: String): String? = (get(key) as? JsonPrimitive)?.content?.takeIf { it.isNotBlank() && it != "null" }

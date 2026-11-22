@@ -14,8 +14,13 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.focusProperties
+import dev.iptv.player.data.BrowseChoice
 import dev.iptv.player.data.LiveSort
+import dev.iptv.player.data.ProfileStore
+import dev.iptv.player.data.browseChoice
+import dev.iptv.player.data.browseKey
 import dev.iptv.player.data.recentStreams
+import dev.iptv.player.data.saveBrowseChoice
 import dev.iptv.player.data.sortChannels
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -87,15 +92,17 @@ private const val PREVIEW_DEBOUNCE_MS = 650L
 
 @Composable
 fun LiveSection(repo: Repository, playlist: Playlist, actions: HomeActions, onSearch: () -> Unit = {}, onRecordings: () -> Unit = {}, focusTrigger: Int = 0) {
+    val profileId by ProfileStore.activeIdFlow.collectAsState()
+    val choiceKey = remember(profileId, playlist.id) { browseKey(profileId, playlist.id, ContentType.LIVE) }
     // Lint misses the direct ProduceStateScope.value assignment in this producer.
     @SuppressLint("ProduceStateDoesNotAssignValue")
-    val state by produceState<Load<Content>>(Load.Loading, playlist.id) {
-        value = loadCatching { repo.content(playlist, ContentType.LIVE) }
+    val state by produceState<Load<Pair<Content, BrowseChoice>>>(Load.Loading, playlist.id, choiceKey) {
+        value = loadCatching { repo.content(playlist, ContentType.LIVE) to repo.settings.browseChoice(choiceKey) }
     }
     when (val s = state) {
         Load.Loading -> Box(Modifier.fillMaxSize().padding(start = 84.dp, top = 20.dp, end = 28.dp)) { LoadingState() }
         is Load.Err -> Box(Modifier.fillMaxSize().padding(start = 84.dp, top = 20.dp, end = 28.dp)) { ErrorState(s.message) }
-        is Load.Ok -> LiveBrowser(repo, playlist, s.value, actions, onSearch, onRecordings, focusTrigger = focusTrigger)
+        is Load.Ok -> LiveBrowser(repo, playlist, s.value.first, s.value.second, choiceKey, actions, onSearch, onRecordings, focusTrigger = focusTrigger)
     }
 }
 
@@ -105,14 +112,25 @@ private fun LiveBrowser(
     repo: Repository,
     playlist: Playlist,
     content: Content,
+    initialChoice: BrowseChoice,
+    choiceKey: String,
     actions: HomeActions,
     onSearch: () -> Unit,
     onRecordings: () -> Unit,
     focusTrigger: Int = 0,
 ) {
     val uiContext = LocalContext.current
-    var selected by rememberSaveable { mutableStateOf(ALL) }
-    var sort by rememberSaveable { mutableStateOf(LiveSort.DEFAULT) }
+    val loadedCategory = initialChoice.category.ifEmpty { ALL }
+    val loadedSort = LiveSort.entries.firstOrNull { it.name == initialChoice.sort } ?: LiveSort.DEFAULT
+    var selected by rememberSaveable(choiceKey) { mutableStateOf(loadedCategory) }
+    var sort by rememberSaveable(choiceKey) { mutableStateOf(loadedSort) }
+    var lastSaved by remember(choiceKey) { mutableStateOf(BrowseChoice(loadedCategory, loadedSort.name)) }
+    LaunchedEffect(choiceKey, selected, sort) {
+        if (selected != lastSaved.category || sort.name != lastSaved.sort) {
+            repo.settings.saveBrowseChoice(choiceKey, selected, sort.name)
+            lastSaved = BrowseChoice(selected, sort.name)
+        }
+    }
     val rules = actions.rules
     val history by repo.history.entries.collectAsState(initial = emptyList())
     // Hidden channels/categories and adult names are removed; locked categories stay listed (with a lock).
@@ -146,22 +164,21 @@ private fun LiveBrowser(
     }
     val categoryName = categories.firstOrNull { it.id == selected }?.name ?: uiContext.getString(R.string.ui_all)
     val listState = rememberLazyListState()
-    val catState = rememberLazyListState()
+    val catState = rememberLazyListState(initialFirstVisibleItemIndex = (categories.indexOfFirst { it.id == selected } - 3).coerceAtLeast(0))
     val itemFocus = remember { FocusRequester() }
-    val categoryFocus = remember { FocusRequester() }
-    val firstVisibleFocus = remember { FocusRequester() }
-    val watchFocus = remember { FocusRequester() }
+    val categoryFocus = remember { SafeFocusRequester() }
+    val firstVisibleFocus = remember { SafeFocusRequester() }
+    val watchFocus = remember { SafeFocusRequester() }
     val searchFocus = remember { FocusRequester() }
     val recordingsFocus = remember { FocusRequester() }
     val sortFocus = remember { FocusRequester() }
     val catVisible = { catState.layoutInfo.visibleItemsInfo.any { it.key == selected } }
     // Entering the list (Right from the categories, Left from the preview) lands on the last focused channel
     // when it is on screen, else the top visible one. (Modifier.focusRestorer crashed inside lazy lists.)
-    var lastFocusedIndex by remember { mutableIntStateOf(-1) }
-    val firstVisible by remember {
+    var lastFocusedIndex by remember(selected, sort) { mutableIntStateOf(-1) }
+    val firstVisible by remember(listState, items) {
         derivedStateOf {
-            val i = lastFocusedIndex
-            if (listState.layoutInfo.visibleItemsInfo.any { it.index == i }) i else listState.firstVisibleItemIndex
+            visibleEntryIndex(listState.layoutInfo.visibleItemsInfo.map { it.index }, items.size, lastFocusedIndex)
         }
     }
     // OK on a category moves focus into its channel list (like pressing Right), starting at the top.
@@ -173,7 +190,7 @@ private fun LiveBrowser(
         lastFocusedIndex = 0
         listState.scrollToItem(0)
         withFrameNanos { }
-        runCatching { firstVisibleFocus.requestFocus() }
+        firstVisibleFocus.requestFocus()
     }
     var focused by remember { mutableStateOf<Stream?>(null) }
     var epg by remember { mutableStateOf<List<EpgEntry>>(emptyList()) }
@@ -193,14 +210,15 @@ private fun LiveBrowser(
             runCatching { itemFocus.requestFocus() }
         } else if (restore.initial) {
             withFrameNanos { }
-            runCatching { categoryFocus.requestFocus() }
+            categoryFocus.requestFocus()
         }
         if (restore.itemId != null || restore.initial) restore.done()
     }
     LaunchedEffect(focusTrigger) {
         if (focusTrigger > 0) {
             withFrameNanos { }
-            runCatching { (if (catVisible()) categoryFocus else searchFocus).requestFocus() }
+            if (catVisible() && categoryFocus.isAttached) categoryFocus.requestFocus()
+            else runCatching { searchFocus.requestFocus() }
         }
     }
     LaunchedEffect(playlist.id) { epgSvc.requestFresh(playlist) }
@@ -264,7 +282,7 @@ private fun LiveBrowser(
                     Modifier.focusRequester(searchFocus).focusProperties {
                         left = FocusRequester.Cancel
                         right = recordingsFocus
-                        down = if (items.isNotEmpty()) firstVisibleFocus else FocusRequester.Default
+                        down = firstVisibleFocus.target
                     },
                 )
                 HeaderButton(
@@ -274,7 +292,7 @@ private fun LiveBrowser(
                     Modifier.focusRequester(recordingsFocus).focusProperties {
                         left = searchFocus
                         right = sortFocus
-                        down = if (items.isNotEmpty()) firstVisibleFocus else FocusRequester.Default
+                        down = firstVisibleFocus.target
                     },
                 )
                 DropdownButton(
@@ -285,7 +303,7 @@ private fun LiveBrowser(
                     Modifier.focusRequester(sortFocus).focusProperties {
                         left = recordingsFocus
                         right = FocusRequester.Cancel
-                        down = if (focused != null) watchFocus else if (items.isNotEmpty()) firstVisibleFocus else FocusRequester.Default
+                        down = if (watchFocus.isAttached) watchFocus.requester else firstVisibleFocus.target
                     },
                 )
             }
@@ -293,11 +311,11 @@ private fun LiveBrowser(
             Row(Modifier.weight(1f).fillMaxWidth()) {
                 LazyColumn(
                     Modifier.width(150.dp).fillMaxHeight().focusProperties {
-                        enter = { if (catVisible()) selectedFocus(categoryFocus) else FocusRequester.Default }
+                        enter = { if (catVisible()) categoryFocus.target else FocusRequester.Default }
                         exit = { dir ->
                             when (dir) {
                                 FocusDirection.Up -> searchFocus
-                                FocusDirection.Right -> if (items.isNotEmpty()) firstVisibleFocus else FocusRequester.Default
+                                FocusDirection.Right -> firstVisibleFocus.target
                                 else -> FocusRequester.Default
                             }
                         }
@@ -327,7 +345,7 @@ private fun LiveBrowser(
                                 }
                             },
                             onLongClick = if (special) null else ({ actions.categoryLongPress(ContentType.LIVE, c.id, c.name) }),
-                            modifier = if (c.id == selected) Modifier.focusRequester(categoryFocus) else Modifier,
+                            modifier = if (c.id == selected) categoryFocus.attach() else Modifier,
                         )
                     }
                 }
@@ -345,11 +363,11 @@ private fun LiveBrowser(
                             // Re-entering the list returns to the last focused channel, else the top visible one
                             // (not whichever row happens to be level with the category).
                             Modifier.fillMaxSize().focusProperties {
-                                enter = { firstVisibleFocus }
+                                enter = { firstVisibleFocus.target }
                                 exit = { dir ->
                                     when (dir) {
-                                        FocusDirection.Left -> if (catVisible()) categoryFocus else FocusRequester.Default
-                                        FocusDirection.Right -> if (focused != null) watchFocus else FocusRequester.Default
+                                        FocusDirection.Left -> if (catVisible()) categoryFocus.target else FocusRequester.Default
+                                        FocusDirection.Right -> watchFocus.target
                                         FocusDirection.Up -> searchFocus
                                         else -> FocusRequester.Default
                                     }
@@ -382,7 +400,7 @@ private fun LiveBrowser(
                                     modifier = Modifier
                                         .focusRequester(rowFocus)
                                         .then(if (i == restoreIndex) Modifier.focusRequester(itemFocus) else Modifier)
-                                        .then(if (i == firstVisible) Modifier.focusRequester(firstVisibleFocus) else Modifier),
+                                        .then(if (i == firstVisible) firstVisibleFocus.attach() else Modifier),
                                 )
                             }
                         }
@@ -398,7 +416,7 @@ private fun LiveBrowser(
                     archive = focused?.let { Catchup.available(playlist, it) } == true,
                     watchFocus = watchFocus,
                     sortFocus = sortFocus,
-                    onLeftTarget = { if (items.isNotEmpty()) firstVisibleFocus else if (catVisible()) categoryFocus else FocusRequester.Default },
+                    onLeftTarget = { if (firstVisibleFocus.isAttached) firstVisibleFocus.requester else if (catVisible()) categoryFocus.target else FocusRequester.Default },
                     onFullscreen = { focused?.let { f -> items.indexOfFirst { it.id == f.id }.takeIf { it >= 0 }?.let(::openFullscreen) } },
                     onFavorite = { focused?.let(actions.toggleFavorite) },
                     onMatch = { showMatch = true },
@@ -416,8 +434,6 @@ private fun LiveBrowser(
     }
 }
 
-private fun selectedFocus(r: FocusRequester) = r
-
 private fun liveSortLabel(context: android.content.Context, sort: LiveSort): String = context.getString(when (sort) {
     LiveSort.DEFAULT -> R.string.ui_sort_default
     LiveSort.NUMBER -> R.string.ui_sort_number
@@ -434,7 +450,7 @@ private fun LiveNowInfo(
     preview: LivePreview?,
     favorite: Boolean,
     archive: Boolean,
-    watchFocus: FocusRequester,
+    watchFocus: SafeFocusRequester,
     sortFocus: FocusRequester,
     onLeftTarget: () -> FocusRequester,
     onFullscreen: () -> Unit,
@@ -505,7 +521,7 @@ private fun LiveNowInfo(
             Column(
                 Modifier
                     .focusProperties {
-                        enter = { watchFocus }
+                        enter = { watchFocus.target }
                         exit = { dir ->
                             when (dir) {
                                 FocusDirection.Left -> onLeftTarget()
@@ -522,7 +538,7 @@ private fun LiveNowInfo(
                         uiContext.getString(R.string.ui_watch),
                         Icons.Rounded.PlayArrow,
                         primary = true,
-                        modifier = Modifier.focusRequester(watchFocus),
+                        modifier = watchFocus.attach(),
                         onClick = onFullscreen,
                     )
                     ActionButton(

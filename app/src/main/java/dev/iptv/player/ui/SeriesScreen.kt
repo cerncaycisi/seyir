@@ -192,13 +192,13 @@ private fun SeriesDetail(repo: Repository, playlist: Playlist, seriesId: String,
                     )
                     .focusGroup(),
             ) {
-                Text(
-                    info.name,
-                    style = MaterialTheme.typography.headlineLarge,
-                    fontWeight = FontWeight.ExtraBold,
-                    color = Palette.Text,
+                TitleLogoOrText(
+                    title = info.name,
+                    logoUrl = info.logo,
+                    textStyle = MaterialTheme.typography.headlineLarge,
+                    maxLogoHeight = 76.dp,
+                    maxLogoWidth = 270.dp,
                     maxLines = 3,
-                    overflow = TextOverflow.Ellipsis,
                 )
                 MetaLine(info.rating, listOfNotNull(info.year, uiContext.getString(R.string.ui_season_count, seasons.size)), Modifier.padding(top = 10.dp))
                 Text(uiContext.getString(R.string.ui_episode_count, info.episodes.size), Modifier.padding(top = 4.dp),

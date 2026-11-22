@@ -40,10 +40,15 @@ import androidx.tv.material3.ClickableSurfaceDefaults
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Surface
 import androidx.tv.material3.Text
+import dev.iptv.player.data.BrowseChoice
+import dev.iptv.player.data.ProfileStore
 import dev.iptv.player.data.VodSort
+import dev.iptv.player.data.browseChoice
+import dev.iptv.player.data.browseKey
 import dev.iptv.player.data.filterByGenre
 import dev.iptv.player.data.genresOf
 import dev.iptv.player.data.latestOf
+import dev.iptv.player.data.saveBrowseChoice
 import dev.iptv.player.data.sortStreams
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
@@ -69,6 +74,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.rounded.Mic
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -98,6 +104,38 @@ import kotlinx.coroutines.delay
 import dev.iptv.player.data.withCatalogMetadata
 import dev.iptv.player.data.Setting
 
+/** Returns an index currently laid out within [visibleIndices] and `0 until itemCount`, or `-1` if none exists. */
+internal fun visibleEntryIndex(
+    visibleIndices: List<Int>,
+    itemCount: Int,
+    preferred: Int,
+): Int = when {
+    itemCount <= 0 || visibleIndices.isEmpty() -> -1
+    preferred in 0 until itemCount && preferred in visibleIndices -> preferred
+    else -> visibleIndices.firstOrNull { it in 0 until itemCount } ?: -1
+}
+
+/** Tracks live composition attachment so FocusProperties.enter/exit never return an unattached FocusRequester. */
+internal class SafeFocusRequester {
+    val requester = FocusRequester()
+    private var attachedCount by mutableIntStateOf(0)
+    val isAttached: Boolean get() = attachedCount > 0
+    val target: FocusRequester get() = if (attachedCount > 0) requester else FocusRequester.Default
+
+    @Composable
+    fun attach(): Modifier {
+        DisposableEffect(this) {
+            attachedCount++
+            onDispose { attachedCount = (attachedCount - 1).coerceAtLeast(0) }
+        }
+        return Modifier.focusRequester(requester)
+    }
+
+    fun requestFocus() {
+        if (attachedCount > 0) runCatching { requester.requestFocus() }
+    }
+}
+
 /** [direct] rows resume on click (continue watching) instead of opening the detail page. */
 data class MediaRow(val title: String, val items: List<Stream>, val direct: Boolean = false, val categoryName: String? = null)
 
@@ -120,18 +158,20 @@ private suspend fun allContent(repo: Repository, playlist: Playlist): Map<Conten
 @Composable
 fun VodSection(repo: Repository, playlist: Playlist, type: ContentType, actions: HomeActions, onSearch: () -> Unit = {}, focusTrigger: Int = 0) {
     val uiContext = LocalContext.current
+    val profileId by ProfileStore.activeIdFlow.collectAsState()
+    val choiceKey = remember(profileId, playlist.id, type) { browseKey(profileId, playlist.id, type) }
     // Lint misses the direct ProduceStateScope.value assignment in this producer.
     @SuppressLint("ProduceStateDoesNotAssignValue")
-    val state by produceState<Load<Content>>(Load.Loading, playlist.id, type) {
-        value = loadCatching { repo.content(playlist, type) }
+    val state by produceState<Load<Pair<Content, BrowseChoice>>>(Load.Loading, playlist.id, type, choiceKey) {
+        value = loadCatching { repo.content(playlist, type) to repo.settings.browseChoice(choiceKey) }
     }
     when (val s = state) {
         Load.Loading -> LoadingState()
         is Load.Err -> ErrorState(s.message)
-        is Load.Ok -> if (s.value.items.isEmpty()) {
+        is Load.Ok -> if (s.value.first.items.isEmpty()) {
             EmptyState(Icons.Rounded.Movie, if (type == ContentType.MOVIE) uiContext.getString(R.string.ui_no_movie) else uiContext.getString(R.string.ui_no_series))
         } else {
-            VodBrowser(repo, playlist, type, s.value, actions, onSearch, focusTrigger = focusTrigger)
+            VodBrowser(repo, playlist, type, s.value.first, s.value.second, choiceKey, actions, onSearch, focusTrigger = focusTrigger)
         }
     }
 }
@@ -160,6 +200,8 @@ private fun VodBrowser(
     playlist: Playlist,
     type: ContentType,
     content: Content,
+    initialChoice: BrowseChoice,
+    choiceKey: String,
     actions: HomeActions,
     onSearch: () -> Unit,
     categoryWidth: Dp = 200.dp,
@@ -169,9 +211,18 @@ private fun VodBrowser(
     val uiContext = LocalContext.current
     val scope = rememberCoroutineScope()
     val rules = actions.rules
-    var sort by rememberSaveable { mutableStateOf(VodSort.DEFAULT) }
+    val loadedSort = VodSort.entries.firstOrNull { it.name == initialChoice.sort } ?: VodSort.DEFAULT
+    val loadedCategory = initialChoice.category.ifEmpty { SpecialCategory.ALL.name }
+    var sort by rememberSaveable(choiceKey) { mutableStateOf(loadedSort) }
     var genre by rememberSaveable { mutableStateOf<String?>(null) }
-    var selectedKey by rememberSaveable { mutableStateOf(SpecialCategory.ALL.name) }
+    var selectedKey by rememberSaveable(choiceKey) { mutableStateOf(loadedCategory) }
+    var lastSaved by remember(choiceKey) { mutableStateOf(BrowseChoice(loadedCategory, loadedSort.name)) }
+    LaunchedEffect(choiceKey, selectedKey, sort) {
+        if (selectedKey != lastSaved.category || sort.name != lastSaved.sort) {
+            repo.settings.saveBrowseChoice(choiceKey, selectedKey, sort.name)
+            lastSaved = BrowseChoice(selectedKey, sort.name)
+        }
+    }
     var confirmClear by remember { mutableStateOf(false) }
     val history by repo.history.entries.collectAsState(initial = null)
     val metadataEnabled by repo.settings.flow(Setting.TmdbEnabled).collectAsState(initial = true)
@@ -200,11 +251,11 @@ private fun VodBrowser(
 
     val gridState = rememberLazyGridState()
     val catState = rememberLazyListState(initialFirstVisibleItemIndex = (categories.indexOfFirst { it.key == selected.key } - 3).coerceAtLeast(0))
-    val selectedReq = remember { FocusRequester() }
+    val selectedReq = remember { SafeFocusRequester() }
     val firstItemReq = remember { FocusRequester() }
-    val gridEntry = remember { FocusRequester() }
+    val gridEntry = remember { SafeFocusRequester() }
     val searchFocus = remember { FocusRequester() }
-    val clearFocus = remember { FocusRequester() }
+    val clearFocus = remember { SafeFocusRequester() }
     val sortFocus = remember { FocusRequester() }
     val genreFocus = remember { FocusRequester() }
     val showClear = selected.special == SpecialCategory.RECENT && raw.isNotEmpty()
@@ -222,14 +273,15 @@ private fun VodBrowser(
             runCatching { firstItemReq.requestFocus() }
         } else if (restore.initial) {
             withFrameNanos { }
-            runCatching { selectedReq.requestFocus() }
+            selectedReq.requestFocus()
         }
         if (restore.itemId != null || restore.initial) restore.done()
     }
     LaunchedEffect(focusTrigger) {
         if (focusTrigger > 0) {
             withFrameNanos { }
-            runCatching { (if (catVisible()) selectedReq else searchFocus).requestFocus() }
+            if (catVisible() && selectedReq.isAttached) selectedReq.requestFocus()
+            else runCatching { searchFocus.requestFocus() }
         }
     }
     var handledJump by remember { mutableIntStateOf(0) }
@@ -254,19 +306,19 @@ private fun VodBrowser(
                 onSearch,
                 Modifier.focusRequester(searchFocus).focusProperties {
                     left = FocusRequester.Cancel
-                    right = if (showClear) clearFocus else sortFocus
-                    down = if (catVisible()) selectedReq else FocusRequester.Default
+                    right = if (showClear && clearFocus.isAttached) clearFocus.requester else sortFocus
+                    down = if (catVisible()) selectedReq.target else FocusRequester.Default
                 },
             )
             Spacer(Modifier.height(8.dp))
             LazyColumn(
                 Modifier.focusProperties {
                     // Entering the list from the grid lands on the selected category, not the nearest row.
-                    enter = { if (catVisible()) selectedReq else FocusRequester.Default }
+                    enter = { if (catVisible()) selectedReq.target else FocusRequester.Default }
                     exit = { dir ->
                         when (dir) {
                             FocusDirection.Up -> searchFocus
-                            FocusDirection.Right -> if (shown.isNotEmpty()) gridEntry else sortFocus
+                            FocusDirection.Right -> if (shown.isNotEmpty() && gridEntry.isAttached) gridEntry.requester else sortFocus
                             else -> FocusRequester.Default
                         }
                     }
@@ -287,7 +339,7 @@ private fun VodBrowser(
                             if (pid != null && pid != OTHER_CATEGORY && rules.isCategoryLocked(playlist, type, pid)) actions.requireUnlock(select) else select()
                         },
                         onLongClick = if (pid != null && pid != OTHER_CATEGORY) ({ actions.categoryLongPress(type, pid, c.name) }) else null,
-                        modifier = if (c.key == selected.key) Modifier.focusRequester(selectedReq) else Modifier,
+                        modifier = if (c.key == selected.key) selectedReq.attach() else Modifier,
                     )
                 }
             }
@@ -304,10 +356,10 @@ private fun VodBrowser(
                         uiContext.getString(R.string.ui_clear_history),
                         Icons.Rounded.DeleteSweep,
                         onClick = { confirmClear = true },
-                        modifier = Modifier.focusRequester(clearFocus).focusProperties {
+                        modifier = clearFocus.attach().focusProperties {
                             left = searchFocus
                             right = sortFocus
-                            down = if (shown.isNotEmpty()) gridEntry else FocusRequester.Cancel
+                            down = if (shown.isNotEmpty() && gridEntry.isAttached) gridEntry.requester else FocusRequester.Cancel
                         },
                     )
                 }
@@ -317,9 +369,9 @@ private fun VodBrowser(
                     sort,
                     { sort = it },
                     Modifier.focusRequester(sortFocus).focusProperties {
-                        left = if (showClear) clearFocus else searchFocus
+                        left = if (showClear && clearFocus.isAttached) clearFocus.requester else searchFocus
                         right = genreFocus
-                        down = if (shown.isNotEmpty()) gridEntry else FocusRequester.Cancel
+                        down = if (shown.isNotEmpty() && gridEntry.isAttached) gridEntry.requester else FocusRequester.Cancel
                     },
                 )
                 run {
@@ -332,7 +384,7 @@ private fun VodBrowser(
                         Modifier.focusRequester(genreFocus).focusProperties {
                             left = sortFocus
                             right = FocusRequester.Cancel
-                            down = if (shown.isNotEmpty()) gridEntry else FocusRequester.Cancel
+                            down = if (shown.isNotEmpty() && gridEntry.isAttached) gridEntry.requester else FocusRequester.Cancel
                         },
                     )
                 }
@@ -359,7 +411,7 @@ private fun VodBrowser(
                     focusIndex = if (gridFocusIndex >= 0) gridFocusIndex else restoreIndex,
                     focusRequester = firstItemReq,
                     entryRequester = gridEntry,
-                    onLeftTarget = { if (catVisible()) selectedReq else FocusRequester.Default },
+                    onLeftTarget = { if (catVisible()) selectedReq.target else FocusRequester.Default },
                     onUpTarget = sortFocus,
                     categoryName = selPid?.let { selected.name },
                     onFocused = { focused = it },
@@ -424,23 +476,22 @@ internal fun PosterGrid(
     categoryName: String?,
     onFocused: (Stream) -> Unit,
     modifier: Modifier = Modifier,
-    entryRequester: FocusRequester = remember { FocusRequester() },
+    entryRequester: SafeFocusRequester = remember { SafeFocusRequester() },
     onLeftTarget: () -> FocusRequester = { FocusRequester.Default },
     onUpTarget: FocusRequester = FocusRequester.Default,
 ) {
     // Coming back from the category list returns to the last focused poster if it is on screen, else the
     // top-left visible one. (Modifier.focusRestorer crashed inside lazy layouts.)
-    var lastFocused by remember { mutableIntStateOf(-1) }
-    val entryIndex by remember(state) {
+    var lastFocused by remember(items.firstOrNull()?.id, items.size) { mutableIntStateOf(-1) }
+    val entryIndex by remember(state, items) {
         derivedStateOf {
-            val i = lastFocused
-            if (state.layoutInfo.visibleItemsInfo.any { it.index == i }) i else state.firstVisibleItemIndex
+            visibleEntryIndex(state.layoutInfo.visibleItemsInfo.map { it.index }, items.size, lastFocused)
         }
     }
     LazyVerticalGrid(
         GridCells.Fixed(columns),
         modifier.fillMaxWidth().focusProperties {
-            enter = { entryRequester }
+            enter = { entryRequester.target }
             exit = { dir ->
                 when (dir) {
                     FocusDirection.Left -> onLeftTarget()
@@ -464,7 +515,7 @@ internal fun PosterGrid(
                 onFocused = { lastFocused = i; onFocused(s) },
                 modifier = Modifier.fillMaxWidth()
                     .then(if (i == focusIndex) Modifier.focusRequester(focusRequester) else Modifier)
-                    .then(if (i == entryIndex) Modifier.focusRequester(entryRequester) else Modifier),
+                    .then(if (i == entryIndex) entryRequester.attach() else Modifier),
                 progress = actions.progress[key],
                 badge = actions.badges[key],
             )
@@ -525,12 +576,11 @@ private fun MediaRowView(
 ) {
     val rowState = rememberLazyListState()
     val requester = remember { FocusRequester() }
-    val entryReq = remember { FocusRequester() }
-    var lastFocused by remember { mutableIntStateOf(-1) }
-    val entryIndex by remember(rowState) {
+    val entryReq = remember { SafeFocusRequester() }
+    var lastFocused by remember(row.items.firstOrNull()?.id, row.items.size) { mutableIntStateOf(-1) }
+    val entryIndex by remember(rowState, row.items) {
         derivedStateOf {
-            val i = lastFocused
-            if (rowState.layoutInfo.visibleItemsInfo.any { it.index == i }) i else rowState.firstVisibleItemIndex
+            visibleEntryIndex(rowState.layoutInfo.visibleItemsInfo.map { it.index }, row.items.size, lastFocused)
         }
     }
     var targetFocused by remember { mutableStateOf(false) }
@@ -550,14 +600,14 @@ private fun MediaRowView(
     LaunchedEffect(focusTrigger) {
         if (focusTrigger > 0 && row.items.isNotEmpty()) {
             withFrameNanos { }
-            runCatching { entryReq.requestFocus() }
+            entryReq.requestFocus()
         }
     }
     Column {
         SectionTitle(row.title, "${row.items.size}")
         LazyRow(
             modifier = Modifier.focusProperties {
-                enter = { if (row.items.isNotEmpty()) entryReq else FocusRequester.Default }
+                enter = { entryReq.target }
             },
             state = rowState,
             horizontalArrangement = Arrangement.spacedBy(14.dp),
@@ -567,7 +617,7 @@ private fun MediaRowView(
             itemsIndexed(row.items, contentType = { _, s -> if (s.type == ContentType.LIVE) 0 else if (row.direct) 1 else 2 }) { i, s ->
                 val mod = Modifier
                     .then(if (i == target) Modifier.focusRequester(requester) else Modifier)
-                    .then(if (i == entryIndex) Modifier.focusRequester(entryReq) else Modifier)
+                    .then(if (i == entryIndex) entryReq.attach() else Modifier)
                 val open = { if (row.direct) actions.resume(s) else actions.open(row.items, i) }
                 val toggle = { actions.longPress(s, row.categoryName) }
                 val onFocusItem = {

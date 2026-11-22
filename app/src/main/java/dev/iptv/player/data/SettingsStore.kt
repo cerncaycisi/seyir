@@ -66,6 +66,8 @@ sealed class Setting<T>(val key: Preferences.Key<T>, val default: T) {
     data object HiddenLabels : Setting<String>(stringPreferencesKey("hidden_labels"), "{}")
     // EPG channel matching: entries "playlistId|streamId<TAB>xmltvChannelId" (epg package)
     data object EpgChannelOverrides : Setting<Set<String>>(stringSetPreferencesKey("epg_channel_overrides"), emptySet())
+    /** JSON map browseKey -> BrowseChoice (remembered category & sort per section/playlist/profile). */
+    data object BrowsePrefs : Setting<String>(stringPreferencesKey("browse_prefs_json"), "{}")
 }
 
 class SettingsStore(context: Context) {

@@ -70,6 +70,7 @@ data class SeriesInfo(
     val director: String? = null,
     val plotLanguage: String? = null,
     val tmdbId: Long? = null,
+    val logo: String? = null,
 )
 
 data class VodInfo(
@@ -89,6 +90,7 @@ data class VodInfo(
     val fromTmdb: Boolean = false,
     val plotLanguage: String? = null,
     val tmdbId: Long? = null,
+    val logo: String? = null,
 )
 
 /** Xtream `user_info` subset. [expiresAt] is epoch seconds, null for unlimited accounts. */

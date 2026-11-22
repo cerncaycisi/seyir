@@ -146,13 +146,13 @@ private fun MovieDetail(
         Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0.4f to Color.Transparent, 0.8f to Palette.Background)))
 
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 48.dp, vertical = 28.dp)) {
-            Text(
-                stream.name,
-                style = MaterialTheme.typography.displaySmall,
-                fontWeight = FontWeight.ExtraBold,
-                color = Palette.Text,
+            TitleLogoOrText(
+                title = stream.name,
+                logoUrl = info?.logo,
+                textStyle = MaterialTheme.typography.displaySmall,
+                maxLogoHeight = 84.dp,
+                maxLogoWidth = 440.dp,
                 maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.widthIn(max = 640.dp),
             )
             MetaLine(
