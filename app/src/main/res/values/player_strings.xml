@@ -102,4 +102,14 @@
     <string name="play_two_channels">2 kanal</string>
     <string name="play_unlock">Kilidi kaldır</string>
     <string name="play_vod_controls">◀ ▶  10 sn    ·    ▲  ayarlar    ·    OK  oynat / duraklat</string>
+    <string name="vod_scrub_hint">◀ ▶ sar · OK git · Geri vazgeç</string>
+    <string name="vod_ends_at">Bitiş %1$s</string>
+    <string name="vod_next_episode">Sonraki bölüm</string>
+    <string name="vod_audio_subtitles">Ses ve altyazı</string>
+    <string name="vod_sheet_audio">Ses</string>
+    <string name="vod_sheet_subtitles">Altyazı</string>
+    <string name="vod_sheet_look">Görünüm</string>
+    <string name="vod_sheet_size">Boyut</string>
+    <string name="vod_watching">İzliyorsun</string>
+    <string name="vod_paused_hint">OK devam · ▲ kontroller</string>
 </resources>

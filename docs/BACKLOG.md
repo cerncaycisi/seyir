@@ -123,7 +123,7 @@ Kullanıcı kararları:
 - Filmde ve canlı yayında önceki/sonraki düğmesi olmasın; −10/+10 düğmesi olmasın.
 
 Logo ayrıca çalışılacak; şu an sade bir göz-oynat işareti.
-- [ ] Oynatıcı v2'yi uygula
+- [x] Oynatıcı v2 (film/dizi) uygulandı — 2026-11-22, TV'de doğrulandı. Eksik: "Bölümler" paneli, sararken küçük resim önizleme (trick-play görselleri yok), Inter Tight yazı tipi.
 - [ ] Ana Sayfa v2'yi uygula
 - [ ] Detay v2'yi uygula
 - [ ] Canlı TV v2'yi uygula

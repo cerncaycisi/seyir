@@ -102,7 +102,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-private enum class Panel { None, Settings, Channels }
+private enum class Panel { None, Settings, Channels, Tracks }
 
 private const val MAX_RECONNECTS = 10
 private const val NEXT_EPISODE_WINDOW_MS = 10_000L
@@ -198,9 +198,11 @@ private fun PlayerContent(repo: Repository, cfg: PlayerConfig, onBack: () -> Uni
     var epg by remember { mutableStateOf<List<EpgEntry>>(emptyList()) }
     var position by remember { mutableLongStateOf(0L) }
     var duration by remember { mutableLongStateOf(0L) }
+    var buffered by remember { mutableLongStateOf(0L) }
     var showInfo by remember { mutableStateOf(false) }
     var titleInfo by remember(current.id) { mutableStateOf<String?>(null) }
     var pauseCast by remember(current.id) { mutableStateOf<String?>(null) }
+    var vodInfo by remember(current.id) { mutableStateOf<dev.iptv.player.data.VodInfo?>(null) }
     var titleInfoLoading by remember(current.id) { mutableStateOf(false) }
     LaunchedEffect(current.id, playRequested, showInfo) {
         if (live || (playRequested && !showInfo) || titleInfo != null) return@LaunchedEffect
@@ -210,11 +212,13 @@ private fun PlayerContent(repo: Repository, cfg: PlayerConfig, onBack: () -> Uni
                 if (current.type == ContentType.SERIES && current.seriesId != null) {
                     val info = repo.seriesDetails(playlist, current.seriesId)
                     pauseCast = info.cast
+                    vodInfo = dev.iptv.player.data.VodInfo(plot = info.plot, backdrop = info.backdrop, genre = info.genre, duration = null, year = info.year, rating = info.rating, cast = info.cast, director = info.director)
                     listOfNotNull(if (info.plotLanguage == "en") context.getString(R.string.ux_plot_english) else null, info.plot, info.genre, info.cast?.let { context.getString(R.string.ui_cast) + ": " + it },
                         info.director?.let { context.getString(R.string.ui_director) + ": " + it }).joinToString("\n\n")
                 } else {
                     val info = repo.movieDetails(playlist, current)
                     pauseCast = info.cast
+                    vodInfo = info
                     listOfNotNull(if (info.plotLanguage == "en") context.getString(R.string.ux_plot_english) else null, info.plot, info.genre, info.cast?.let { context.getString(R.string.ui_cast) + ": " + it },
                         info.director?.let { context.getString(R.string.ui_director) + ": " + it }).joinToString("\n\n")
                 }
@@ -512,10 +516,21 @@ private fun PlayerContent(repo: Repository, cfg: PlayerConfig, onBack: () -> Uni
         overlay = false
     }
 
+    // VOD: after a few seconds of pause the controls give way to the title details (design v2).
+    var pausedIdle by remember { mutableStateOf(false) }
+    LaunchedEffect(overlayTick, playRequested, panel) {
+        pausedIdle = false
+        if (live || playRequested || panel != Panel.None) return@LaunchedEffect
+        delay(4_000)
+        controlsActive = false
+        pausedIdle = true
+    }
+
     LaunchedEffect(overlay) {
         while (overlay) {
             position = player.currentPosition
             duration = player.duration.coerceAtLeast(0)
+            buffered = player.bufferedPosition
             if (live) {
                 val shift = shiftStartSec
                 behindSec = if (shift != null) {
@@ -618,7 +633,7 @@ private fun PlayerContent(repo: Repository, cfg: PlayerConfig, onBack: () -> Uni
             .focusable()
             .onPreviewKeyEvent { event ->
                 // Handle both halves of Back before TV focus groups/native views can consume it.
-                if (panel == Panel.Settings && event.key == Key.Back) {
+                if ((panel == Panel.Settings || panel == Panel.Tracks) && event.key == Key.Back) {
                     if (event.type == KeyEventType.KeyUp) { panel = Panel.None; controlsActive = true; showOverlay() }
                     return@onPreviewKeyEvent true
                 }
@@ -630,7 +645,8 @@ private fun PlayerContent(repo: Repository, cfg: PlayerConfig, onBack: () -> Uni
                     return@onPreviewKeyEvent false
                 }
                 if (code == KeyEvent.KEYCODE_MENU || code == KeyEvent.KEYCODE_SETTINGS || code == KeyEvent.KEYCODE_CAPTIONS) {
-                    openSettings(if (code == KeyEvent.KEYCODE_CAPTIONS) PlayerPage.Subtitle else PlayerPage.Main)
+                    if (!live && code == KeyEvent.KEYCODE_CAPTIONS) panel = Panel.Tracks
+                    else openSettings(if (code == KeyEvent.KEYCODE_CAPTIONS) PlayerPage.Subtitle else PlayerPage.Main)
                     return@onPreviewKeyEvent true
                 }
                 if (controlsActive && event.key in listOf(Key.DirectionLeft, Key.DirectionRight, Key.DirectionUp,
@@ -674,7 +690,11 @@ private fun PlayerContent(repo: Repository, cfg: PlayerConfig, onBack: () -> Uni
                     }
                 } else {
                     when (event.key) {
-                        Key.DirectionCenter, Key.Enter, Key.NumPadEnter -> { controlsActive = true; showOverlay(); true }
+                        Key.DirectionCenter, Key.Enter, Key.NumPadEnter -> {
+                            // OK on the paused info screen resumes, like other streaming apps.
+                            if (pausedIdle) player.play() else controlsActive = true
+                            showOverlay(); true
+                        }
                         Key.MediaPlayPause, Key.Spacebar -> {
                             if (player.playWhenReady) player.pause() else player.play()
                             showOverlay(); true
@@ -703,6 +723,15 @@ private fun PlayerContent(repo: Repository, cfg: PlayerConfig, onBack: () -> Uni
                     else -> androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FILL
                 }
                 v.subtitleView?.applySubtitleStyle(SubtitleStyle.fromKey(subtitleStyleKey), subtitleScale)
+                // Keep subtitles above the VOD controls / track sheet instead of under them.
+                v.subtitleView?.setBottomPaddingFraction(
+                    when {
+                        live -> androidx.media3.ui.SubtitleView.DEFAULT_BOTTOM_PADDING_FRACTION
+                        panel == Panel.Tracks -> 0.5f
+                        overlay && !pausedIdle && panel == Panel.None -> 0.26f
+                        else -> androidx.media3.ui.SubtitleView.DEFAULT_BOTTOM_PADDING_FRACTION
+                    },
+                )
             },
             modifier = (aspectMode.ratio?.let { Modifier.align(Alignment.Center).aspectRatio(it) } ?: Modifier.fillMaxSize())
                 .pointerClick({ controlsActive = true; showOverlay() }),
@@ -762,7 +791,41 @@ private fun PlayerContent(repo: Repository, cfg: PlayerConfig, onBack: () -> Uni
             )
         }
 
-        if (overlay && panel == Panel.None && !nextVisible && !inPip) {
+        if (!live && overlay && !pausedIdle && panel == Panel.None && !nextVisible && !inPip) {
+            VodControls(
+                name = current.name,
+                playing = playRequested,
+                position = position,
+                buffered = buffered,
+                duration = duration,
+                speed = speed,
+                active = controlsActive,
+                onToggle = { if (player.playWhenReady) player.pause() else player.play(); showOverlay() },
+                onSeek = { player.seekTo(it); showOverlay() },
+                onInteraction = { controlsActive = true; showOverlay() },
+                onNext = if (current.type == ContentType.SERIES && index < items.lastIndex) ({ saveProgress(); nextSeconds = 0; index++ }) else null,
+                onTracks = { panel = Panel.Tracks },
+            )
+            Text(
+                formatClock(System.currentTimeMillis() / 1000),
+                modifier = Modifier.align(Alignment.TopEnd).padding(horizontal = 40.dp, vertical = 26.dp),
+                style = MaterialTheme.typography.titleLarge,
+                color = Color.White,
+            )
+        }
+        if (!live && pausedIdle && panel == Panel.None && !inPip) {
+            PausedInfo(
+                name = current.name,
+                meta = listOfNotNull(vodInfo?.rating?.let { "★ $it" }, vodInfo?.year, vodInfo?.genre).joinToString(" · "),
+                plot = vodInfo?.plot,
+                cast = vodInfo?.cast ?: pauseCast,
+                director = vodInfo?.director,
+                position = position,
+                duration = duration,
+            )
+        }
+
+        if (live && overlay && panel == Panel.None && !nextVisible && !inPip) {
             Text(
                 formatClock(System.currentTimeMillis() / 1000),
                 modifier = Modifier.align(Alignment.TopEnd).padding(horizontal = 40.dp, vertical = 24.dp),
@@ -882,6 +945,25 @@ private fun PlayerContent(repo: Repository, cfg: PlayerConfig, onBack: () -> Uni
                 onPip = if (PipState.supported(context)) ({ panel = Panel.None; activity?.let { PipState.enter(it) } }) else null,
                 onClose = { panel = Panel.None },
                 modifier = Modifier.align(Alignment.CenterEnd),
+            )
+            Panel.Tracks -> AudioSubtitleSheet(
+                audio = trackOptions(context, tracks, trackParams, C.TRACK_TYPE_AUDIO, null),
+                onAudio = { audioAuto = false; player.selectTrack(C.TRACK_TYPE_AUDIO, it) },
+                subtitles = trackOptions(context, tracks, trackParams, C.TRACK_TYPE_TEXT, context.getString(R.string.play_off)),
+                onSubtitle = { subtitleAuto = false; player.selectTrack(C.TRACK_TYPE_TEXT, it) },
+                style = SubtitleStyle.fromKey(subtitleStyleKey),
+                onStyle = { style ->
+                    subtitleStyleKey = style.key
+                    repo.scope.launch { repo.settings.set(Setting.SubtitleStyle, style.key) }
+                },
+                scale = subtitleScale,
+                onScale = { s ->
+                    subtitleScale = s
+                    repo.scope.launch { repo.settings.set(Setting.SubtitleScale, s) }
+                },
+                onOnlineSearch = if (subtitleSearch != null) ({ openSettings(PlayerPage.Online) }) else null,
+                onClose = { panel = Panel.None; controlsActive = true; showOverlay() },
+                modifier = Modifier.align(Alignment.BottomCenter),
             )
             Panel.None -> Unit
         }
