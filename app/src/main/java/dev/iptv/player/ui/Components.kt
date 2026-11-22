@@ -60,6 +60,7 @@ import androidx.tv.material3.Card
 import androidx.tv.material3.CardDefaults
 import androidx.tv.material3.ClickableSurfaceDefaults
 import androidx.tv.material3.Icon
+import androidx.tv.material3.LocalContentColor
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Surface
 import androidx.tv.material3.Text
@@ -143,8 +144,13 @@ fun Pill(text: String, modifier: Modifier = Modifier, color: Color = Palette.Sur
 }
 
 @Composable
-fun ProgressBar(fraction: Float, modifier: Modifier = Modifier, color: Color = Color(0xFFF2B544)) {
-    Box(modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)).background(Color(0x33FFFFFF))) {
+fun ProgressBar(
+    fraction: Float,
+    modifier: Modifier = Modifier,
+    color: Color = Color(0xFFF2B544),
+    trackColor: Color = Color(0x33FFFFFF),
+) {
+    Box(modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)).background(trackColor)) {
         Box(Modifier.fillMaxWidth(fraction.coerceIn(0f, 1f)).fillMaxHeight().clip(RoundedCornerShape(3.dp)).background(color))
     }
 }
@@ -285,53 +291,84 @@ fun ChannelRow(
     progress: Float? = null,
 ) {
     val uiContext = LocalContext.current
+    var hasFocus by remember { mutableStateOf(false) }
+    val rowShape = RoundedCornerShape(12.dp)
     Surface(
         onClick = onClick,
         onLongClick = onLongClick,
-        modifier = modifier.fillMaxWidth().height(56.dp).pointerClick(onClick, onLongClick).onFocusChanged { if (it.isFocused || it.hasFocus) onFocused() },
-        shape = ClickableSurfaceDefaults.shape(cardShape),
+        modifier = modifier.fillMaxWidth().height(60.dp).pointerClick(onClick, onLongClick).onFocusChanged {
+            val focused = it.isFocused || it.hasFocus
+            hasFocus = focused
+            if (focused) onFocused()
+        },
+        shape = ClickableSurfaceDefaults.shape(rowShape),
         colors = ClickableSurfaceDefaults.colors(
             containerColor = Color.Transparent,
             contentColor = Palette.Text,
-            focusedContainerColor = Palette.SurfaceHigh,
-            focusedContentColor = Color.White,
+            focusedContainerColor = Color(0xFFF5F5F7),
+            focusedContentColor = Color(0xFF07080A),
         ),
-        border = ClickableSurfaceDefaults.border(focusedBorder = Border(BorderStroke(2.dp, Color(0xFFF5F5F7)), shape = cardShape)),
-        scale = ClickableSurfaceDefaults.scale(focusedScale = 1.02f),
+        scale = ClickableSurfaceDefaults.scale(focusedScale = 1.0f),
     ) {
         Row(Modifier.fillMaxSize().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(
                 "$number",
                 modifier = Modifier.width(28.dp),
                 style = MaterialTheme.typography.titleSmall,
-                color = Palette.TextFaint,
+                fontWeight = if (hasFocus) FontWeight.Bold else FontWeight.SemiBold,
+                color = LocalContentColor.current.copy(alpha = 0.5f),
                 textAlign = TextAlign.End,
+                maxLines = 1,
             )
-            Spacer(Modifier.width(8.dp))
-            LogoTile(stream.name, stream.logo, Modifier.size(width = 60.dp, height = 36.dp), MaterialTheme.typography.labelMedium)
-            Spacer(Modifier.width(12.dp))
-            Column(Modifier.weight(1f)) {
-                Text(
-                    stream.name,
-                    style = MaterialTheme.typography.titleSmall,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
+            Spacer(Modifier.width(10.dp))
+            Box(Modifier.size(width = 44.dp, height = 26.dp), contentAlignment = Alignment.Center) {
+                if (!stream.logo.isNullOrBlank()) {
+                    AsyncImage(
+                        model = stream.logo,
+                        contentDescription = null,
+                        contentScale = ContentScale.Fit,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                }
+            }
+            Spacer(Modifier.width(10.dp))
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.Center) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text(
+                        stream.name,
+                        modifier = Modifier.weight(1f, fill = false),
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = if (hasFocus) FontWeight.Bold else FontWeight.SemiBold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    if (hasFocus) {
+                        Pill(uiContext.getString(R.string.ui_live), color = Palette.Live, contentColor = Color.White)
+                    }
+                }
                 if (nowTitle != null) {
                     Text(
                         nowTitle,
                         style = MaterialTheme.typography.labelSmall,
-                        color = Palette.TextMuted,
+                        color = LocalContentColor.current.copy(alpha = 0.65f),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
                     if (progress != null) {
-                        Spacer(Modifier.height(2.dp))
-                        ProgressBar(progress, Modifier.height(3.dp))
+                        Spacer(Modifier.height(3.dp))
+                        ProgressBar(
+                            fraction = progress,
+                            modifier = Modifier.height(3.dp),
+                            color = if (hasFocus) Color(0xFF07080A) else Color(0xFFF2B544),
+                            trackColor = if (hasFocus) Color(0xFFD9D9DE) else Color(0x33FFFFFF),
+                        )
                     }
                 }
             }
-            if (favorite) Icon(Icons.Rounded.Star, contentDescription = uiContext.getString(R.string.ui_favorite), tint = Palette.Gold, modifier = Modifier.size(20.dp))
+            if (favorite) {
+                Spacer(Modifier.width(8.dp))
+                Icon(Icons.Rounded.Star, contentDescription = uiContext.getString(R.string.ui_favorite), tint = Color(0xFFF2B544), modifier = Modifier.size(18.dp))
+            }
         }
     }
 }
@@ -358,7 +395,7 @@ fun CategoryItem(
             focusedContainerColor = Color(0xFFF5F5F7),
             focusedContentColor = Color(0xFF07080A),
         ),
-        scale = ClickableSurfaceDefaults.scale(focusedScale = 1.02f),
+        scale = ClickableSurfaceDefaults.scale(focusedScale = 1.0f),
     ) {
         Row(Modifier.fillMaxSize().padding(horizontal = 10.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(

@@ -1,6 +1,6 @@
 # Seyir backlog
 
-Bu dosyada kullanıcının istekleri ve testlerde bulunan sorunlar tutulur. Biten maddeler işaretlenir, silinmez. Son güncelleme: 2026-11-22 (logo/ikon v1; sıradaki: Canlı TV v2, TMDB bölüm adları, içerik logoları).
+Bu dosyada kullanıcının istekleri ve testlerde bulunan sorunlar tutulur. Biten maddeler işaretlenir, silinmez. Son güncelleme: 2026-11-22 (Canlı TV v2; sıradaki: TMDB tmdb_id eşleştirmesi, içerik logoları).
 
 ## P0 — Şu an açık
 
@@ -125,12 +125,12 @@ Kullanıcı kararları:
 Logo ayrıca çalışılacak; şu an sade bir göz-oynat işareti.
 - [x] Oynatıcı v2 (film/dizi) uygulandı — 2026-11-22, TV'de doğrulandı. Eksik: "Bölümler" paneli, sararken küçük resim önizleme (trick-play görselleri yok), Inter Tight yazı tipi.
 - [x] Canlı yayın kontrolleri v2 diline geçti (2026-11-22, TV'de doğrulandı): kanal kimliği + CANLI rozeti, şu anki program ilerlemesi ve "Sonra", oynat/duraklat (timeshift), Kanal listesi, Kaydet, Ses-altyazı (seçenek varsa), Diğer. Eski kontrol çubuğu ve SeekBar silindi.
-- [ ] Canlı: "▲▼ kanal" ipucu kontroller açıkken yanıltıcı (o anda ▲▼ odak taşıyor); kanal listesi paneli ve tam ekran bilgi paneli v2 diline taşınacak.
+- [ ] Canlı: "▲▼ kanal" ipucu kontroller açıkken yanıltıcı (o anda ▲▼ odak taşıyor); kanal listesi paneli (`ChannelListPanel`) v2 diline taşındı (2026-11-22), tam ekran bilgi paneli ve ▲▼ ipucu kaldı.
 - [x] Ana Sayfa v2 (2026-11-22, TV'de doğrulandı): kenardan kenara arka plan görseli (yalnızca sağ üst alan, önbellekli katman), odaklanan içeriği izleyen başlık bloğu (★ puan, yıl, tür, 2 satır özet), "İzlemeye devam et" için 16:9 kartlar + kehribar ilerleme. Performans aynı senaryoda: eski %5 / 28 ms → yeni %8 / 23 ms ortanca.
 - [ ] Ana Sayfa: içerik logoları (TMDB title logo) yerine şu an metin başlık; üst menü (tasarımdaki ortalanmış hap menü) henüz sol menü; kanal kartları baş harfli kutular.
 - [~] Detay v2 büyük ölçüde (2026-11-22, TV'de doğrulandı): beyaz ana düğme / yarı saydam diğerleri, büyük başlık, kehribar puan + noktalı bilgi satırı (MetaLine), "Hz Omer.S01.E01" gibi bölüm adları temizleniyor (hepsi aynıysa "Bölüm N"). Kalan: TMDB logo başlık, bölüm kartlarında görsel.
 - [x] Uygulama genelinde odak beyaz (yazı siyah), seçim/ilerleme kehribar: kartlar, kategoriler, açılır listeler, oynatıcı panelleri, sezon/bölüm satırları (2026-11-22).
-- [ ] Canlı TV v2'yi uygula
+- [x] Canlı TV v2 (2026-11-22, TV'de doğrulandı): sağ üst 16:9 arka plan önizleme + önbellekli karartma katmanı (`RESIZE_MODE_FILL` ile dikey taşma/çizgi düzeltildi), üst başlık satırı, beyaz odaklı kanal satırları + CANLI rozeti, sağ alt ŞİMDİ/Sonra bloğu ve eylem düğmeleri. Ölçüm: kanal listesi %9,45 / 16 ms, kategoriler %28,22 / 42 ms.
 - [ ] Logo ve ikon
 - [x] Logo ve ikon v1 (2026-11-22): göz + kehribar oynat göz bebeği. Uygulama ikonu (adaptive), TV banner'ı (drawable-xhdpi/banner.png, Segoe UI Bold ile üretildi) ve uygulama içi BrandMark güncellendi. Kalan: profesyonel wordmark (özel yazı tipi), farklı boyutlarda kontrol.
 - [x] Bölüm adları (2026-11-22): sağlayıcı ad vermiyorsa TMDB sezon bölüm adları kullanılıyor; Türkçe ad "1. Bölüm" gibi genel bir adsa İngilizce gerçek ad. TMDB eşleşmesi yoksa "Bölüm N" gösteriliyor. Örnek: sağlayıcıdaki "Farouk Omar" TMDB'de bulunmuyor (TMDB'deki karşılığı "Hz. Ömer", id 58887); eşleşmesi için sağlayıcının tmdb_id alanı gerekli (P1).

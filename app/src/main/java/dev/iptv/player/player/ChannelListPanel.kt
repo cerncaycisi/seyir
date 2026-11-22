@@ -23,6 +23,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -50,15 +51,16 @@ fun ChannelListPanel(
         awaitFrame()
         runCatching { focus.requestFocus() }
     }
+    val panelBg = remember { Brush.horizontalGradient(listOf(Color(0xF507080A), Color(0xE607080A))) }
     Column(
         modifier
             .fillMaxHeight()
-            .width(380.dp)
-            .background(Color(0xF2111620))
+            .width(400.dp)
+            .background(panelBg)
             .padding(horizontal = 16.dp, vertical = 24.dp),
     ) {
         Text(stringResource(R.string.play_channels), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = Color.White)
-        Text(stringResource(R.string.play_channels_hint, items.size), style = MaterialTheme.typography.labelMedium, color = Palette.TextFaint)
+        Text(stringResource(R.string.play_channels_hint, items.size), style = MaterialTheme.typography.labelMedium, color = Palette.TextMuted)
         Spacer(Modifier.height(12.dp))
         LazyColumn(Modifier.fillMaxSize(), state = state, verticalArrangement = Arrangement.spacedBy(4.dp)) {
             itemsIndexed(items, key = { i, s -> "$i|${s.id}" }) { i, stream ->

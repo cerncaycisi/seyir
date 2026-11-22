@@ -246,4 +246,6 @@
     <string name="ui_watch_episode">Watch · %1$s</string>
     <string name="ui_restart_series">Watch again from the start</string>
     <string name="ui_series_badge">S%1$d B%2$d</string>
+    <string name="ui_next_at">Next %1$s · %2$s</string>
+    <string name="ui_live_hint">OK preview · OK again fullscreen · long press: options</string>
 </resources>

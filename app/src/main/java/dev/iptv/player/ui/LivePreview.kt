@@ -1,6 +1,7 @@
 package dev.iptv.player.ui
 
 import android.content.Context
+import androidx.annotation.OptIn
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -31,7 +32,10 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
+import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.ui.AspectRatioFrameLayout
+import androidx.media3.ui.PlayerView
 import androidx.tv.material3.Icon
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
@@ -106,6 +110,27 @@ fun rememberLivePreview(repo: Repository): LivePreview? {
         onDispose { lifecycle.removeObserver(observer) }
     }
     return preview
+}
+
+/** Full-bleed live preview backdrop; creates the PlayerView once so channel changes never recreate it. */
+@OptIn(UnstableApi::class)
+@Composable
+fun LivePreviewBackdrop(preview: LivePreview?, modifier: Modifier = Modifier.fillMaxSize()) {
+    Box(modifier.background(Color(0xFF07080A))) {
+        if (preview != null) {
+            AndroidView(
+                factory = { ctx ->
+                    createPlayerView(ctx).apply {
+                        player = preview.player
+                        resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FILL
+                        setShowBuffering(PlayerView.SHOW_BUFFERING_NEVER)
+                    }
+                },
+                onRelease = { it.player = null },
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
+    }
 }
 
 /** 16:9 video of [preview]; the channel logo shows while buffering and an error text on failure. */
