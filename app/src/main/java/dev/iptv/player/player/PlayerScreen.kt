@@ -653,6 +653,19 @@ private fun PlayerContent(repo: Repository, cfg: PlayerConfig, onBack: () -> Uni
 
     val blocking = panel != Panel.None || nextVisible || recordingTarget != null
 
+    // A subtitle the viewer just downloaded is selected as soon as its track appears.
+    var selectDownloadedLabel by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(tracks, selectDownloadedLabel) {
+        val label = selectDownloadedLabel ?: return@LaunchedEffect
+        val match = tracks.groups.filter { it.type == C.TRACK_TYPE_TEXT }
+            .firstNotNullOfOrNull { g -> (0 until g.length).firstOrNull { g.getTrackFormat(it).label == label }?.let { g to it } }
+            ?: return@LaunchedEffect
+        subtitleAuto = false
+        player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
+            .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
+            .setOverrideForType(androidx.media3.common.TrackSelectionOverride(match.first.mediaTrackGroup, match.second)).build()
+        selectDownloadedLabel = null
+    }
     val subtitleSearch = remember(index) {
         if (!OpenSubtitles.enabled || live) null else object : SubtitleSearch {
             override suspend fun search(): List<SubtitleHit> {
@@ -669,8 +682,10 @@ private fun PlayerContent(repo: Repository, cfg: PlayerConfig, onBack: () -> Uni
                         current.tmdbId?.takeIf { it > 0 } ?: repo.tmdb.lookup(current.name, ContentType.MOVIE, current.year)?.tmdbId
                     }
                 }.getOrNull()?.takeIf { it > 0 }
-                val exact = if (id != null) runCatching { OpenSubtitles.searchByTmdb(id, current.season, current.episode, langs) }.getOrDefault(emptyList()) else emptyList()
-                return exact.ifEmpty { OpenSubtitles.search(splitPlayerTitle(current.name).first, current.year, langs) }
+                // A known title with no subtitles gives an honest empty list: the title-query fallback returned
+                // unrelated shows on the TV ("Göz Açıp…" → a Serbian series). Title search only without an id.
+                return if (id != null) OpenSubtitles.searchByTmdb(id, current.season, current.episode, langs)
+                else OpenSubtitles.search(splitPlayerTitle(current.name).first, current.year, langs)
             }
 
             override suspend fun download(hit: SubtitleHit): Boolean {
@@ -683,6 +698,7 @@ private fun PlayerContent(repo: Repository, cfg: PlayerConfig, onBack: () -> Uni
                         .setSelectionFlags(C.SELECTION_FLAG_DEFAULT)
                         .build(),
                 )
+                selectDownloadedLabel = "OpenSubtitles · ${hit.language.uppercase()}"
                 val pos = player.currentPosition
                 player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
                     .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false).build()
@@ -697,14 +713,20 @@ private fun PlayerContent(repo: Repository, cfg: PlayerConfig, onBack: () -> Uni
     // Gömülü altyazıda tercih edilen dil (varsayılan Türkçe) yoksa OpenSubtitles'tan en çok indirilen
     // eşleşmeyi bir kez otomatik getir. Elle seçim yapıldıysa (subtitleAuto=false) dokunma.
     var autoSubTried by remember(current.id) { mutableStateOf(false) }
-    LaunchedEffect(tracks, current.id) {
+    LaunchedEffect(tracks, current.id, languageResolved) {
         val pref = normalizeLanguage(cfg.subtitleLanguage) ?: return@LaunchedEffect
         val search = subtitleSearch ?: return@LaunchedEffect
         if (live || autoSubTried || !subtitleAuto || tracks.groups.none { it.type == C.TRACK_TYPE_AUDIO }) return@LaunchedEffect
-        autoSubTried = true
+        // Let the original-audio pick settle first: the stream may start on its Turkish dub.
+        if (cfg.audioLanguage == dev.iptv.player.data.ORIGINAL_AUDIO && !languageResolved) return@LaunchedEffect
         val hasPref = tracks.groups.filter { it.type == C.TRACK_TYPE_TEXT }
             .any { g -> (0 until g.length).any { normalizeLanguage(g.getTrackFormat(it).language) == pref } }
         if (hasPref) return@LaunchedEffect
+        // Audio already in that language (a Turkish production): subtitles would only repeat the dialogue.
+        val audioInPref = tracks.groups.filter { it.type == C.TRACK_TYPE_AUDIO }
+            .any { g -> (0 until g.length).any { g.isTrackSelected(it) && normalizeLanguage(g.getTrackFormat(it).language) == pref } }
+        if (audioInPref) return@LaunchedEffect
+        autoSubTried = true
         val hit = runCatching { search.search() }.getOrNull()
             ?.filter { normalizeLanguage(it.language) == pref }?.maxByOrNull { it.downloads } ?: return@LaunchedEffect
         runCatching { search.download(hit) }

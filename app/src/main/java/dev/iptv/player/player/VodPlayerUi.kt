@@ -47,6 +47,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.focus.focusProperties
+import androidx.compose.foundation.focusGroup
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
@@ -387,6 +389,9 @@ internal fun AudioSubtitleSheet(
     BackHandler { onClose() }
     val first = remember { FocusRequester() }
     val audioState = androidx.compose.foundation.lazy.rememberLazyListState()
+    // ◀▶ between columns land on that column's selected item, not the geometrically nearest one.
+    val subSel = remember { FocusRequester() }
+    val styleSel = remember { FocusRequester() }
     val subState = androidx.compose.foundation.lazy.rememberLazyListState()
     LaunchedEffect(Unit) {
         // Long track lists: bring the selected rows into view first, or the focus target is not composed yet.
@@ -403,25 +408,27 @@ internal fun AudioSubtitleSheet(
             .padding(start = 40.dp, end = 40.dp, top = 20.dp, bottom = 16.dp),
         horizontalArrangement = Arrangement.spacedBy(28.dp),
     ) {
-        SheetColumn(stringResource(R.string.vod_sheet_audio), Modifier.weight(1f), audioState) {
+        SheetColumn(stringResource(R.string.vod_sheet_audio), Modifier.weight(1f).enterAt(first), audioState) {
             val start = audio.indexOfFirst { it.selected }.coerceAtLeast(0)
             if (audio.isEmpty()) item { SheetRow(stringResource(R.string.play_no_audio), false, {}, Modifier.focusRequester(first)) }
             itemsIndexed(audio) { i, o ->
                 SheetRow(o.label, o.selected, { onAudio(o) }, if (i == start) Modifier.focusRequester(first) else Modifier)
             }
         }
-        SheetColumn(stringResource(R.string.vod_sheet_subtitles), Modifier.weight(1f), subState) {
-            itemsIndexed(subtitles) { _, o -> SheetRow(o.label, o.selected, { onSubtitle(o) }) }
+        SheetColumn(stringResource(R.string.vod_sheet_subtitles), Modifier.weight(1f).enterAt(subSel), subState) {
+            val subStart = subtitles.indexOfFirst { it.selected }.coerceAtLeast(0)
+            itemsIndexed(subtitles) { i, o -> SheetRow(o.label, o.selected, { onSubtitle(o) }, if (i == subStart) Modifier.focusRequester(subSel) else Modifier) }
             if (onOnlineSearch != null) item { SheetRow(stringResource(R.string.play_online_subtitles), false, onOnlineSearch, muted = true) }
         }
-        Column(Modifier.weight(1f)) {
+        Column(Modifier.weight(1f).enterAt(styleSel)) {
             SheetHeader(stringResource(R.string.vod_sheet_look))
-            StylePicker(style, onStyle)
+            StylePicker(style, onStyle, Modifier.focusRequester(styleSel))
             Spacer(Modifier.height(10.dp))
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(stringResource(R.string.vod_sheet_size), style = MaterialTheme.typography.labelLarge, color = InkMuted, modifier = Modifier.width(52.dp))
                 SubtitleScales.forEachIndexed { i, s ->
-                    SizeChip(s, (12 + i * 2).sp, s == scale) { onScale(s) }
+                    // Left of the first size goes back to the subtitle list, not up to the style chips.
+                    SizeChip(s, (12 + i * 2).sp, s == scale, if (i == 0) Modifier.focusProperties { left = subSel } else Modifier) { onScale(s) }
                 }
             }
         }
@@ -465,7 +472,7 @@ private fun SheetRow(label: String, selected: Boolean, onClick: () -> Unit, modi
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun StylePicker(current: SubtitleStyle, onStyle: (SubtitleStyle) -> Unit) {
+private fun StylePicker(current: SubtitleStyle, onStyle: (SubtitleStyle) -> Unit, selectedModifier: Modifier = Modifier) {
     FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         SubtitleStyle.entries.forEach { s ->
             val selected = s == current
@@ -477,7 +484,7 @@ private fun StylePicker(current: SubtitleStyle, onStyle: (SubtitleStyle) -> Unit
             }
             Surface(
                 onClick = { onStyle(s) },
-                modifier = Modifier.height(36.dp).pointerClick({ onStyle(s) }),
+                modifier = Modifier.height(36.dp).pointerClick({ onStyle(s) }).then(if (selected) selectedModifier else Modifier),
                 shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(8.dp)),
                 colors = ClickableSurfaceDefaults.colors(containerColor = Color(0xFF26282E), focusedContainerColor = Color(0xFF3A3D45)),
                 border = ClickableSurfaceDefaults.border(
@@ -495,10 +502,10 @@ private fun StylePicker(current: SubtitleStyle, onStyle: (SubtitleStyle) -> Unit
 }
 
 @Composable
-private fun SizeChip(scale: Int, size: androidx.compose.ui.unit.TextUnit, selected: Boolean, onClick: () -> Unit) {
+private fun SizeChip(scale: Int, size: androidx.compose.ui.unit.TextUnit, selected: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
     Surface(
         onClick = onClick,
-        modifier = Modifier.size(width = 40.dp, height = 34.dp).pointerClick(onClick),
+        modifier = modifier.size(width = 40.dp, height = 34.dp).pointerClick(onClick),
         shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(8.dp)),
         colors = ClickableSurfaceDefaults.colors(
             containerColor = if (selected) Color(0x2EF5F5F7) else Color.Transparent, contentColor = Ink,
@@ -565,3 +572,9 @@ internal fun PausedInfo(
         }
     }
 }
+
+/** Focus entering this group (D-pad from a neighbouring column) goes to [target] when it is attached. */
+@OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
+private fun Modifier.enterAt(target: FocusRequester): Modifier = this
+    .focusProperties { enter = { target } }
+    .focusGroup()
