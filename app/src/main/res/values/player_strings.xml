@@ -120,4 +120,8 @@
     <string name="live_controls_hint">OK kontroller · ▲▼ kanal · ◀ liste</string>
     <string name="live_controls_active_hint">◀▶ gezin · Geri gizle</string>
     <string name="ui_no_programme_info">Program bilgisi yok</string>
+    <string name="play_programme_guide">Rehber</string>
+    <string name="live_guide_hint">◀ ▶ kanal · OK hatırlatıcı · Geri kapat</string>
+    <string name="live_reminder_set">Hatırlatıcı kuruldu: %1$s</string>
+    <string name="live_reminder_removed">Hatırlatıcı kaldırıldı</string>
 </resources>

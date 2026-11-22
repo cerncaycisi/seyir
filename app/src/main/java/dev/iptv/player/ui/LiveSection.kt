@@ -234,7 +234,7 @@ private fun LiveBrowser(
         epg = emptyList()
         val f = focused ?: return@LaunchedEffect
         delay(350)
-        epg = epgSvc.nowAndNext(playlist.id, f, 2).map { EpgEntry(it.title, it.start, it.stop) }
+        epg = epgSvc.nowAndNext(playlist.id, f, 2).map { EpgEntry(it.title, it.start, it.stop, it.description) }
             .ifEmpty { runCatching { repo.shortEpg(playlist, f) }.getOrDefault(emptyList()) }
     }
     // The preview follows the focused channel; the delay keeps fast scrolling from hammering the provider.

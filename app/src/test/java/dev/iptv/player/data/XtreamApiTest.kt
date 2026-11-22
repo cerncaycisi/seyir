@@ -183,11 +183,12 @@ class XtreamApiTest {
 
     @Test
     fun shortEpgParsesTimestampsAsStringsOrNumbers() = runBlocking {
-        responses["get_short_epg"] = """{"epg_listings":[{"title":"VGl0bGU=","start_timestamp":"100","stop_timestamp":200},{"title":"x","start_timestamp":null,"stop_timestamp":5}]}"""
+        responses["get_short_epg"] = """{"epg_listings":[{"title":"VGl0bGU=","description":"RGVzYw==","start_timestamp":"100","stop_timestamp":200},{"title":"x","start_timestamp":null,"stop_timestamp":5}]}"""
         val epg = api().shortEpg("1")
         assertEquals(1, epg.size)
         assertEquals(100L, epg[0].start)
         assertEquals(200L, epg[0].end)
+        assertEquals("Desc", epg[0].description)
     }
 
     @Test

@@ -328,6 +328,7 @@ fun PosterListRow(
     }
 }
 
+/** 16:9 live channel card for the Home row: clean dark surface with centered logo (or dim initials badge) and channel name below. */
 @Composable
 fun ChannelCard(
     stream: Stream,
@@ -336,25 +337,72 @@ fun ChannelCard(
     onFocused: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Card(
-        onClick = onClick,
-        onLongClick = onLongClick,
-        modifier = modifier.width(168.dp).aspectRatio(16f / 10f).pointerClick(onClick, onLongClick).onFocusChanged { if (it.isFocused || it.hasFocus) onFocused() },
-        shape = CardDefaults.shape(cardShape),
-        scale = CardDefaults.scale(focusedScale = 1.06f),
-        border = CardDefaults.border(focusedBorder = Border(BorderStroke(3.dp, Color(0xFFF5F5F7)), shape = cardShape)),
-        colors = CardDefaults.colors(containerColor = Palette.Surface),
-    ) {
-        Box(Modifier.fillMaxSize()) {
-            LogoTile(stream.name, stream.logo, Modifier.fillMaxSize(), MaterialTheme.typography.headlineMedium)
-            Box(
-                Modifier.align(Alignment.BottomCenter).fillMaxWidth()
-                    .background(Brush.verticalGradient(listOf(Color.Transparent, Color(0xE6000000))))
-                    .padding(horizontal = 12.dp, vertical = 8.dp),
-            ) {
-                Text(stream.name, style = MaterialTheme.typography.titleSmall, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    val uiContext = LocalContext.current
+    var focused by remember { mutableStateOf(false) }
+    var logoLoaded by remember(stream.logo) { mutableStateOf(false) }
+    val shape = RoundedCornerShape(10.dp)
+    Column(Modifier.width(180.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Surface(
+            onClick = onClick,
+            onLongClick = onLongClick,
+            modifier = modifier
+                .fillMaxWidth()
+                .aspectRatio(16f / 9f)
+                .pointerClick(onClick, onLongClick)
+                .onFocusChanged {
+                    focused = it.isFocused || it.hasFocus
+                    if (focused) onFocused()
+                },
+            shape = ClickableSurfaceDefaults.shape(shape),
+            colors = ClickableSurfaceDefaults.colors(containerColor = Palette.SurfaceHigh, focusedContainerColor = Palette.SurfaceHigh),
+            border = ClickableSurfaceDefaults.border(focusedBorder = Border(BorderStroke(3.dp, Color(0xFFF5F5F7)), shape = shape)),
+            scale = ClickableSurfaceDefaults.scale(focusedScale = 1.06f),
+        ) {
+            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                if (!logoLoaded) {
+                    Box(
+                        Modifier
+                            .size(width = 72.dp, height = 42.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(Color(0x1AF5F5F7)),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(
+                            initials(stream.name),
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xB3F5F5F7),
+                            maxLines = 1,
+                        )
+                    }
+                }
+                if (!stream.logo.isNullOrBlank()) {
+                    AsyncImage(
+                        model = stream.logo,
+                        contentDescription = null,
+                        contentScale = ContentScale.Fit,
+                        onState = { logoLoaded = it is AsyncImagePainter.State.Success },
+                        modifier = Modifier.fillMaxSize().padding(horizontal = 24.dp, vertical = 14.dp),
+                    )
+                }
+                if (focused) {
+                    Pill(
+                        uiContext.getString(R.string.ui_live),
+                        modifier = Modifier.align(Alignment.TopEnd).padding(8.dp),
+                        color = Palette.Live,
+                        contentColor = Color.White,
+                    )
+                }
             }
         }
+        Text(
+            stream.name,
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.SemiBold,
+            color = if (focused) Palette.Text else Palette.TextMuted,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
     }
 }
 

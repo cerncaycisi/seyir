@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.List
+import androidx.compose.material.icons.rounded.EventNote
 import androidx.compose.material.icons.rounded.FiberManualRecord
 import androidx.compose.material.icons.rounded.LiveTv
 import androidx.compose.material.icons.rounded.MoreHoriz
@@ -72,9 +73,11 @@ internal fun LiveControls(
     focusTarget: PlayerControlFocus = PlayerControlFocus.PlayPause,
     favorite: Boolean = false,
     onFavorite: (() -> Unit)? = null,
+    onGuide: (() -> Unit)? = null,
 ) {
     val first = remember { FocusRequester() }
     val channelsFocus = remember { FocusRequester() }
+    val guideFocus = remember { FocusRequester() }
     val tracksFocus = remember { FocusRequester() }
     val moreFocus = remember { FocusRequester() }
     LaunchedEffect(active, focusTarget) {
@@ -83,6 +86,7 @@ internal fun LiveControls(
             val target = when (focusTarget) {
                 PlayerControlFocus.PlayPause, PlayerControlFocus.Episodes -> first
                 PlayerControlFocus.Channels -> channelsFocus
+                PlayerControlFocus.Guide -> if (onGuide != null) guideFocus else first
                 PlayerControlFocus.Tracks -> if (onTracks != null) tracksFocus else first
                 PlayerControlFocus.More -> moreFocus
             }
@@ -137,6 +141,16 @@ internal fun LiveControls(
                         Box(Modifier.fillMaxHeight().fillMaxWidth(frac).background(Amber))
                     }
                 }
+                if (active && !now.description.isNullOrBlank()) {
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        now.description,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = Color(0xCCF5F5F7),
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
             } else {
                 Text(stringResource(R.string.ui_no_programme_info), style = MaterialTheme.typography.titleMedium, color = InkMuted)
             }
@@ -154,6 +168,10 @@ internal fun LiveControls(
                     Spacer(Modifier.width(10.dp))
                 }
                 PillButton(stringResource(R.string.play_channel_list), Icons.AutoMirrored.Rounded.List, onChannels, Modifier.focusRequester(channelsFocus))
+                onGuide?.let {
+                    Spacer(Modifier.width(10.dp))
+                    PillButton(stringResource(R.string.play_programme_guide), Icons.Rounded.EventNote, it, Modifier.focusRequester(guideFocus))
+                }
                 Spacer(Modifier.width(10.dp))
                 PillButton(
                     stringResource(if (recording) R.string.play_stop_recording else R.string.play_record),

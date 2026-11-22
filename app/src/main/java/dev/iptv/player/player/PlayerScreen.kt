@@ -103,7 +103,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
-private enum class Panel { None, Settings, Channels, Tracks, Episodes }
+private enum class Panel { None, Settings, Channels, Tracks, Episodes, LiveInfo }
 
 private const val MAX_RECONNECTS = 10
 private const val NEXT_EPISODE_WINDOW_MS = 10_000L
@@ -564,7 +564,13 @@ private fun PlayerContent(repo: Repository, cfg: PlayerConfig, onBack: () -> Uni
         if (live) repo.history.record(playlist, current)
         // UX hook: remember the last live channel for "Açılışta son kanal".
         if (live) repo.scope.launch { repo.settings.set(dev.iptv.player.data.Setting.LastChannel, dev.iptv.player.data.LastChannel.encode(playlist.id, current.id)) }
-        if (live) epg = runCatching { repo.shortEpg(playlist, current) }.getOrDefault(emptyList())
+        if (live) {
+            epg = runCatching {
+                dev.iptv.player.epg.EpgService.get(context).nowAndNext(playlist.id, current, 2)
+                    .map { EpgEntry(it.title, it.start, it.stop, it.description) }
+            }.getOrDefault(emptyList())
+                .ifEmpty { runCatching { repo.shortEpg(playlist, current) }.getOrDefault(emptyList()) }
+        }
     }
 
     LaunchedEffect(overlayTick, playing, overlay, panel) {
@@ -797,7 +803,7 @@ private fun PlayerContent(repo: Repository, cfg: PlayerConfig, onBack: () -> Uni
                         return@onPreviewKeyEvent true
                     }
                     if (code == KeyEvent.KEYCODE_GUIDE) { panelOpenedFromControls = false; panel = Panel.Channels; return@onPreviewKeyEvent true }
-                    if (code == KeyEvent.KEYCODE_INFO) { showOverlay(); return@onPreviewKeyEvent true }
+                    if (code == KeyEvent.KEYCODE_INFO) { panelOpenedFromControls = false; panel = Panel.LiveInfo; return@onPreviewKeyEvent true }
                     when (event.key) {
                         Key.DirectionUp, Key.ChannelUp -> { zapTo((index + 1) % items.size); true }
                         Key.DirectionDown, Key.ChannelDown -> { zapTo((index - 1 + items.size) % items.size); true }
@@ -975,6 +981,7 @@ private fun PlayerContent(repo: Repository, cfg: PlayerConfig, onBack: () -> Uni
                 onReturnToLive = if (canReturnToLive) ({ returnToLive(); showOverlay() }) else null,
                 favorite = favoriteKey(playlist, current) in playerFavorites,
                 onFavorite = { scope.launch { repo.store.toggleFavorite(favoriteKey(playlist, current)) }; showOverlay() },
+                onGuide = { openPanelFromControls(Panel.LiveInfo, PlayerControlFocus.Guide) },
             )
         }
 
@@ -996,6 +1003,18 @@ private fun PlayerContent(repo: Repository, cfg: PlayerConfig, onBack: () -> Uni
                 onPick = { zapTo(it); dismissPanel() },
                 onClose = ::closePanel,
                 modifier = Modifier.align(Alignment.CenterStart),
+            )
+            Panel.LiveInfo -> LiveInfoPanel(
+                playlist = playlist,
+                number = index + 1,
+                stream = current,
+                favorite = favoriteKey(playlist, current) in playerFavorites,
+                fallbackEpg = epg,
+                onPrevChannel = { zapTo((index - 1 + items.size) % items.size) },
+                onNextChannel = { zapTo((index + 1) % items.size) },
+                onToast = ::toast,
+                onClose = ::closePanel,
+                modifier = Modifier.align(Alignment.CenterEnd),
             )
             Panel.Settings -> PlayerSettingsPanel(
                 initialPage = settingsPage,

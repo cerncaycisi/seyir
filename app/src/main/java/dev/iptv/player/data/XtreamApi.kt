@@ -178,11 +178,16 @@ class XtreamApi(
                 title = DisplayText.decodeEntities(decodeBase64(o.str("title").orEmpty())),
                 start = o.str("start_timestamp")?.toLongOrNull() ?: return@mapNotNull null,
                 end = o.str("stop_timestamp")?.toLongOrNull() ?: return@mapNotNull null,
+                description = o.str("description")?.let { DisplayText.decodeEntities(decodeBase64(it)).trim() }.blankToNull(),
             )
         }.filterNot { DisplayText.isPlaceholderTitle(it.title) }
 
+    @android.annotation.SuppressLint("NewApi")
     private fun decodeBase64(value: String) =
-        runCatching { String(Base64.decode(value, Base64.DEFAULT), Charsets.UTF_8) }.getOrDefault(value)
+        runCatching {
+            val bytes = Base64.decode(value, Base64.DEFAULT) ?: java.util.Base64.getMimeDecoder().decode(value)
+            String(bytes, Charsets.UTF_8)
+        }.getOrDefault(value)
 
     private fun enc(value: String) = URLEncoder.encode(value, "UTF-8")
 }

@@ -111,6 +111,11 @@ data class AccountInfo(
     val trial: Boolean = false,
 )
 
-data class EpgEntry(val title: String, val start: Long, val end: Long)
+data class EpgEntry(
+    val title: String,
+    val start: Long,
+    val end: Long,
+    val description: String? = null,
+)
 
 fun favoriteKey(playlist: Playlist, stream: Stream) = "${playlist.id}|${stream.type}|${stream.id}"

@@ -96,7 +96,7 @@ internal fun splitPlayerTitle(name: String): Pair<String, String?> {
     return if (i <= 0) name to null else name.substring(0, i) to name.substring(i + 3)
 }
 
-internal enum class PlayerControlFocus { PlayPause, Channels, Tracks, Episodes, More }
+internal enum class PlayerControlFocus { PlayPause, Channels, Guide, Tracks, Episodes, More }
 
 /** Pure helper: returns true only when an episode skip button was already armed recently within [windowMs]. */
 internal fun isEpisodeJumpConfirmed(armedAtMs: Long?, nowMs: Long, windowMs: Long = 4_000L): Boolean =
