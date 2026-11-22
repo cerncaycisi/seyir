@@ -58,7 +58,7 @@ Bu dosyada kullanıcının istekleri ve testlerde bulunan sorunlar tutulur. Bite
 - [ ] Canlı yayın akış formatı seçimi (TS/HLS).
 - [x] İzleme geçmişinden seçerek silme: zaten vardı (kart üzerinde uzun bas → "Geçmişten kaldır"; toplu silme "Son İzlenenler" kategorisinde).
 - [ ] Liste/ızgara görünümü arasında geçiş.
-- [~] Kanal logoları (2026-11-22, Claude): Canlı TV listesinde logo yoksa ya da yüklenemezse boşluk kalıyordu (MAX WESTERN vb.); artık soluk bir kutuda baş harfler. TV'de görsel olarak henüz bakılmadı. Kalan: EPG logosu veya başka bir kaynak.
+- [~] Kanal logoları (2026-11-22, Claude): Canlı TV listesinde logo yoksa ya da yüklenemezse boşluk kalıyordu (MAX WESTERN vb.); artık soluk bir kutuda baş harfler. TV'de doğrulandı. Kalan: EPG logosu veya başka bir kaynak.
 - [x] **Android TV "Play Next" satırında logosu olmayan içerikler boş kart olarak görünüyor. Yedek görsel kullanılmalı** (2026-11-22, birim testle doğrulandı): `WatchNextPublisher` (`resolveWatchNextPoster`) logosu eksik içeriklerde `android.resource://.../banner` (16:9) yedeğine düşüyor.
 
 ## P2 — Platformlar
