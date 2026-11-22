@@ -18,6 +18,10 @@ object ParentalFilter {
 
     fun isAdultName(name: String): Boolean = adultPattern.containsMatchIn(name)
 
+    // Panels put fake "channels" between groups, e.g. "∞∞∞∞ TURK ULUSAL ∞∞∞∞" or "##### SPOR #####".
+    private val separatorPattern = Regex("""^\s*([∞#=*~_•●▬\-]\s*){3,}""")
+    fun isSeparatorName(name: String): Boolean = separatorPattern.containsMatchIn(name)
+
     fun hashPin(pin: String): String {
         val digest = MessageDigest.getInstance("SHA-256").digest("iptv-pin:$pin".toByteArray())
         return "sha256:" + digest.joinToString("") { "%02x".format(it) }
@@ -56,7 +60,8 @@ data class ContentRules(
         val items = content.items.filter {
             ParentalFilter.streamKey(playlist.id, it.type, it.id) !in hiddenChannels &&
                 (it.categoryId in visibleCats || it.categoryId !in knownCats) &&
-                !(hideAdult && ParentalFilter.isAdultName(it.name))
+                !(hideAdult && ParentalFilter.isAdultName(it.name)) &&
+                !(type == ContentType.LIVE && ParentalFilter.isSeparatorName(it.name))
         }
         return Content(categories, items)
     }
