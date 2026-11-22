@@ -537,7 +537,7 @@ private fun LiveNowInfo(
                     ActionButton(
                         uiContext.getString(R.string.ui_watch),
                         Icons.Rounded.PlayArrow,
-                        primary = true,
+                        // Not primary here: focus mostly sits in the channel list, and a white button beside it reads as focused.
                         modifier = watchFocus.attach(),
                         onClick = onFullscreen,
                     )
