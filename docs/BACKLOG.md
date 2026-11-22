@@ -1,6 +1,6 @@
 # Seyir backlog
 
-Bu dosyada kullanıcının istekleri ve testlerde bulunan sorunlar tutulur. Biten maddeler işaretlenir, silinmez. Son güncelleme: 2026-11-22 (Yeni Seyir sinema-prizma logosu ve banner, Inter Tight + Inter tipografisi, XMLTV EPG kanal logosu yedeği, Room düşük öncelikli dbExecutor; sürüm 0.2.16).
+Bu dosyada kullanıcının istekleri ve testlerde bulunan sorunlar tutulur. Biten maddeler işaretlenir, silinmez. Son güncelleme: 2026-11-22 (MetadataCatalog bellek içi anlık snapshot/decode önbelleği — TMDB puan/tür filtreli listede detaydan dönüşte "0 öğe" yanıp sönmesi giderildi; sürüm 0.2.17).
 
 ## P0 — Şu an açık
 

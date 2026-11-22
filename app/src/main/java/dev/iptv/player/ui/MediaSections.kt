@@ -234,14 +234,16 @@ private fun VodBrowser(
     val history by repo.history.entries.collectAsState(initial = null)
     val metadataEnabled by repo.settings.flow(Setting.TmdbEnabled).collectAsState(initial = true)
     val listView by repo.settings.flow(Setting.VodListView).collectAsState(initial = false)
-    val metadata by remember(repo, playlist.id, type) { repo.metadata.observe(playlist.id, type) }.collectAsState(initial = emptyMap())
+    val initialMetadata = remember(repo, playlist.id, type) { repo.metadata.cached(playlist.id, type) }
+    val metadata by remember(repo, playlist.id, type) { repo.metadata.observe(playlist.id, type) }.collectAsState(initial = initialMetadata)
     var availableGenres by remember { mutableStateOf<List<String>>(emptyList()) }
     LaunchedEffect(type, metadataEnabled) { availableGenres = if (metadataEnabled) repo.tmdb.genres(type) else emptyList() }
     // Filtering/sorting ~20k titles takes far longer than a frame: do it off the main thread and keep
     // showing the previous result meanwhile (this was the 1-2 s freeze when opening Movies/Series).
     val view = rememberBackground(content, rules, playlist.id, type, actions.favorites, actions.watchLater, history, selectedKey, sort, genre, metadata, metadataEnabled) {
         val h = history ?: return@rememberBackground null
-        val enriched = content.copy(items = content.items.map { withCatalogMetadata(it, if (metadataEnabled) metadata[it.id] else null, sort == VodSort.RATING) })
+        val m = if (metadataEnabled) (metadata ?: return@rememberBackground null) else emptyMap()
+        val enriched = content.copy(items = content.items.map { withCatalogMetadata(it, if (metadataEnabled) m[it.id] else null, sort == VodSort.RATING) })
         buildVodView(uiContext, playlist, type, enriched, rules, actions.favorites, actions.watchLater, h, selectedKey, sort, genre)
     }
     if (view == null) {
