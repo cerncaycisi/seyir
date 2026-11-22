@@ -57,7 +57,7 @@ Bu dosyada kullanıcının istekleri ve testlerde bulunan sorunlar tutulur. Bite
 - [x] Catch-up gün listesi (2026-11-22, Claude): "Geçmiş yayınlar" penceresinde üstte gün sekmeleri (Bugün, Dün, Cmt 21…), altında o günün programları yeniden eskiye. Gün sınırı yerel saate göre (birim testli). TV'de arşivli kanal bulunamadığı için görsel olarak doğrulanmadı.
 - [ ] Canlı yayın akış formatı seçimi (TS/HLS).
 - [x] İzleme geçmişinden seçerek silme: zaten vardı (kart üzerinde uzun bas → "Geçmişten kaldır"; toplu silme "Son İzlenenler" kategorisinde).
-- [ ] Liste/ızgara görünümü arasında geçiş.
+- [x] Liste/ızgara geçişi (2026-11-22, Claude, TV'de doğrulandı): Filmler/Diziler başlığında "Liste / Izgara" düğmesi. Liste: iki sütun satır kart (afiş, ad, yıl · puan · tür, konu, ilerleme). Seçim kalıcı. Ayrıca alt bilgi satırında ve listede "(2021) · 2021" yıl tekrarı giderildi.
 - [~] Kanal logoları (2026-11-22, Claude): Canlı TV listesinde logo yoksa ya da yüklenemezse boşluk kalıyordu (MAX WESTERN vb.); artık soluk bir kutuda baş harfler. TV'de doğrulandı. Kalan: EPG logosu veya başka bir kaynak.
 - [x] **Android TV "Play Next" satırında logosu olmayan içerikler boş kart olarak görünüyor. Yedek görsel kullanılmalı** (2026-11-22, birim testle doğrulandı): `WatchNextPublisher` (`resolveWatchNextPoster`) logosu eksik içeriklerde `android.resource://.../banner` (16:9) yedeğine düşüyor.
 

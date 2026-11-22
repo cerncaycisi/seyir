@@ -251,6 +251,80 @@ fun PosterCard(
     }
 }
 
+/** List-view cell for Movies/Series: small poster, title, year · rating · genre, plot and progress. */
+@Composable
+fun PosterListRow(
+    stream: Stream,
+    favorite: Boolean,
+    onClick: () -> Unit,
+    onLongClick: () -> Unit,
+    onFocused: () -> Unit,
+    modifier: Modifier = Modifier,
+    progress: Float? = null,
+    badge: String? = null,
+) {
+    val shape = RoundedCornerShape(12.dp)
+    Card(
+        onClick = onClick,
+        onLongClick = onLongClick,
+        modifier = modifier.height(112.dp).pointerClick(onClick, onLongClick).onFocusChanged { if (it.isFocused || it.hasFocus) onFocused() },
+        shape = CardDefaults.shape(shape),
+        scale = CardDefaults.scale(focusedScale = 1.03f),
+        colors = CardDefaults.colors(
+            containerColor = Palette.Surface,
+            contentColor = Palette.Text,
+            focusedContainerColor = Color(0xFFF5F5F7),
+            focusedContentColor = Color(0xFF07080A),
+        ),
+    ) {
+        Row(Modifier.fillMaxSize().padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            var loaded by remember(stream.logo) { mutableStateOf(false) }
+            Box(Modifier.fillMaxHeight().aspectRatio(2f / 3f).clip(RoundedCornerShape(8.dp)).background(tileBrush(stream.name))) {
+                if (stream.logo != null) {
+                    AsyncImage(
+                        model = stream.logo,
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        onState = { loaded = it is AsyncImagePainter.State.Success },
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                }
+                if (!loaded) {
+                    Text(initials(stream.name), Modifier.align(Alignment.Center), color = Color.White, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelLarge)
+                }
+            }
+            Spacer(Modifier.width(14.dp))
+            Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.Center) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text(
+                        titleWithoutYear(stream.name, stream.year),
+                        modifier = Modifier.weight(1f, fill = false),
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    if (favorite) Icon(Icons.Rounded.Star, contentDescription = null, tint = Palette.Gold, modifier = Modifier.size(16.dp))
+                    if (progress != null && progress >= WATCHED_FRACTION) Icon(Icons.Rounded.CheckCircle, contentDescription = null, tint = Palette.Accent, modifier = Modifier.size(16.dp))
+                }
+                val meta = listOfNotNull(stream.year, stream.rating?.let { "★ $it" }, stream.genre?.substringBefore(',')?.trim(), badge)
+                    .filter { it.isNotBlank() }.joinToString("  ·  ")
+                if (meta.isNotEmpty()) {
+                    Text(meta, style = MaterialTheme.typography.labelMedium, color = LocalContentColor.current.copy(alpha = 0.65f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+                stream.plot?.takeIf { it.isNotBlank() }?.let {
+                    Spacer(Modifier.height(4.dp))
+                    Text(it, style = MaterialTheme.typography.bodySmall, color = LocalContentColor.current.copy(alpha = 0.7f), maxLines = 2, overflow = TextOverflow.Ellipsis)
+                }
+                if (progress != null && progress > 0.01f && progress < WATCHED_FRACTION) {
+                    Spacer(Modifier.height(6.dp))
+                    ProgressBar(progress, Modifier.fillMaxWidth(0.6f))
+                }
+            }
+        }
+    }
+}
+
 @Composable
 fun ChannelCard(
     stream: Stream,
@@ -634,4 +708,10 @@ fun TitleLogoOrText(
             )
         }
     }
+}
+
+/** "Göz Açıp Kapayıncaya Kadar (2021)" → "Göz Açıp Kapayıncaya Kadar" when [year] is shown next to it anyway. */
+internal fun titleWithoutYear(name: String, year: String?): String {
+    val y = year?.trim()?.takeIf { it.length == 4 } ?: return name
+    return name.replace(Regex("""\s*[(\[]\s*$y\s*[)\]]\s*$"""), "").ifBlank { name }
 }

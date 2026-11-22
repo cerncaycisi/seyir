@@ -68,6 +68,8 @@ sealed class Setting<T>(val key: Preferences.Key<T>, val default: T) {
     data object EpgChannelOverrides : Setting<Set<String>>(stringSetPreferencesKey("epg_channel_overrides"), emptySet())
     /** JSON map browseKey -> BrowseChoice (remembered category & sort per section/playlist/profile). */
     data object BrowsePrefs : Setting<String>(stringPreferencesKey("browse_prefs_json"), "{}")
+    /** Movies/Series as a list of rows instead of a poster grid. */
+    data object VodListView : Setting<Boolean>(booleanPreferencesKey("vod_list_view"), false)
 }
 
 class SettingsStore(context: Context) {

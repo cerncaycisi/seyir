@@ -64,6 +64,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.FavoriteBorder
 import androidx.compose.material.icons.rounded.Movie
 import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material.icons.rounded.GridView
+import androidx.compose.material.icons.automirrored.rounded.ViewList
 import androidx.compose.material.icons.rounded.SearchOff
 import android.content.Intent
 import android.speech.RecognizerIntent
@@ -226,6 +228,7 @@ private fun VodBrowser(
     var confirmClear by remember { mutableStateOf(false) }
     val history by repo.history.entries.collectAsState(initial = null)
     val metadataEnabled by repo.settings.flow(Setting.TmdbEnabled).collectAsState(initial = true)
+    val listView by repo.settings.flow(Setting.VodListView).collectAsState(initial = false)
     val metadata by remember(repo, playlist.id, type) { repo.metadata.observe(playlist.id, type) }.collectAsState(initial = emptyMap())
     var availableGenres by remember { mutableStateOf<List<String>>(emptyList()) }
     LaunchedEffect(type, metadataEnabled) { availableGenres = if (metadataEnabled) repo.tmdb.genres(type) else emptyList() }
@@ -258,6 +261,7 @@ private fun VodBrowser(
     val clearFocus = remember { SafeFocusRequester() }
     val sortFocus = remember { FocusRequester() }
     val genreFocus = remember { FocusRequester() }
+    val viewFocus = remember { FocusRequester() }
     val showClear = selected.special == SpecialCategory.RECENT && raw.isNotEmpty()
     val catVisible = { catState.layoutInfo.visibleItemsInfo.any { it.key == selected.key } }
     // OK on a category moves focus into its grid (top-left poster), like Netflix's category rail.
@@ -306,7 +310,7 @@ private fun VodBrowser(
                 onSearch,
                 Modifier.focusRequester(searchFocus).focusProperties {
                     left = FocusRequester.Cancel
-                    right = if (showClear && clearFocus.isAttached) clearFocus.requester else sortFocus
+                    right = if (showClear && clearFocus.isAttached) clearFocus.requester else viewFocus
                     down = if (catVisible()) selectedReq.target else FocusRequester.Default
                 },
             )
@@ -358,18 +362,29 @@ private fun VodBrowser(
                         onClick = { confirmClear = true },
                         modifier = clearFocus.attach().focusProperties {
                             left = searchFocus
-                            right = sortFocus
+                            right = viewFocus
                             down = if (shown.isNotEmpty() && gridEntry.isAttached) gridEntry.requester else FocusRequester.Cancel
                         },
                     )
                 }
+                // Shows the mode it switches to, like a toggle on a TV remote-driven toolbar.
+                HeaderButton(
+                    uiContext.getString(if (listView) R.string.ui_view_grid else R.string.ui_view_list),
+                    if (listView) Icons.Rounded.GridView else Icons.AutoMirrored.Rounded.ViewList,
+                    onClick = { scope.launch { repo.settings.set(Setting.VodListView, !listView) } },
+                    modifier = Modifier.focusRequester(viewFocus).focusProperties {
+                        left = if (showClear && clearFocus.isAttached) clearFocus.requester else searchFocus
+                        right = sortFocus
+                        down = if (shown.isNotEmpty() && gridEntry.isAttached) gridEntry.requester else FocusRequester.Cancel
+                    },
+                )
                 DropdownButton(
                     uiContext.getString(R.string.ui_sort),
                     VodSort.entries.map { it to sortLabel(uiContext, it) },
                     sort,
                     { sort = it },
                     Modifier.focusRequester(sortFocus).focusProperties {
-                        left = if (showClear && clearFocus.isAttached) clearFocus.requester else searchFocus
+                        left = viewFocus
                         right = genreFocus
                         down = if (shown.isNotEmpty() && gridEntry.isAttached) gridEntry.requester else FocusRequester.Cancel
                     },
@@ -406,7 +421,8 @@ private fun VodBrowser(
                     items = shown,
                     playlist = playlist,
                     actions = actions,
-                    columns = columns,
+                    columns = if (listView) 2 else columns,
+                    listView = listView,
                     state = gridState,
                     focusIndex = if (gridFocusIndex >= 0) gridFocusIndex else restoreIndex,
                     focusRequester = firstItemReq,
@@ -418,7 +434,7 @@ private fun VodBrowser(
                     modifier = Modifier.weight(1f),
                 )
                 Text(
-                    focused?.let { listOfNotNull(it.name, it.year, it.rating?.let { r -> "★ $r" }).joinToString("  ·  ") }.orEmpty(),
+                    focused?.let { listOfNotNull(titleWithoutYear(it.name, it.year), it.year, it.rating?.let { r -> "★ $r" }).joinToString("  ·  ") }.orEmpty(),
                     modifier = Modifier.fillMaxWidth().height(24.dp),
                     style = MaterialTheme.typography.labelLarge,
                     color = Palette.TextMuted,
@@ -480,6 +496,8 @@ internal fun PosterGrid(
     entryRequester: SafeFocusRequester = remember { SafeFocusRequester() },
     onLeftTarget: () -> FocusRequester = { FocusRequester.Default },
     onUpTarget: FocusRequester = FocusRequester.Default,
+    /** Rows with title, year, rating and plot instead of bare posters. */
+    listView: Boolean = false,
 ) {
     // Coming back from the category list returns to the last focused poster if it is on screen, else the
     // top-left visible one. (Modifier.focusRestorer crashed inside lazy layouts.)
@@ -508,18 +526,32 @@ internal fun PosterGrid(
     ) {
         itemsIndexed(items, key = { _, s -> s.id }) { i, s ->
             val key = favoriteKey(playlist, s)
-            PosterCard(
-                s,
-                key in actions.favorites,
-                onClick = { actions.open(items, i) },
-                onLongClick = { actions.longPress(s, categoryName) },
-                onFocused = { lastFocused = i; onFocused(s) },
-                modifier = Modifier.fillMaxWidth()
-                    .then(if (i == focusIndex) Modifier.focusRequester(focusRequester) else Modifier)
-                    .then(if (i == entryIndex) entryRequester.attach() else Modifier),
-                progress = actions.progress[key],
-                badge = actions.badges[key],
-            )
+            val cellModifier = Modifier.fillMaxWidth()
+                .then(if (i == focusIndex) Modifier.focusRequester(focusRequester) else Modifier)
+                .then(if (i == entryIndex) entryRequester.attach() else Modifier)
+            if (listView) {
+                PosterListRow(
+                    s,
+                    key in actions.favorites,
+                    onClick = { actions.open(items, i) },
+                    onLongClick = { actions.longPress(s, categoryName) },
+                    onFocused = { lastFocused = i; onFocused(s) },
+                    modifier = cellModifier,
+                    progress = actions.progress[key],
+                    badge = actions.badges[key],
+                )
+            } else {
+                PosterCard(
+                    s,
+                    key in actions.favorites,
+                    onClick = { actions.open(items, i) },
+                    onLongClick = { actions.longPress(s, categoryName) },
+                    onFocused = { lastFocused = i; onFocused(s) },
+                    modifier = cellModifier,
+                    progress = actions.progress[key],
+                    badge = actions.badges[key],
+                )
+            }
         }
     }
 }
