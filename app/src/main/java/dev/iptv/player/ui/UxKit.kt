@@ -396,3 +396,28 @@ fun AvatarBubble(name: String, colorIndex: Int, size: Dp = 44.dp) {
 
 /** The amber accent on dark content, or [content] itself when it is dark (a white, focused surface). */
 internal fun accentOn(content: Color): Color = if (content.luminance() > 0.5f) Palette.Primary else content
+
+/** Asks for a short name (e.g. a new channel group). The field opens the keyboard on OK, like other TV fields. */
+@Composable
+fun NameInputDialog(title: String, placeholder: String, confirmLabel: String, onConfirm: (String) -> Unit, onDismiss: () -> Unit) {
+    val uiContext = LocalContext.current
+    var name by remember { mutableStateOf("") }
+    val fieldFocus = remember { FocusRequester() }
+    LaunchedEffect(Unit) {
+        withFrameNanos { }
+        runCatching { fieldFocus.requestFocus() }
+    }
+    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+        Column(
+            Modifier.width(420.dp).clip(RoundedCornerShape(20.dp)).background(Palette.Surface).padding(24.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            Text(title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = Palette.Text)
+            TvTextField(name, { name = it.take(40) }, placeholder, Modifier.fillMaxWidth().focusRequester(fieldFocus))
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                TvButton(confirmLabel, { if (name.isNotBlank()) onConfirm(name.trim()) }, Modifier.weight(1f), primary = true)
+                TvButton(uiContext.getString(R.string.ui_cancel), onDismiss, Modifier.weight(1f))
+            }
+        }
+    }
+}

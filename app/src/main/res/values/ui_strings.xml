@@ -209,6 +209,14 @@
     <string name="ui_account_connections">Bağlantı: %1$d/%2$d</string>
     <string name="ui_past_days">%1$s · son %2$d gün</string>
     <string name="ui_today">Bugün</string>
+    <string name="ui_add_to_group">Gruba ekle</string>
+    <string name="ui_new_group">Yeni grup…</string>
+    <string name="ui_group_name">Grup adı</string>
+    <string name="ui_create">Oluştur</string>
+    <string name="ui_delete_group">Grubu sil</string>
+    <string name="ui_delete_group_message">\"%1$s\" grubu silinecek. Kanallar silinmez.</string>
+    <string name="ui_group_empty_hint">Bir kanala uzun basıp \"Gruba ekle\"yi seçin</string>
+    <string name="ui_groups_pick_hint">İşaretli gruplarda var; seçmek ekler ya da çıkarır</string>
     <string name="ui_categories_page">Kategoriler</string>
     <string name="ui_categories_type">Bölüm</string>
     <string name="ui_categories_visible">%1$d / %2$d kategori görünüyor</string>

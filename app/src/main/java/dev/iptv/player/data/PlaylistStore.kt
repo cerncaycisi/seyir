@@ -37,6 +37,23 @@ class PlaylistStore(context: Context, private val codec: Codec = SecretBox) {
     private fun watchLaterKey(profileId: String = ProfileStore.activeProfileId) =
         stringSetPreferencesKey(ProfileStore.profileScopedKey("watchlater", profileId))
 
+    private fun groupsKey(profileId: String = ProfileStore.activeProfileId) =
+        stringPreferencesKey(ProfileStore.profileScopedKey("groups", profileId))
+
+    private fun decodeGroups(raw: String?): List<ChannelGroup> =
+        if (raw.isNullOrEmpty()) emptyList() else runCatching { json.decodeFromString<List<ChannelGroup>>(raw) }.getOrDefault(emptyList())
+
+    /** User channel groups of the active profile ("Gruplarım"). */
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    val groups: Flow<List<ChannelGroup>> = ProfileStore.activeIdFlow.flatMapLatest { id -> store.data.map { decodeGroups(it[groupsKey(id)]) } }
+
+    suspend fun editGroups(change: (List<ChannelGroup>) -> List<ChannelGroup>) {
+        store.edit {
+            val k = groupsKey()
+            it[k] = json.encodeToString(change(decodeGroups(it[k])))
+        }
+    }
+
     /** "Watch later" set of the active profile; same key format as [favorites] (see [favoriteKey]). */
     @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
     val watchLater: Flow<Set<String>> = ProfileStore.activeIdFlow.flatMapLatest { id -> store.data.map { it[watchLaterKey(id)].orEmpty() } }
@@ -70,6 +87,12 @@ class PlaylistStore(context: Context, private val codec: Codec = SecretBox) {
                 @Suppress("UNCHECKED_CAST")
                 val fk = k as Preferences.Key<Set<String>>
                 it[fk] = it[fk].orEmpty().filterNot { key -> key.startsWith("$id|") }.toSet()
+            }
+            // Channel groups of every profile hold the same keys.
+            for (k in it.asMap().keys.filter { k -> k.name == "groups" || k.name.endsWith(".groups") }) {
+                @Suppress("UNCHECKED_CAST")
+                val gk = k as Preferences.Key<String>
+                it[gk] = json.encodeToString(ChannelGroups.withoutPlaylist(decodeGroups(it[gk]), id))
             }
         }
     }

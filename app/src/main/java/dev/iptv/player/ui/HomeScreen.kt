@@ -24,6 +24,11 @@ import androidx.compose.material.icons.automirrored.rounded.PlaylistPlay
 import androidx.compose.material.icons.rounded.CalendarViewWeek
 import androidx.compose.material.icons.rounded.FiberManualRecord
 import androidx.compose.material.icons.rounded.GridView
+import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.CheckBox
+import androidx.compose.material.icons.rounded.CheckBoxOutlineBlank
+import androidx.compose.material.icons.automirrored.rounded.PlaylistAdd
+import dev.iptv.player.data.ChannelGroups
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material.icons.rounded.LiveTv
@@ -117,11 +122,19 @@ class HomeActions(
     val categoryLongPress: (ContentType, String, String) -> Unit = { _, _, _ -> },
     /** Runs the action once the parental PIN was entered (or immediately if already unlocked / no PIN). */
     val requireUnlock: (() -> Unit) -> Unit = { it() },
+    /** User channel groups ("Gruplarım") of the active profile. */
+    val groups: List<dev.iptv.player.data.ChannelGroup> = emptyList(),
+    /** Long-press on a group entry in the Live category list (id, name). */
+    val groupLongPress: (String, String) -> Unit = { _, _ -> },
 )
 
 private sealed interface ActionTarget {
     data class Channel(val stream: Stream, val categoryName: String?) : ActionTarget
     data class Category(val type: ContentType, val id: String, val name: String) : ActionTarget
+    /** "Add to group" picker for a live channel. */
+    data class GroupPicker(val stream: Stream) : ActionTarget
+    data class NewGroup(val stream: Stream) : ActionTarget
+    data class Group(val id: String, val name: String) : ActionTarget
 }
 
 @OptIn(ExperimentalComposeUiApi::class)
@@ -154,6 +167,7 @@ fun HomeScreen(
     val scope = rememberCoroutineScope()
     val favorites by repo.store.favorites.collectAsState(initial = emptySet())
     val watchLater by repo.store.watchLater.collectAsState(initial = emptySet())
+    val groups by repo.store.groups.collectAsState(initial = emptyList())
     val history by repo.history.entries.collectAsState(initial = emptyList())
     val progress = remember(history) {
         history.filter { it.type != ContentType.LIVE }.associate { it.favKey to (if (it.finished) 1f else it.fraction) }
@@ -198,6 +212,8 @@ fun HomeScreen(
         longPress = { s, c -> target = ActionTarget.Channel(s, c) },
         categoryLongPress = { t, id, name -> target = ActionTarget.Category(t, id, name) },
         requireUnlock = { a -> if (rules.unlocked || hasPin.isEmpty()) a() else pendingUnlock = a },
+        groups = groups,
+        groupLongPress = { id, name -> target = ActionTarget.Group(id, name) },
     )
 
     // OK on a menu entry moves focus into that section (its own first-focus logic runs again);
@@ -338,7 +354,7 @@ fun HomeScreen(
         }
     }
 
-    HomeOverlays(repo, playlist, target, hasPin.isNotEmpty(), rules, favorites, watchLater, { target = null }, pendingUnlock, { pendingUnlock = null }, onMultiView)
+    HomeOverlays(repo, playlist, target, hasPin.isNotEmpty(), rules, favorites, watchLater, { target = null }, pendingUnlock, { pendingUnlock = null }, onMultiView, groups, { target = it })
 }
 
 @Composable
@@ -354,6 +370,8 @@ private fun HomeOverlays(
     pendingUnlock: (() -> Unit)?,
     clearUnlock: () -> Unit,
     onMultiView: (List<Stream>, Int, Int) -> Unit,
+    groups: List<dev.iptv.player.data.ChannelGroup> = emptyList(),
+    setTarget: (ActionTarget) -> Unit = {},
 ) {
     val historyEntries by repo.history.entries.collectAsState(initial = emptyList())
     val context = LocalContext.current
@@ -370,6 +388,12 @@ private fun HomeOverlays(
                     scope.launch { repo.store.toggleFavorite(favoriteKey(playlist, s)) }
                     dismiss()
                 })
+                if (s.type == ContentType.LIVE) {
+                    add(CardAction(context.getString(R.string.ui_add_to_group), Icons.AutoMirrored.Rounded.PlaylistAdd) {
+                        // No groups yet: go straight to naming one.
+                        setTarget(if (groups.isEmpty()) ActionTarget.NewGroup(s) else ActionTarget.GroupPicker(s))
+                    })
+                }
                 if (s.type != ContentType.LIVE) {
                     val later = favoriteKey(playlist, s) in watchLater
                     add(CardAction(if (later) context.getString(R.string.ui_remove_watch_later) else context.getString(R.string.ui_add_watch_later), Icons.Rounded.WatchLater) {
@@ -431,6 +455,46 @@ private fun HomeOverlays(
                 }
             }
             ActionCard(target.name, null, actions, onDismiss = dismiss)
+        }
+        is ActionTarget.GroupPicker -> {
+            val s = target.stream
+            val key = favoriteKey(playlist, s)
+            val actions = buildList {
+                for (g in groups) {
+                    val inside = key in g.keys
+                    add(CardAction(g.name, if (inside) Icons.Rounded.CheckBox else Icons.Rounded.CheckBoxOutlineBlank) {
+                        scope.launch { repo.store.editGroups { ChannelGroups.toggle(it, g.id, key) } }
+                        dismiss()
+                    })
+                }
+                add(CardAction(context.getString(R.string.ui_new_group), Icons.Rounded.Add) { setTarget(ActionTarget.NewGroup(s)) })
+            }
+            ActionCard(s.name, context.getString(R.string.ui_groups_pick_hint), actions, onDismiss = dismiss)
+        }
+        is ActionTarget.NewGroup -> {
+            val key = favoriteKey(playlist, target.stream)
+            NameInputDialog(
+                title = context.getString(R.string.ui_new_group).trimEnd('…'),
+                placeholder = context.getString(R.string.ui_group_name),
+                confirmLabel = context.getString(R.string.ui_create),
+                onConfirm = { name ->
+                    scope.launch { repo.store.editGroups { ChannelGroups.create(it, java.util.UUID.randomUUID().toString(), name, key) } }
+                    dismiss()
+                },
+                onDismiss = dismiss,
+            )
+        }
+        is ActionTarget.Group -> {
+            ConfirmDialog(
+                context.getString(R.string.ui_delete_group),
+                context.getString(R.string.ui_delete_group_message, target.name),
+                context.getString(R.string.ui_delete),
+                onConfirm = {
+                    scope.launch { repo.store.editGroups { ChannelGroups.delete(it, target.id) } }
+                    dismiss()
+                },
+                onDismiss = dismiss,
+            )
         }
         null -> Unit
     }

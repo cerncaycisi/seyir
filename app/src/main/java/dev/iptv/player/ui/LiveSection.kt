@@ -87,6 +87,7 @@ import kotlinx.coroutines.delay
 
 private const val ALL = "*"
 private const val RECENT = "~recent"
+private const val GROUP_PREFIX = "~group:"
 private const val FAVS = "~favorites"
 private const val PREVIEW_DEBOUNCE_MS = 650L
 
@@ -141,22 +142,29 @@ private fun LiveBrowser(
     val recent = remember(history, visible) { recentStreams(history.filter { it.type == ContentType.LIVE }, visible, playlist.id) }
     val favs = remember(visible, actions.favorites) { visible.filter { favoriteKey(playlist, it) in actions.favorites } }
     val counts = remember(base) { base.items.groupingBy { it.categoryId }.eachCount() }
-    val categories = remember(uiContext, base, recent.size, favs.size) {
+    // User groups ("Gruplarım") sit under Favorites; channels keep the order they were added in.
+    val groupItems = remember(visible, actions.groups) {
+        val byKey = visible.associateBy { favoriteKey(playlist, it) }
+        actions.groups.associate { g -> (GROUP_PREFIX + g.id) to g.keys.mapNotNull(byKey::get) }
+    }
+    val categories = remember(uiContext, base, recent.size, favs.size, actions.groups) {
         listOf(
             Category(ALL, uiContext.getString(R.string.ui_all)),
             Category(RECENT, uiContext.getString(R.string.ui_cat_recent)),
             Category(FAVS, uiContext.getString(R.string.ui_favorites)),
-        ) + base.categories.filter { (counts[it.id] ?: 0) > 0 }
+        ) + actions.groups.map { Category(GROUP_PREFIX + it.id, it.name) } +
+            base.categories.filter { (counts[it.id] ?: 0) > 0 }
     }
     if (categories.none { it.id == selected }) selected = ALL
-    val isSpecial = selected == ALL || selected == RECENT || selected == FAVS
+    val isSpecial = selected == ALL || selected == RECENT || selected == FAVS || selected.startsWith(GROUP_PREFIX)
     if (!isSpecial && rules.isCategoryLocked(playlist, ContentType.LIVE, selected)) selected = ALL
-    val items = remember(base, visible, recent, favs, selected, sort, rules.lockedCategories, rules.unlocked) {
+    val items = remember(base, visible, recent, favs, groupItems, selected, sort, rules.lockedCategories, rules.unlocked) {
         sortChannels(
             when (selected) {
                 ALL -> visible
                 RECENT -> recent
                 FAVS -> favs
+                in groupItems -> groupItems[selected].orEmpty()
                 else -> base.items.filter { it.categoryId == selected }
             },
             sort,
@@ -325,13 +333,15 @@ private fun LiveBrowser(
                     contentPadding = PaddingValues(bottom = 32.dp),
                 ) {
                     items(categories, key = { it.id }) { c ->
-                        val special = c.id == ALL || c.id == RECENT || c.id == FAVS
+                        val group = c.id.startsWith(GROUP_PREFIX)
+                        val special = c.id == ALL || c.id == RECENT || c.id == FAVS || group
                         CategoryItem(
                             name = c.name,
                             count = when (c.id) {
                                 ALL -> visible.size
                                 RECENT -> recent.size
                                 FAVS -> favs.size
+                                in groupItems -> groupItems[c.id]?.size
                                 else -> counts[c.id]
                             },
                             selected = c.id == selected,
@@ -344,7 +354,11 @@ private fun LiveBrowser(
                                     jumpToList++
                                 }
                             },
-                            onLongClick = if (special) null else ({ actions.categoryLongPress(ContentType.LIVE, c.id, c.name) }),
+                            onLongClick = when {
+                                group -> ({ actions.groupLongPress(c.id.removePrefix(GROUP_PREFIX), c.name) })
+                                special -> null
+                                else -> ({ actions.categoryLongPress(ContentType.LIVE, c.id, c.name) })
+                            },
                             modifier = if (c.id == selected) categoryFocus.attach() else Modifier,
                         )
                     }
@@ -355,6 +369,7 @@ private fun LiveBrowser(
                         val hint = when (selected) {
                             FAVS -> uiContext.getString(R.string.ui_favorites_hint)
                             RECENT -> uiContext.getString(R.string.ui_history_empty_hint)
+                            in groupItems -> uiContext.getString(R.string.ui_group_empty_hint)
                             else -> null
                         }
                         EmptyState(Icons.Rounded.Tv, uiContext.getString(R.string.ui_channels_empty), hint)
