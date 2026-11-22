@@ -1,6 +1,6 @@
 # Seyir backlog
 
-Bu dosyada kullanıcının istekleri ve testlerde bulunan sorunlar tutulur. Biten maddeler işaretlenir, silinmez. Son güncelleme: 2026-11-22 (Ana Sayfa v2).
+Bu dosyada kullanıcının istekleri ve testlerde bulunan sorunlar tutulur. Biten maddeler işaretlenir, silinmez. Son güncelleme: 2026-11-22 (Detay düğmeleri v2; sıradaki iş: Detay v2 geri kalanı, Canlı TV v2, logo).
 
 ## P0 — Şu an açık
 
@@ -128,6 +128,6 @@ Logo ayrıca çalışılacak; şu an sade bir göz-oynat işareti.
 - [ ] Canlı: "▲▼ kanal" ipucu kontroller açıkken yanıltıcı (o anda ▲▼ odak taşıyor); kanal listesi paneli ve tam ekran bilgi paneli v2 diline taşınacak.
 - [x] Ana Sayfa v2 (2026-11-22, TV'de doğrulandı): kenardan kenara arka plan görseli (yalnızca sağ üst alan, önbellekli katman), odaklanan içeriği izleyen başlık bloğu (★ puan, yıl, tür, 2 satır özet), "İzlemeye devam et" için 16:9 kartlar + kehribar ilerleme. Performans aynı senaryoda: eski %5 / 28 ms → yeni %8 / 23 ms ortanca.
 - [ ] Ana Sayfa: içerik logoları (TMDB title logo) yerine şu an metin başlık; üst menü (tasarımdaki ortalanmış hap menü) henüz sol menü; kanal kartları baş harfli kutular.
-- [ ] Detay v2'yi uygula
+- [~] Detay v2 kısmen: düğmeler yeni dilde (beyaz ana düğme, yarı saydam diğerleri, odakta beyaz + halka) — 2026-11-22 TV'de doğrulandı. Kalan: kenardan kenara arka plan + sinematik karartma, TMDB logo başlık, kehribar puan, bölüm kartları (sıradaki bölüm beyaz).
 - [ ] Canlı TV v2'yi uygula
 - [ ] Logo ve ikon

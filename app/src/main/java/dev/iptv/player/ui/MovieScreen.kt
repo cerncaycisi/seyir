@@ -258,19 +258,22 @@ internal fun ActionButton(
     Surface(
         onClick = onClick,
         modifier = modifier.heightIn(min = MinTapTarget).pointerClick(onClick),
-        shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(50)),
+        // Design v2: white primary, translucent secondary; focus turns any button white with a ring.
+        shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(10.dp)),
         colors = ClickableSurfaceDefaults.colors(
-            containerColor = if (primary) Palette.Text else Palette.Surface,
-            contentColor = if (primary) Palette.Background else Palette.Text,
-            focusedContainerColor = Palette.Primary,
-            focusedContentColor = Color.White,
+            containerColor = if (primary) Color(0xFFF5F5F7) else Color(0x616E7078),
+            contentColor = if (primary) Color(0xFF07080A) else Color(0xFFF5F5F7),
+            focusedContainerColor = Color(0xFFF5F5F7),
+            focusedContentColor = Color(0xFF07080A),
         ),
-        scale = ClickableSurfaceDefaults.scale(focusedScale = 1.06f),
+        border = ClickableSurfaceDefaults.border(focusedBorder = androidx.tv.material3.Border(
+            androidx.compose.foundation.BorderStroke(2.dp, Color(0xFFF5F5F7)), inset = (-4).dp, shape = RoundedCornerShape(13.dp))),
+        scale = ClickableSurfaceDefaults.scale(focusedScale = 1.04f),
     ) {
         Row(Modifier.heightIn(min = MinTapTarget).padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
             Icon(icon, contentDescription = null, modifier = Modifier.size(20.dp))
             Spacer(Modifier.size(8.dp))
-            Text(label, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, maxLines = 1)
+            Text(label, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, maxLines = 1)
         }
     }
 }
