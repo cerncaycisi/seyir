@@ -20,6 +20,8 @@ import androidx.compose.material.icons.rounded.FiberManualRecord
 import androidx.compose.material.icons.rounded.LiveTv
 import androidx.compose.material.icons.rounded.MoreHoriz
 import androidx.compose.material.icons.rounded.Stop
+import androidx.compose.material.icons.rounded.Star
+import androidx.compose.material.icons.rounded.StarBorder
 import androidx.compose.material.icons.rounded.Subtitles
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -68,6 +70,8 @@ internal fun LiveControls(
     onReturnToLive: (() -> Unit)?,
     modifier: Modifier = Modifier,
     focusTarget: PlayerControlFocus = PlayerControlFocus.PlayPause,
+    favorite: Boolean = false,
+    onFavorite: (() -> Unit)? = null,
 ) {
     val first = remember { FocusRequester() }
     val channelsFocus = remember { FocusRequester() }
@@ -156,6 +160,14 @@ internal fun LiveControls(
                     if (recording) Icons.Rounded.Stop else Icons.Rounded.FiberManualRecord,
                     onRecord,
                 )
+                onFavorite?.let {
+                    Spacer(Modifier.width(10.dp))
+                    PillButton(
+                        stringResource(if (favorite) R.string.play_favorite_remove else R.string.play_favorite_add),
+                        if (favorite) Icons.Rounded.Star else Icons.Rounded.StarBorder,
+                        it,
+                    )
+                }
                 Spacer(Modifier.weight(1f))
                 Text(
                     stringResource(if (active) R.string.live_controls_active_hint else R.string.live_controls_hint),

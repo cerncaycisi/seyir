@@ -250,6 +250,7 @@ private fun MultiViewContent(cfg: PlayerConfig, channels: List<Stream>, start: I
             ChannelListPanel(
                 items = channels,
                 currentIndex = slots[focused],
+                playlistId = PlayerQueue.playlist?.id.orEmpty(),
                 onPick = { slots[focused] = it; picking = false },
                 onClose = { picking = false },
                 modifier = Modifier.align(Alignment.CenterStart),

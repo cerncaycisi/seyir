@@ -200,6 +200,7 @@ private fun PlayerContent(repo: Repository, cfg: PlayerConfig, onBack: () -> Uni
     var position by remember { mutableLongStateOf(0L) }
     var duration by remember { mutableLongStateOf(0L) }
     var buffered by remember { mutableLongStateOf(0L) }
+    val playerFavorites by repo.store.favorites.collectAsState(initial = emptySet())
     var showInfo by remember { mutableStateOf(false) }
     var titleInfo by remember(current.id) { mutableStateOf<String?>(null) }
     var pauseCast by remember(current.id) { mutableStateOf<String?>(null) }
@@ -943,6 +944,8 @@ private fun PlayerContent(repo: Repository, cfg: PlayerConfig, onBack: () -> Uni
                 onMore = { openPanelFromControls(Panel.Settings, PlayerControlFocus.More) },
                 focusTarget = controlFocus,
                 onReturnToLive = if (canReturnToLive) ({ returnToLive(); showOverlay() }) else null,
+                favorite = favoriteKey(playlist, current) in playerFavorites,
+                onFavorite = { scope.launch { repo.store.toggleFavorite(favoriteKey(playlist, current)) }; showOverlay() },
             )
         }
 
@@ -960,6 +963,7 @@ private fun PlayerContent(repo: Repository, cfg: PlayerConfig, onBack: () -> Uni
             Panel.Channels -> ChannelListPanel(
                 items = items,
                 currentIndex = index,
+                playlistId = playlist.id,
                 onPick = { zapTo(it); dismissPanel() },
                 onClose = ::closePanel,
                 modifier = Modifier.align(Alignment.CenterStart),
