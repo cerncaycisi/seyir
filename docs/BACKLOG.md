@@ -104,3 +104,27 @@ Bu dosyada kullanıcının istekleri ve testlerde bulunan sorunlar tutulur. Bite
 - [ ] Bölüm aramasını menüden açınca odak bazen arama kutusuna değil sol menüye düşüyor (Filmler → Ara).
 - [ ] Oynatıcıdan Geri: aramadan açılan dizi bölümünde dönüş arama sonuçlarına değil dizi sayfasına gidiyor (beklenen olabilir, değerlendirilecek).
 - [ ] İsteğe bağlı: gömülü TR altyazı yoksa OpenSubtitles'tan otomatik TR altyazı.
+
+## Tasarım v2 (2026-11-22) — tasarım panosu: https://claude.ai/artifact/Eji8f93DBxFTPLMfsR8Nue
+
+Kullanıcı ilk üç yönü "ucuz, profesyonel değil" diye reddetti. Onun yerine tek yön hazırlandı:
+- Koyu, beyaz ağırlıklı arayüz; tek vurgu rengi kehribar (#F2B544); yazı tipi Inter Tight + Inter.
+- TMDB arka planları ve başlık logoları kullanılıyor.
+
+Oynatıcı v2, benchmark sonrası şu kurallarla kuruldu:
+- Zaman çubuğu ana kontrol; önizleme yalnızca sararken görünür.
+- Ses, altyazı ve altyazı görünümü tek panelde; panel açıkken video durmaz.
+- İçerik bilgisi yalnızca duraklatınca gösterilir.
+- "Girişi atla" ve "Sonraki bölüm" bağlama göre çıkar; "22:56'da biter" bilgisi var.
+
+Kullanıcı kararları:
+- Oynat/duraklat düğmesi kalsın.
+- Dizide "Sonraki bölüm" olsun.
+- Filmde ve canlı yayında önceki/sonraki düğmesi olmasın; −10/+10 düğmesi olmasın.
+
+Logo ayrıca çalışılacak; şu an sade bir göz-oynat işareti.
+- [ ] Oynatıcı v2'yi uygula
+- [ ] Ana Sayfa v2'yi uygula
+- [ ] Detay v2'yi uygula
+- [ ] Canlı TV v2'yi uygula
+- [ ] Logo ve ikon
