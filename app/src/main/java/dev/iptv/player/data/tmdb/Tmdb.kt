@@ -117,6 +117,36 @@ class Tmdb(context: Context, private val settings: SettingsStore, private val ap
         }
     }
 
+    /**
+     * Episode titles of one season from TMDB (episode number → name), Turkish first, English for episodes
+     * TMDB only names generically ("Bölüm 3"). Used when the provider gives no real episode names. Cached.
+     */
+    suspend fun seasonEpisodeNames(seriesTitle: String, yearHint: String?, season: Int): Map<Int, String> {
+        val basic = lookup(seriesTitle, ContentType.SERIES, yearHint) ?: return emptyMap()
+        return withContext(Dispatchers.IO) {
+            val file = File(dir, "season2-${basic.tmdbId}-$season.json")
+            readNames(file)?.let { return@withContext it }
+            try {
+                fun names(lang: String): Map<Int, String> =
+                    (request("/tv/${basic.tmdbId}/season/$season", mapOf("language" to lang))["episodes"] as? JsonArray).orEmpty()
+                        .mapNotNull { it as? JsonObject }
+                        .mapNotNull { e -> e.str("episode_number")?.toIntOrNull()?.let { n -> e.str("name")?.let { n to it } } }
+                        .toMap()
+                // "Bölüm 3", "3. Bölüm", "Episode 3": placeholders, not titles.
+                val generic = Regex("""(?i)^\s*(\d+\.?\s*(bölüm|episode)|(bölüm|episode)\s*\d+)\s*$""")
+                val tr = names("tr-TR")
+                val en = if (tr.values.any { generic.matches(it) }) names("en-US") else emptyMap()
+                val merged = tr.mapValues { (n, t) -> if (generic.matches(t)) en[n]?.takeUnless { generic.matches(it) } ?: t else t }
+                    .filterValues { !generic.matches(it) }
+                runCatching { file.writeText(json.encodeToString(merged.mapKeys { it.key.toString() })) }
+                merged
+            } catch (e: CancellationException) { throw e } catch (_: Exception) { emptyMap() }
+        }
+    }
+
+    private fun readNames(file: File): Map<Int, String>? = if (!file.exists()) null else
+        runCatching { json.decodeFromString<Map<String, String>>(file.readText()).mapKeys { it.key.toInt() } }.getOrNull()
+
     /** Credits are fetched only for a detail/pause panel, never for every catalog item. */
     suspend fun details(rawTitle: String, type: ContentType, yearHint: String? = null): TmdbInfo? {
         val basic = lookup(rawTitle, type, yearHint) ?: return null

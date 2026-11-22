@@ -210,6 +210,16 @@ private fun SeriesDetail(repo: Repository, playlist: Playlist, seriesId: String,
                     items(seasons.keys.toList()) { n -> SeasonChip(uiContext.getString(R.string.ui_season, n), n == season, Modifier.fillMaxWidth()) { chosenSeason = n } }
                 }
                 // Right: episodes of the selected season, scrolled to the continue target.
+                // Provider gave no real episode names (empty or the same leftover everywhere): ask TMDB for them.
+                val providerNames = seasons[season].orEmpty().map { DisplayText.episodeTitle(it.title, info.name) }
+                val needNames = providerNames.any { it.isEmpty() } || (providerNames.size > 1 && providerNames.distinct().size == 1)
+                val tmdbNames by androidx.compose.runtime.produceState(emptyMap<Int, String>(), info.name, season, needNames) {
+                    if (needNames) value = runCatching {
+                        // The TMDB match was made with the provider's title, which can differ from the shown (TMDB) name.
+                        val providerTitle = repo.content(playlist, ContentType.SERIES).items.firstOrNull { it.id == seriesId }?.name ?: info.name
+                        repo.tmdb.seasonEpisodeNames(providerTitle, info.year, season)
+                    }.getOrDefault(emptyMap())
+                }
                 val epState = remember(season) { androidx.compose.foundation.lazy.LazyListState(episodes.indexOfFirst { e -> e.id == target?.let { t -> all[t.index].id } }.coerceAtLeast(0)) }
                 LazyColumn(
                     Modifier.weight(1f).fillMaxHeight(),
@@ -224,7 +234,9 @@ private fun SeriesDetail(repo: Repository, playlist: Playlist, seriesId: String,
                         val ep = seasons[season]?.getOrNull(i)
                         EpisodeRow(
                             number = ep?.number ?: (i + 1),
-                            title = (if (uninformative) "" else cleaned.getOrNull(i).orEmpty()).ifEmpty { uiContext.getString(R.string.ui_episode_number, ep?.number ?: (i + 1)) },
+                            title = (if (uninformative) "" else cleaned.getOrNull(i).orEmpty())
+                                .ifEmpty { tmdbNames[ep?.number ?: (i + 1)].orEmpty() }
+                                .ifEmpty { uiContext.getString(R.string.ui_episode_number, ep?.number ?: (i + 1)) },
                             progress = progressById[e.id],
                             onClick = { if (resumeById[e.id] != null) pendingEpisode = i else onPlay(episodes, i) },
                         )

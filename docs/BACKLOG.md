@@ -133,4 +133,4 @@ Logo ayrıca çalışılacak; şu an sade bir göz-oynat işareti.
 - [ ] Canlı TV v2'yi uygula
 - [ ] Logo ve ikon
 - [x] Logo ve ikon v1 (2026-11-22): göz + kehribar oynat göz bebeği. Uygulama ikonu (adaptive), TV banner'ı (drawable-xhdpi/banner.png, Segoe UI Bold ile üretildi) ve uygulama içi BrandMark güncellendi. Kalan: profesyonel wordmark (özel yazı tipi), farklı boyutlarda kontrol.
-- [ ] Bölüm adları: sağlayıcı ad vermiyorsa ya da her bölümde aynı kalıntı varsa ("Hz Omer.S01.E01") şu an "Bölüm N" gösteriliyor; TMDB sezon bölüm adlarını (tv/{id}/season/{n}) çekip gerçek adları göster.
+- [x] Bölüm adları (2026-11-22): sağlayıcı ad vermiyorsa TMDB sezon bölüm adları kullanılıyor; Türkçe ad "1. Bölüm" gibi genel bir adsa İngilizce gerçek ad. TMDB eşleşmesi yoksa "Bölüm N" gösteriliyor. Örnek: sağlayıcıdaki "Farouk Omar" TMDB'de bulunmuyor (TMDB'deki karşılığı "Hz. Ömer", id 58887); eşleşmesi için sağlayıcının tmdb_id alanı gerekli (P1).
