@@ -9,13 +9,15 @@ class BrowseMemoryTest {
     fun `update and decode round trip preserves per profile playlist and type keys`() {
         val kLive = browseKey("default", "p1", ContentType.LIVE)
         val kMovie = browseKey("kids", "p1", ContentType.MOVIE)
+        val kSeries = browseKey("kids", "p1", ContentType.SERIES)
 
         val step1 = updateBrowsePref("{}", kLive, "cat_news", "AZ")
-        val step2 = updateBrowsePref(step1, kMovie, "cat_anim", "RATING")
+        val step2 = updateBrowsePref(step1, kMovie, "cat_anim", "RECENT")
 
         val decoded = decodeBrowsePrefs(step2)
         assertEquals(BrowseChoice("cat_news", "AZ"), decoded[kLive])
-        assertEquals(BrowseChoice("cat_anim", "RATING"), decoded[kMovie])
+        assertEquals(BrowseChoice("cat_anim", "RECENT"), decoded[kMovie])
+        assertEquals(BrowseChoice("", "RECENT"), decoded[kSeries])
     }
 
     @Test

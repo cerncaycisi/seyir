@@ -49,6 +49,7 @@ import dev.iptv.player.data.filterByGenre
 import dev.iptv.player.data.genresOf
 import dev.iptv.player.data.latestOf
 import dev.iptv.player.data.saveBrowseChoice
+import dev.iptv.player.data.saveBrowseChoiceAsync
 import dev.iptv.player.data.sortStreams
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
@@ -220,14 +221,14 @@ private fun VodBrowser(
     val rules = actions.rules
     val loadedSort = VodSort.entries.firstOrNull { it.name == initialChoice.sort } ?: VodSort.DEFAULT
     val loadedCategory = initialChoice.category.ifEmpty { SpecialCategory.ALL.name }
-    var sort by rememberSaveable(choiceKey) { mutableStateOf(loadedSort) }
+    var sort by rememberSaveable(choiceKey, loadedSort) { mutableStateOf(loadedSort) }
     var genre by rememberSaveable { mutableStateOf<String?>(null) }
-    var selectedKey by rememberSaveable(choiceKey) { mutableStateOf(loadedCategory) }
-    var lastSaved by remember(choiceKey) { mutableStateOf(BrowseChoice(loadedCategory, loadedSort.name)) }
+    var selectedKey by rememberSaveable(choiceKey, loadedCategory) { mutableStateOf(loadedCategory) }
+    var lastSaved by remember(choiceKey, loadedCategory, loadedSort) { mutableStateOf(BrowseChoice(loadedCategory, loadedSort.name)) }
     LaunchedEffect(choiceKey, selectedKey, sort) {
         if (selectedKey != lastSaved.category || sort.name != lastSaved.sort) {
-            repo.settings.saveBrowseChoice(choiceKey, selectedKey, sort.name)
             lastSaved = BrowseChoice(selectedKey, sort.name)
+            repo.settings.saveBrowseChoice(choiceKey, selectedKey, sort.name)
         }
     }
     var confirmClear by remember { mutableStateOf(false) }
@@ -355,7 +356,14 @@ private fun VodBrowser(
                         selected = c.key == selected.key,
                         locked = pid != null && pid != OTHER_CATEGORY && rules.isCategoryMarkedLocked(playlist, type, pid),
                         onClick = {
-                            val select = { selectedKey = c.key; genre = null; focused = null; jumpToGrid += 1; Unit }
+                            val select = {
+                                selectedKey = c.key
+                                genre = null
+                                focused = null
+                                jumpToGrid += 1
+                                repo.settings.saveBrowseChoiceAsync(choiceKey, c.key, sort.name)
+                                Unit
+                            }
                             if (pid != null && pid != OTHER_CATEGORY && rules.isCategoryLocked(playlist, type, pid)) actions.requireUnlock(select) else select()
                         },
                         onLongClick = if (pid != null && pid != OTHER_CATEGORY) ({ actions.categoryLongPress(type, pid, c.name) }) else null,
@@ -400,7 +408,10 @@ private fun VodBrowser(
                     uiContext.getString(R.string.ui_sort),
                     VodSort.entries.map { it to sortLabel(uiContext, it) },
                     sort,
-                    { sort = it },
+                    {
+                        sort = it
+                        repo.settings.saveBrowseChoiceAsync(choiceKey, selectedKey, it.name)
+                    },
                     Modifier.focusRequester(sortFocus).focusProperties {
                         up = actions.menuFocus()
                         left = viewFocus

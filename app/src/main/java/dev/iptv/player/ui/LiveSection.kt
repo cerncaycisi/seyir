@@ -21,6 +21,7 @@ import dev.iptv.player.data.browseChoice
 import dev.iptv.player.data.browseKey
 import dev.iptv.player.data.recentStreams
 import dev.iptv.player.data.saveBrowseChoice
+import dev.iptv.player.data.saveBrowseChoiceAsync
 import dev.iptv.player.data.sortChannels
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -128,13 +129,13 @@ private fun LiveBrowser(
     val uiContext = LocalContext.current
     val loadedCategory = initialChoice.category.ifEmpty { ALL }
     val loadedSort = LiveSort.entries.firstOrNull { it.name == initialChoice.sort } ?: LiveSort.DEFAULT
-    var selected by rememberSaveable(choiceKey) { mutableStateOf(loadedCategory) }
-    var sort by rememberSaveable(choiceKey) { mutableStateOf(loadedSort) }
-    var lastSaved by remember(choiceKey) { mutableStateOf(BrowseChoice(loadedCategory, loadedSort.name)) }
+    var selected by rememberSaveable(choiceKey, loadedCategory) { mutableStateOf(loadedCategory) }
+    var sort by rememberSaveable(choiceKey, loadedSort) { mutableStateOf(loadedSort) }
+    var lastSaved by remember(choiceKey, loadedCategory, loadedSort) { mutableStateOf(BrowseChoice(loadedCategory, loadedSort.name)) }
     LaunchedEffect(choiceKey, selected, sort) {
         if (selected != lastSaved.category || sort.name != lastSaved.sort) {
-            repo.settings.saveBrowseChoice(choiceKey, selected, sort.name)
             lastSaved = BrowseChoice(selected, sort.name)
+            repo.settings.saveBrowseChoice(choiceKey, selected, sort.name)
         }
     }
     val rules = actions.rules
@@ -314,7 +315,10 @@ private fun LiveBrowser(
                     uiContext.getString(R.string.ui_sort),
                     LiveSort.entries.map { it to liveSortLabel(uiContext, it) },
                     sort,
-                    { sort = it },
+                    {
+                        sort = it
+                        repo.settings.saveBrowseChoiceAsync(choiceKey, selected, it.name)
+                    },
                     Modifier.focusRequester(sortFocus).focusProperties {
                         up = actions.menuFocus()
                         left = recordingsFocus
@@ -364,10 +368,15 @@ private fun LiveBrowser(
                             locked = !special && rules.isCategoryMarkedLocked(playlist, ContentType.LIVE, c.id),
                             onClick = {
                                 if (!special && rules.isCategoryLocked(playlist, ContentType.LIVE, c.id)) {
-                                    actions.requireUnlock { selected = c.id; jumpToList += 1 }
+                                    actions.requireUnlock {
+                                        selected = c.id
+                                        jumpToList += 1
+                                        repo.settings.saveBrowseChoiceAsync(choiceKey, c.id, sort.name)
+                                    }
                                 } else {
                                     selected = c.id
                                     jumpToList++
+                                    repo.settings.saveBrowseChoiceAsync(choiceKey, c.id, sort.name)
                                 }
                             },
                             onLongClick = when {

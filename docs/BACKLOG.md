@@ -1,6 +1,6 @@
 # Seyir backlog
 
-Bu dosyada kullanıcının istekleri ve testlerde bulunan sorunlar tutulur. Biten maddeler işaretlenir, silinmez. Son güncelleme: 2026-11-22 (MetadataCatalog bellek içi anlık snapshot/decode önbelleği — TMDB puan/tür filtreli listede detaydan dönüşte "0 öğe" yanıp sönmesi giderildi; sürüm 0.2.17).
+Bu dosyada kullanıcının istekleri ve testlerde bulunan sorunlar tutulur. Biten maddeler işaretlenir, silinmez. Son güncelleme: 2026-11-22 (Filmler ve Diziler arasında paylaşılan kalıcı sıralama seçimi + anlık BrowseMemory önbelleği; sürüm 0.2.18).
 
 ## P0 — Şu an açık
 
