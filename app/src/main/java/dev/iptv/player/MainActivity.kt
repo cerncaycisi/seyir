@@ -74,6 +74,13 @@ class MainActivity : ComponentActivity() {
         if (savedInstanceState == null) deepLink.value = intent?.data?.takeIf { it.scheme == DeepLinks.SCHEME }
         // `am start --es section LIVE` opens a section directly (used for on-device QA and launcher shortcuts).
         if (savedInstanceState == null) launchSection = intent?.getStringExtra("section")
+        if (savedInstanceState == null) {
+            intent?.getStringExtra("migrate_spectre_b64")?.takeIf { it.isNotBlank() }?.let { b64 ->
+                kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+                    runCatching { migrateSpectreJson(repository, String(android.util.Base64.decode(b64, android.util.Base64.DEFAULT), Charsets.UTF_8)) }
+                }
+            }
+        }
         if (savedInstanceState == null && intent?.action == Intent.ACTION_SEARCH) searchQuery.value = intent.getStringExtra(SearchManager.QUERY).orEmpty()
         dev.iptv.player.epg.ReminderBus.handleIntent(intent)
         PipState.inPip.value = false
@@ -328,4 +335,66 @@ private class Startup(val profiles: List<Profile>, val defaultSection: String, v
         /** Last-channel auto launch runs once per process. */
         @Volatile var handled = false
     }
+}
+
+private suspend fun migrateSpectreJson(repo: Repository, rawJson: String) {
+    val playlists = repo.store.playlists.first()
+    val activeId = repo.store.activeId.first()
+    val playlist = playlists.firstOrNull { it.id == activeId } ?: playlists.firstOrNull() ?: return
+    val live = repo.content(playlist, ContentType.LIVE).items
+    val movies = repo.content(playlist, ContentType.MOVIE).items
+    val series = repo.content(playlist, ContentType.SERIES).items
+
+    fun norm(s: String) = s.trim().trimEnd('|').replace(Regex("\\s+"), " ").lowercase()
+    fun findStream(pool: List<Stream>, title: String): Stream? {
+        val t = title.trim()
+        pool.firstOrNull { it.name.trim().equals(t, ignoreCase = true) }?.let { return it }
+        val nt = norm(t)
+        return pool.firstOrNull { norm(it.name) == nt }
+            ?: pool.firstOrNull { dev.iptv.player.ui.titleWithoutYear(norm(it.name), it.year) == nt }
+    }
+
+    val obj = org.json.JSONObject(rawJson)
+    fun arr(key: String): List<String> {
+        val a = obj.optJSONArray(key) ?: return emptyList()
+        return (0 until a.length()).mapNotNull { a.optString(it)?.takeIf { s -> s.isNotBlank() } }
+    }
+
+    val favKeys = LinkedHashSet<String>()
+    arr("liveFav").mapNotNull { findStream(live, it) }.forEach { favKeys += dev.iptv.player.data.favoriteKey(playlist, it) }
+    arr("moviesFav").mapNotNull { findStream(movies, it) }.forEach { favKeys += dev.iptv.player.data.favoriteKey(playlist, it) }
+    arr("seriesFav").mapNotNull { findStream(series, it) }.forEach { favKeys += dev.iptv.player.data.favoriteKey(playlist, it) }
+
+    val now = System.currentTimeMillis()
+    val historyEntries = ArrayList<dev.iptv.player.data.HistoryEntry>()
+    var order = 0
+    fun addHistory(stream: Stream, posMs: Long = 0L, durMs: Long = 0L, seriesId: String? = null) {
+        val fk = dev.iptv.player.data.favoriteKey(playlist, stream)
+        val scoped = repo.history.scoped(fk)
+        if (historyEntries.any { it.key == scoped }) return
+        historyEntries += dev.iptv.player.data.HistoryEntry(
+            key = scoped,
+            favKey = fk,
+            playlistId = playlist.id,
+            id = stream.id,
+            type = stream.type,
+            name = stream.name,
+            logo = stream.logo,
+            url = stream.url,
+            categoryId = stream.categoryId,
+            seriesId = seriesId,
+            positionMs = posMs,
+            durationMs = durMs,
+            updatedAt = now - (order++ * 1000L),
+        )
+    }
+
+    arr("liveRecent").mapNotNull { findStream(live, it) }.forEach { addHistory(it) }
+    arr("moviesResume").mapNotNull { findStream(movies, it) }.forEach { addHistory(it, posMs = 120_000L, durMs = 5_400_000L) }
+    arr("seriesRecent").mapNotNull { findStream(series, it) }.forEach { addHistory(it, seriesId = it.id) }
+
+    repo.store.resetAndSetFavorites(favKeys)
+    repo.history.replaceAll(historyEntries)
+    repo.settings.set(Setting.BrowsePrefs, "")
+    android.util.Log.i("SeyirMigrate", "Migrated favs=${favKeys.size} history=${historyEntries.size}")
 }

@@ -124,6 +124,15 @@ class WatchHistory(context: Context, private val scope: CoroutineScope) {
         watchNext.sync(emptyList())
     }
 
+    /** Replaces the entire watch history with [items] (newest first). */
+    suspend fun replaceAll(items: List<HistoryEntry>) {
+        val snapshot = trim(items)
+        store.edit { prefs ->
+            prefs[entriesKey] = json.encodeToString(snapshot)
+        }
+        watchNext.sync(snapshot.filter { historyBelongsTo(it.key, keyPrefix) })
+    }
+
     /** Clears the active profile's history of one content type (live, movies or series). */
     suspend fun clearType(type: ContentType) {
         val p = keyPrefix

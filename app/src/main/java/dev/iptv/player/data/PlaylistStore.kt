@@ -168,6 +168,19 @@ class PlaylistStore(context: Context, private val codec: Codec = SecretBox) {
         }
     }
 
+    /** Resets favorites, watch-later, custom groups and saved positions while preserving playlists, then writes [newFavorites]. */
+    suspend fun resetAndSetFavorites(newFavorites: Set<String>) {
+        store.edit { prefs ->
+            val keepKeys = setOf(playlistsKey.name, activeKey.name)
+            for (k in prefs.asMap().keys.toList()) {
+                if (k.name !in keepKeys) prefs.remove(k)
+            }
+            if (newFavorites.isNotEmpty()) {
+                prefs[favoritesKey()] = newFavorites
+            }
+        }
+    }
+
     private fun decode(raw: String?): List<Playlist> =
         raw?.let { runCatching { json.decodeFromString<List<Playlist>>(it) }.getOrNull() }.orEmpty()
 
