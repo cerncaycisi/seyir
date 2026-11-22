@@ -228,6 +228,14 @@ private fun PlayerContent(repo: Repository, cfg: PlayerConfig, onBack: () -> Uni
     }
 
     var panel by remember { mutableStateOf(Panel.None) }
+    var controlFocus by remember { mutableStateOf(PlayerControlFocus.PlayPause) }
+    var panelOpenedFromControls by remember { mutableStateOf(false) }
+    LaunchedEffect(controlsActive, panel) {
+        if (panel == Panel.None) {
+            panelOpenedFromControls = false
+            if (!controlsActive) controlFocus = PlayerControlFocus.PlayPause
+        }
+    }
     var tracks by remember { mutableStateOf(Tracks.EMPTY) }
     var trackParams by remember { mutableStateOf<TrackSelectionParameters>(player.trackSelectionParameters) }
     // Default audio = the title's original language (setting "original"); a manual choice in the player wins.
@@ -326,8 +334,37 @@ private fun PlayerContent(repo: Repository, cfg: PlayerConfig, onBack: () -> Uni
     val holdPause = remember { BooleanArray(1) } // true while the pause comes from the lifecycle, not the user
     val canReturnToLive = live && (shiftStartSec != null || behindSec >= Timeshift.BEHIND_LIVE_SHOW_SEC)
 
-    fun showOverlay() { overlayTick++ }
-    fun openSettings(page: PlayerPage = PlayerPage.Main) { settingsPage = page; panel = Panel.Settings }
+    fun showOverlay() {
+        overlay = true
+        overlayTick++
+    }
+    fun openSettings(page: PlayerPage = PlayerPage.Main, fromControls: Boolean = false) {
+        settingsPage = page
+        panelOpenedFromControls = fromControls
+        panel = Panel.Settings
+    }
+    fun openPanelFromControls(target: Panel, control: PlayerControlFocus, page: PlayerPage = PlayerPage.Main) {
+        controlFocus = control
+        panelOpenedFromControls = true
+        if (target == Panel.Settings) settingsPage = page
+        panel = target
+    }
+    fun closePanel() {
+        val fromControls = panelOpenedFromControls
+        panelOpenedFromControls = false
+        panel = Panel.None
+        if (fromControls) {
+            controlsActive = true
+            showOverlay()
+        } else {
+            overlay = false
+        }
+    }
+    fun dismissPanel() {
+        panel = Panel.None
+        panelOpenedFromControls = false
+        controlFocus = PlayerControlFocus.PlayPause
+    }
     fun toast(message: String) = android.widget.Toast.makeText(context, message, android.widget.Toast.LENGTH_SHORT).show()
     fun returnToLive() {
         pausedAtMs = 0
@@ -522,9 +559,8 @@ private fun PlayerContent(repo: Repository, cfg: PlayerConfig, onBack: () -> Uni
         if (live) epg = runCatching { repo.shortEpg(playlist, current) }.getOrDefault(emptyList())
     }
 
-    LaunchedEffect(overlayTick, playing, panel) {
-        overlay = true
-        if (!playing || panel != Panel.None) return@LaunchedEffect
+    LaunchedEffect(overlayTick, playing, overlay, panel) {
+        if (!overlay || !playing || panel != Panel.None) return@LaunchedEffect
         delay(if (controlsActive) 8_000 else 5_000)
         controlsActive = false
         overlay = false
@@ -595,12 +631,17 @@ private fun PlayerContent(repo: Repository, cfg: PlayerConfig, onBack: () -> Uni
     }
 
     BackHandler {
-        if (controlsActive) {
-            controlsActive = false
-            overlay = false
-        } else {
-            saveProgress()
-            onBack()
+        when {
+            panel != Panel.None -> closePanel()
+            controlsActive -> {
+                controlsActive = false
+                overlay = false
+                controlFocus = PlayerControlFocus.PlayPause
+            }
+            else -> {
+                saveProgress()
+                onBack()
+            }
         }
     }
 
@@ -647,19 +688,27 @@ private fun PlayerContent(repo: Repository, cfg: PlayerConfig, onBack: () -> Uni
             .focusable()
             .onPreviewKeyEvent { event ->
                 // Handle both halves of Back before TV focus groups/native views can consume it.
-                if ((panel == Panel.Settings || panel == Panel.Tracks) && event.key == Key.Back) {
-                    if (event.type == KeyEventType.KeyUp) { panel = Panel.None; controlsActive = true; showOverlay() }
+                if (event.key == Key.Back && (panel != Panel.None || controlsActive)) {
+                    if (event.type == KeyEventType.KeyUp) {
+                        if (panel != Panel.None) {
+                            closePanel()
+                        } else {
+                            controlsActive = false
+                            overlay = false
+                            controlFocus = PlayerControlFocus.PlayPause
+                        }
+                    }
                     return@onPreviewKeyEvent true
                 }
                 if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
                 val code = event.nativeKeyEvent.keyCode
                 if (blocking) {
                     // Panels own the D-pad; MENU toggles the settings panel closed again.
-                    if (code == KeyEvent.KEYCODE_MENU && panel == Panel.Settings) { panel = Panel.None; return@onPreviewKeyEvent true }
+                    if (code == KeyEvent.KEYCODE_MENU && panel == Panel.Settings) { closePanel(); return@onPreviewKeyEvent true }
                     return@onPreviewKeyEvent false
                 }
                 if (code == KeyEvent.KEYCODE_MENU || code == KeyEvent.KEYCODE_SETTINGS || code == KeyEvent.KEYCODE_CAPTIONS) {
-                    if (!live && code == KeyEvent.KEYCODE_CAPTIONS) panel = Panel.Tracks
+                    if (!live && code == KeyEvent.KEYCODE_CAPTIONS) { panelOpenedFromControls = false; panel = Panel.Tracks }
                     else openSettings(if (code == KeyEvent.KEYCODE_CAPTIONS) PlayerPage.Subtitle else PlayerPage.Main)
                     return@onPreviewKeyEvent true
                 }
@@ -687,12 +736,12 @@ private fun PlayerContent(repo: Repository, cfg: PlayerConfig, onBack: () -> Uni
                         if (previousIndex in items.indices) zapTo(previousIndex)
                         return@onPreviewKeyEvent true
                     }
-                    if (code == KeyEvent.KEYCODE_GUIDE) { panel = Panel.Channels; return@onPreviewKeyEvent true }
+                    if (code == KeyEvent.KEYCODE_GUIDE) { panelOpenedFromControls = false; panel = Panel.Channels; return@onPreviewKeyEvent true }
                     if (code == KeyEvent.KEYCODE_INFO) { showOverlay(); return@onPreviewKeyEvent true }
                     when (event.key) {
                         Key.DirectionUp, Key.ChannelUp -> { zapTo((index + 1) % items.size); true }
                         Key.DirectionDown, Key.ChannelDown -> { zapTo((index - 1 + items.size) % items.size); true }
-                        Key.DirectionLeft -> { panel = Panel.Channels; true }
+                        Key.DirectionLeft -> { panelOpenedFromControls = false; panel = Panel.Channels; true }
                         Key.DirectionRight -> { openSettings(); true }
                         Key.DirectionCenter, Key.Enter, Key.NumPadEnter -> {
                             if (digits.isNotEmpty()) commitDigits() else { controlsActive = true; showOverlay() }
@@ -818,7 +867,8 @@ private fun PlayerContent(repo: Repository, cfg: PlayerConfig, onBack: () -> Uni
                 onSeek = { player.seekTo(it); showOverlay() },
                 onInteraction = { controlsActive = true; showOverlay() },
                 onNext = if (current.type == ContentType.SERIES && index < items.lastIndex) ({ saveProgress(); nextSeconds = 0; index++ }) else null,
-                onTracks = { panel = Panel.Tracks },
+                onTracks = { openPanelFromControls(Panel.Tracks, PlayerControlFocus.Tracks) },
+                focusTarget = controlFocus,
             )
             Text(
                 formatClock(System.currentTimeMillis() / 1000),
@@ -855,10 +905,11 @@ private fun PlayerContent(repo: Repository, cfg: PlayerConfig, onBack: () -> Uni
                 recording = activeRecording != null,
                 sleepLabel = if (sleepMinutes > 0) stringResource(R.string.play_sleep_remaining, sleepMinutes) else null,
                 onToggle = { if (player.playWhenReady) player.pause() else player.play(); showOverlay() },
-                onChannels = { panel = Panel.Channels },
+                onChannels = { openPanelFromControls(Panel.Channels, PlayerControlFocus.Channels) },
                 onRecord = ::toggleRecording,
-                onTracks = if (liveAudio.size > 1 || liveSubs.isNotEmpty()) ({ panel = Panel.Tracks }) else null,
-                onMore = { openSettings() },
+                onTracks = if (liveAudio.size > 1 || liveSubs.isNotEmpty()) ({ openPanelFromControls(Panel.Tracks, PlayerControlFocus.Tracks) }) else null,
+                onMore = { openPanelFromControls(Panel.Settings, PlayerControlFocus.More) },
+                focusTarget = controlFocus,
                 onReturnToLive = if (canReturnToLive) ({ returnToLive(); showOverlay() }) else null,
             )
         }
@@ -877,8 +928,8 @@ private fun PlayerContent(repo: Repository, cfg: PlayerConfig, onBack: () -> Uni
             Panel.Channels -> ChannelListPanel(
                 items = items,
                 currentIndex = index,
-                onPick = { zapTo(it); panel = Panel.None },
-                onClose = { panel = Panel.None },
+                onPick = { zapTo(it); dismissPanel() },
+                onClose = ::closePanel,
                 modifier = Modifier.align(Alignment.CenterStart),
             )
             Panel.Settings -> PlayerSettingsPanel(
@@ -922,7 +973,7 @@ private fun PlayerContent(repo: Repository, cfg: PlayerConfig, onBack: () -> Uni
                 onRecordToggle = if (live) ({ toggleRecording(); panel = Panel.None }) else null,
                 onMultiView = if (live) ({ n -> saveProgress(); panel = Panel.None; onMultiView(n) }) else null,
                 onPip = if (PipState.supported(context)) ({ panel = Panel.None; activity?.let { PipState.enter(it) } }) else null,
-                onClose = { panel = Panel.None },
+                onClose = ::closePanel,
                 modifier = Modifier.align(Alignment.CenterEnd),
             )
             Panel.Tracks -> AudioSubtitleSheet(
@@ -941,7 +992,7 @@ private fun PlayerContent(repo: Repository, cfg: PlayerConfig, onBack: () -> Uni
                     repo.scope.launch { repo.settings.set(Setting.SubtitleScale, s) }
                 },
                 onOnlineSearch = if (subtitleSearch != null) ({ openSettings(PlayerPage.Online) }) else null,
-                onClose = { panel = Panel.None; controlsActive = true; showOverlay() },
+                onClose = ::closePanel,
                 modifier = Modifier.align(Alignment.BottomCenter),
             )
             Panel.None -> Unit

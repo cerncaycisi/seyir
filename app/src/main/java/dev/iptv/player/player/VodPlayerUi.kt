@@ -91,6 +91,8 @@ internal fun splitPlayerTitle(name: String): Pair<String, String?> {
     return if (i <= 0) name to null else name.substring(0, i) to name.substring(i + 3)
 }
 
+internal enum class PlayerControlFocus { PlayPause, Channels, Tracks, More }
+
 @Composable
 internal fun VodControls(
     name: String,
@@ -106,14 +108,17 @@ internal fun VodControls(
     onNext: (() -> Unit)?,
     onTracks: () -> Unit,
     modifier: Modifier = Modifier,
+    focusTarget: PlayerControlFocus = PlayerControlFocus.PlayPause,
 ) {
     val (title, subtitle) = remember(name) { splitPlayerTitle(name) }
     val playFocus = remember { FocusRequester() }
+    val tracksFocus = remember { FocusRequester() }
     var scrubTarget by remember { mutableStateOf<Long?>(null) }
-    LaunchedEffect(active) {
+    LaunchedEffect(active, focusTarget) {
         if (active) {
             withFrameNanos { }
-            runCatching { playFocus.requestFocus() }
+            val target = if (focusTarget == PlayerControlFocus.Tracks) tracksFocus else playFocus
+            runCatching { target.requestFocus() }
         }
     }
     Box(modifier.fillMaxSize()) {
@@ -151,7 +156,7 @@ internal fun VodControls(
                     PillButton(stringResource(R.string.vod_next_episode), Icons.Rounded.SkipNext, onNext)
                     Spacer(Modifier.width(10.dp))
                 }
-                RoundIconButton(Icons.Rounded.Subtitles, stringResource(R.string.vod_audio_subtitles), onTracks)
+                RoundIconButton(Icons.Rounded.Subtitles, stringResource(R.string.vod_audio_subtitles), onTracks, Modifier.focusRequester(tracksFocus))
             }
         }
     }
@@ -251,10 +256,10 @@ internal fun PlayPauseButton(playing: Boolean, onClick: () -> Unit, modifier: Mo
 }
 
 @Composable
-internal fun RoundIconButton(icon: ImageVector, description: String, onClick: () -> Unit) {
+internal fun RoundIconButton(icon: ImageVector, description: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
     Surface(
         onClick = onClick,
-        modifier = Modifier.size(40.dp).pointerClick(onClick),
+        modifier = modifier.size(40.dp).pointerClick(onClick),
         shape = ClickableSurfaceDefaults.shape(CircleShape),
         colors = ClickableSurfaceDefaults.colors(containerColor = Chip, contentColor = Ink, focusedContainerColor = Ink, focusedContentColor = Color.Black),
         scale = ClickableSurfaceDefaults.scale(focusedScale = 1.08f),
@@ -264,10 +269,10 @@ internal fun RoundIconButton(icon: ImageVector, description: String, onClick: ()
 }
 
 @Composable
-internal fun PillButton(label: String, icon: ImageVector, onClick: () -> Unit) {
+internal fun PillButton(label: String, icon: ImageVector, onClick: () -> Unit, modifier: Modifier = Modifier) {
     Surface(
         onClick = onClick,
-        modifier = Modifier.height(40.dp).pointerClick(onClick),
+        modifier = modifier.height(40.dp).pointerClick(onClick),
         shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(20.dp)),
         colors = ClickableSurfaceDefaults.colors(containerColor = Chip, contentColor = Ink, focusedContainerColor = Ink, focusedContentColor = Color.Black),
         scale = ClickableSurfaceDefaults.scale(focusedScale = 1.05f),

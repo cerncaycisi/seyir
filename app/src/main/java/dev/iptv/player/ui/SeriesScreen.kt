@@ -7,6 +7,7 @@ import androidx.compose.ui.platform.LocalContext
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -48,12 +49,17 @@ import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
@@ -95,6 +101,7 @@ fun SeriesScreen(repo: Repository, playlist: Playlist, seriesId: String, onPlay:
     }
 }
 
+@OptIn(ExperimentalComposeUiApi::class)
 @Composable
 private fun SeriesDetail(repo: Repository, playlist: Playlist, seriesId: String, info: SeriesInfo, onPlay: (List<Stream>, Int) -> Unit) {
     val uiContext = LocalContext.current
@@ -134,6 +141,14 @@ private fun SeriesDetail(repo: Repository, playlist: Playlist, seriesId: String,
     }
     val episodes = remember(info, season) { all.filterIndexed { i, _ -> info.episodes[i].season == season } }
     val primary = remember { FocusRequester() }
+    val seasonKeys = remember(seasons) { seasons.keys.toList() }
+    val seasonState = rememberLazyListState(seasonKeys.indexOf(season).coerceAtLeast(0))
+    val selectedSeasonFocus = remember { FocusRequester() }
+    val selectedSeasonVisible by remember(seasonKeys, season) {
+        derivedStateOf {
+            season in seasonKeys && seasonState.layoutInfo.visibleItemsInfo.any { it.key == season }
+        }
+    }
     LaunchedEffect(seasons.isEmpty()) {
         withFrameNanos { }
         runCatching { primary.requestFocus() }
@@ -158,7 +173,25 @@ private fun SeriesDetail(repo: Repository, playlist: Playlist, seriesId: String,
 
         Row(Modifier.fillMaxSize().padding(horizontal = 48.dp, vertical = 24.dp), horizontalArrangement = Arrangement.spacedBy(20.dp)) {
             // Left: title, facts and the vertical button group (primary action first).
-            Column(Modifier.width(290.dp).fillMaxHeight().verticalScroll(rememberScrollState())) {
+            Column(
+                Modifier
+                    .width(290.dp)
+                    .fillMaxHeight()
+                    .verticalScroll(rememberScrollState())
+                    .lazyFocusBoundary(
+                        exitTarget = { dir ->
+                            when (dir) {
+                                FocusDirection.Right ->
+                                    if (seasons.isEmpty()) FocusRequester.Cancel
+                                    else if (selectedSeasonVisible) selectedSeasonFocus
+                                    else FocusRequester.Default
+                                FocusDirection.Left, FocusDirection.Up, FocusDirection.Down -> FocusRequester.Cancel
+                                else -> FocusRequester.Default
+                            }
+                        },
+                    )
+                    .focusGroup(),
+            ) {
                 Text(
                     info.name,
                     style = MaterialTheme.typography.headlineLarge,
@@ -205,9 +238,47 @@ private fun SeriesDetail(repo: Repository, playlist: Playlist, seriesId: String,
             if (seasons.isEmpty()) {
                 EmptyState(Icons.Rounded.VideoLibrary, uiContext.getString(R.string.ui_no_episodes), modifier = Modifier.weight(1f))
             } else {
+                val targetEpIndex = remember(episodes, target) {
+                    episodes.indexOfFirst { e -> e.id == target?.let { t -> all[t.index].id } }.coerceAtLeast(0)
+                }
+                val epState = remember(season) { androidx.compose.foundation.lazy.LazyListState(targetEpIndex) }
+                val epEntryFocus = remember { FocusRequester() }
+                var lastFocusedEp by remember(season) { mutableStateOf<Int?>(null) }
+                val epEntryIndex by remember(season, episodes, targetEpIndex) {
+                    derivedStateOf {
+                        val visible = epState.layoutInfo.visibleItemsInfo
+                        lastFocusedEp?.takeIf { idx -> visible.any { it.index == idx } }
+                            ?: targetEpIndex.takeIf { idx -> visible.any { it.index == idx } }
+                            ?: visible.firstOrNull()?.index
+                    }
+                }
                 // Middle: seasons as a vertical list; OK / tap selects.
-                LazyColumn(Modifier.width(120.dp).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(6.dp), contentPadding = PaddingValues(vertical = 4.dp, horizontal = 4.dp)) {
-                    items(seasons.keys.toList()) { n -> SeasonChip(uiContext.getString(R.string.ui_season, n), n == season, Modifier.fillMaxWidth()) { chosenSeason = n } }
+                LazyColumn(
+                    Modifier
+                        .width(120.dp)
+                        .fillMaxHeight()
+                        .lazyFocusBoundary(
+                            enterTarget = { if (selectedSeasonVisible) selectedSeasonFocus else FocusRequester.Default },
+                            exitTarget = { dir ->
+                                when (dir) {
+                                    FocusDirection.Left -> primary
+                                    FocusDirection.Right -> if (epEntryIndex != null) epEntryFocus else FocusRequester.Cancel
+                                    FocusDirection.Up, FocusDirection.Down -> FocusRequester.Cancel
+                                    else -> FocusRequester.Default
+                                }
+                            },
+                        ),
+                    state = seasonState,
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                    contentPadding = PaddingValues(vertical = 4.dp, horizontal = 4.dp),
+                ) {
+                    items(seasonKeys, key = { it }) { n ->
+                        SeasonChip(
+                            uiContext.getString(R.string.ui_season, n),
+                            n == season,
+                            Modifier.fillMaxWidth().then(if (n == season) Modifier.focusRequester(selectedSeasonFocus) else Modifier),
+                        ) { chosenSeason = n }
+                    }
                 }
                 // Right: episodes of the selected season, scrolled to the continue target.
                 // Provider gave no real episode names (empty or the same leftover everywhere): ask TMDB for them.
@@ -221,9 +292,20 @@ private fun SeriesDetail(repo: Repository, playlist: Playlist, seriesId: String,
                         repo.tmdb.seasonEpisodeNames(providerTitle, info.year, season, tmdbId = info.tmdbId ?: item?.tmdbId)
                     }.getOrDefault(emptyMap())
                 }
-                val epState = remember(season) { androidx.compose.foundation.lazy.LazyListState(episodes.indexOfFirst { e -> e.id == target?.let { t -> all[t.index].id } }.coerceAtLeast(0)) }
                 LazyColumn(
-                    Modifier.weight(1f).fillMaxHeight(),
+                    Modifier
+                        .weight(1f)
+                        .fillMaxHeight()
+                        .lazyFocusBoundary(
+                            enterTarget = { if (epEntryIndex != null) epEntryFocus else FocusRequester.Default },
+                            exitTarget = { dir ->
+                                when (dir) {
+                                    FocusDirection.Left -> if (selectedSeasonVisible) selectedSeasonFocus else FocusRequester.Default
+                                    FocusDirection.Right, FocusDirection.Up, FocusDirection.Down -> FocusRequester.Cancel
+                                    else -> FocusRequester.Default
+                                }
+                            },
+                        ),
                     state = epState,
                     verticalArrangement = Arrangement.spacedBy(6.dp),
                     contentPadding = PaddingValues(vertical = 4.dp, horizontal = 4.dp),
@@ -240,6 +322,8 @@ private fun SeriesDetail(repo: Repository, playlist: Playlist, seriesId: String,
                                 .ifEmpty { uiContext.getString(R.string.ui_episode_number, ep?.number ?: (i + 1)) },
                             progress = progressById[e.id],
                             onClick = { if (resumeById[e.id] != null) pendingEpisode = i else onPlay(episodes, i) },
+                            modifier = if (i == epEntryIndex) Modifier.focusRequester(epEntryFocus) else Modifier,
+                            onFocused = { lastFocusedEp = i },
                         )
                     }
                 }
@@ -287,14 +371,38 @@ private fun SeasonChip(label: String, selected: Boolean, modifier: Modifier = Mo
     }
 }
 
+@OptIn(ExperimentalComposeUiApi::class)
+private fun Modifier.lazyFocusBoundary(
+    enterTarget: (FocusDirection) -> FocusRequester = { FocusRequester.Default },
+    exitTarget: (FocusDirection) -> FocusRequester = { FocusRequester.Default },
+): Modifier = focusProperties {
+    enter = enterTarget
+    exit = exitTarget
+}
+
 @Composable
-private fun EpisodeRow(number: Int, title: String, progress: Float?, onClick: () -> Unit, modifier: Modifier = Modifier) {
+private fun EpisodeRow(
+    number: Int,
+    title: String,
+    progress: Float?,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    onFocused: () -> Unit = {},
+) {
     val uiContext = LocalContext.current
     var focused by remember { mutableStateOf(false) }
     val shape = RoundedCornerShape(12.dp)
     Surface(
         onClick = onClick,
-        modifier = modifier.fillMaxWidth().height(52.dp).pointerClick(onClick).onFocusChanged { focused = it.isFocused || it.hasFocus },
+        modifier = modifier
+            .fillMaxWidth()
+            .height(52.dp)
+            .pointerClick(onClick)
+            .onFocusChanged {
+                val now = it.isFocused || it.hasFocus
+                if (now && !focused) onFocused()
+                focused = now
+            },
         shape = ClickableSurfaceDefaults.shape(shape),
         colors = ClickableSurfaceDefaults.colors(
             containerColor = Palette.Surface.copy(alpha = 0.7f),

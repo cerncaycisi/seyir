@@ -67,12 +67,22 @@ internal fun LiveControls(
     onMore: () -> Unit,
     onReturnToLive: (() -> Unit)?,
     modifier: Modifier = Modifier,
+    focusTarget: PlayerControlFocus = PlayerControlFocus.PlayPause,
 ) {
     val first = remember { FocusRequester() }
-    LaunchedEffect(active) {
+    val channelsFocus = remember { FocusRequester() }
+    val tracksFocus = remember { FocusRequester() }
+    val moreFocus = remember { FocusRequester() }
+    LaunchedEffect(active, focusTarget) {
         if (active) {
             withFrameNanos { }
-            runCatching { first.requestFocus() }
+            val target = when (focusTarget) {
+                PlayerControlFocus.PlayPause -> first
+                PlayerControlFocus.Channels -> channelsFocus
+                PlayerControlFocus.Tracks -> if (onTracks != null) tracksFocus else first
+                PlayerControlFocus.More -> moreFocus
+            }
+            runCatching { target.requestFocus() }
         }
     }
     Box(modifier.fillMaxSize()) {
@@ -139,7 +149,7 @@ internal fun LiveControls(
                     PillButton(stringResource(R.string.play_back_live), Icons.Rounded.LiveTv, it)
                     Spacer(Modifier.width(10.dp))
                 }
-                PillButton(stringResource(R.string.play_channel_list), Icons.AutoMirrored.Rounded.List, onChannels)
+                PillButton(stringResource(R.string.play_channel_list), Icons.AutoMirrored.Rounded.List, onChannels, Modifier.focusRequester(channelsFocus))
                 Spacer(Modifier.width(10.dp))
                 PillButton(
                     stringResource(if (recording) R.string.play_stop_recording else R.string.play_record),
@@ -150,10 +160,10 @@ internal fun LiveControls(
                 Text(stringResource(R.string.live_controls_hint), style = MaterialTheme.typography.labelMedium, color = Color(0x80F5F5F7))
                 Spacer(Modifier.width(16.dp))
                 onTracks?.let {
-                    RoundIconButton(Icons.Rounded.Subtitles, stringResource(R.string.vod_audio_subtitles), it)
+                    RoundIconButton(Icons.Rounded.Subtitles, stringResource(R.string.vod_audio_subtitles), it, Modifier.focusRequester(tracksFocus))
                     Spacer(Modifier.width(10.dp))
                 }
-                RoundIconButton(Icons.Rounded.MoreHoriz, stringResource(R.string.ux_more), onMore)
+                RoundIconButton(Icons.Rounded.MoreHoriz, stringResource(R.string.ux_more), onMore, Modifier.focusRequester(moreFocus))
             }
         }
     }

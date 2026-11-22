@@ -52,8 +52,11 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
-import androidx.compose.ui.focus.FocusDirection
-import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.ui.graphics.Brush
@@ -68,6 +71,7 @@ import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.ModalNavigationDrawer
 import androidx.tv.material3.NavigationDrawerItem
 import androidx.tv.material3.Text
+import androidx.tv.material3.rememberDrawerState
 import dev.iptv.player.data.ContentRules
 import dev.iptv.player.data.ContentType
 import dev.iptv.player.data.ParentalSession
@@ -197,22 +201,20 @@ fun HomeScreen(
     )
 
     // OK on a menu entry moves focus into that section (its own first-focus logic runs again);
-    // picking the section already shown just steps right into it.
-    val focusManager = LocalFocusManager.current
-    var stepIntoContent by remember { mutableIntStateOf(0) }
+    // picking the section already shown just steps deterministically into its primary focus target.
+    val drawerState = rememberDrawerState(DrawerValue.Closed)
+    var contentFocusTrigger by remember { mutableIntStateOf(0) }
     fun selectSection(s: Section) {
         searchType = null
         recordings = false
+        drawerState.setValue(DrawerValue.Closed)
         if (s == section) {
-            stepIntoContent++
+            contentFocusTrigger++
         } else {
             restoreId = null
             initialFocus = true
             section = s
         }
-    }
-    LaunchedEffect(stepIntoContent) {
-        if (stepIntoContent > 0) focusManager.moveFocus(FocusDirection.Right)
     }
     // Back walks outwards like other TV apps: content → menu → Home → "exit?" instead of closing the app at once.
     // Registered before the sections compose, so their own Back handlers (dialogs, edits) win.
@@ -220,9 +222,12 @@ fun HomeScreen(
     var confirmExit by remember { mutableStateOf(false) }
     BackHandler {
         when {
-            searchType != null -> { searchType = null; initialFocus = true }
-            recordings -> { recordings = false; initialFocus = true }
-            !drawerFocused -> runCatching { navFocus[section.ordinal].requestFocus() }
+            searchType != null -> { searchType = null; initialFocus = true; drawerState.setValue(DrawerValue.Closed) }
+            recordings -> { recordings = false; initialFocus = true; drawerState.setValue(DrawerValue.Closed) }
+            !drawerFocused -> {
+                drawerState.setValue(DrawerValue.Open)
+                runCatching { navFocus[section.ordinal].requestFocus() }
+            }
             section != Section.HOME -> {
                 section = Section.HOME
                 restoreId = null
@@ -243,11 +248,12 @@ fun HomeScreen(
     }
 
     ModalNavigationDrawer(
+        drawerState = drawerState,
         scrimBrush = Brush.horizontalGradient(listOf(Palette.Background.copy(alpha = 0.92f), Color.Transparent)),
         drawerContent = { value ->
             val open = value == DrawerValue.Open
             LaunchedEffect(open) {
-                if (open) runCatching { navFocus[section.ordinal].requestFocus() }
+                if (open && !initialFocus) runCatching { navFocus[section.ordinal].requestFocus() }
             }
             Column(
                 Modifier
@@ -257,6 +263,13 @@ fun HomeScreen(
                     .verticalScroll(rememberScrollState())
                     // Entering the menu lands on the current section instead of the nearest item.
                     .focusProperties { enter = { navFocus[section.ordinal] } }
+                    .onPreviewKeyEvent { ev ->
+                        if (ev.type == KeyEventType.KeyDown && ev.key == Key.DirectionRight && open) {
+                            drawerState.setValue(DrawerValue.Closed)
+                            contentFocusTrigger++
+                            true
+                        } else false
+                    }
                     .onFocusChanged { drawerFocused = it.hasFocus },
                 // Items keep the drawer's own 56 dp height: forcing 42 dp made the selected pill overlap its
                 // neighbours and the logo. Sections sit centred in the free space (4 entries, plenty of room).
@@ -313,12 +326,12 @@ fun HomeScreen(
             key(section, playlist.id) {
                 when {
                     recordings -> RecordingsSection(repo, playlist, onPlay)
-                    searchType != null -> SearchSection(repo, playlist, actions, initialQuery = initialSearchQuery, type = searchType!!)
+                    searchType != null -> SearchSection(repo, playlist, actions, initialQuery = initialSearchQuery, type = searchType!!, focusTrigger = contentFocusTrigger)
                     else -> when (section) {
-                        Section.HOME -> HomeSection(repo, playlist, actions)
-                        Section.LIVE -> LiveSection(repo, playlist, actions, onSearch = { searchType = ContentType.LIVE; initialFocus = true }, onRecordings = { recordings = true })
-                        Section.MOVIES -> VodSection(repo, playlist, ContentType.MOVIE, actions, onSearch = { searchType = ContentType.MOVIE; initialFocus = true })
-                        Section.SERIES -> VodSection(repo, playlist, ContentType.SERIES, actions, onSearch = { searchType = ContentType.SERIES; initialFocus = true })
+                        Section.HOME -> HomeSection(repo, playlist, actions, focusTrigger = contentFocusTrigger)
+                        Section.LIVE -> LiveSection(repo, playlist, actions, onSearch = { drawerState.setValue(DrawerValue.Closed); searchType = ContentType.LIVE; initialFocus = true }, onRecordings = { drawerState.setValue(DrawerValue.Closed); recordings = true }, focusTrigger = contentFocusTrigger)
+                        Section.MOVIES -> VodSection(repo, playlist, ContentType.MOVIE, actions, onSearch = { drawerState.setValue(DrawerValue.Closed); searchType = ContentType.MOVIE; initialFocus = true }, focusTrigger = contentFocusTrigger)
+                        Section.SERIES -> VodSection(repo, playlist, ContentType.SERIES, actions, onSearch = { drawerState.setValue(DrawerValue.Closed); searchType = ContentType.SERIES; initialFocus = true }, focusTrigger = contentFocusTrigger)
                     }
                 }
             }

@@ -1,3 +1,5 @@
+@file:OptIn(ExperimentalComposeUiApi::class)
+
 package dev.iptv.player.ui
 
 import android.annotation.SuppressLint
@@ -28,7 +30,10 @@ import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -61,7 +66,7 @@ private class Featured(val stream: Stream, val resuming: Boolean)
 
 /** Landing page: a static hero plus continue watching, recent / favourite channels and the newest titles. */
 @Composable
-fun HomeSection(repo: Repository, playlist: Playlist, actions: HomeActions) {
+fun HomeSection(repo: Repository, playlist: Playlist, actions: HomeActions, focusTrigger: Int = 0) {
     val uiContext = LocalContext.current
     val refreshWork by remember(repo, playlist.id) {
         dev.iptv.player.data.RefreshWorker.observe(repo.appContext, playlist.id)
@@ -100,9 +105,13 @@ fun HomeSection(repo: Repository, playlist: Playlist, actions: HomeActions) {
                     maxLines = 1, overflow = TextOverflow.Ellipsis)
                 refreshMessage?.let { Text(it, style = MaterialTheme.typography.labelMedium, color = Palette.TextMuted) }
             }
-            PointerOutlinedButton(enabled = !refreshing, onClick = {
-                dev.iptv.player.data.RefreshWorker.request(repo.appContext, playlist.id)
-            }) {
+            PointerOutlinedButton(
+                enabled = !refreshing,
+                modifier = Modifier.focusProperties { left = FocusRequester.Cancel },
+                onClick = {
+                    dev.iptv.player.data.RefreshWorker.request(repo.appContext, playlist.id)
+                },
+            ) {
                 Icon(Icons.Rounded.Refresh, contentDescription = null, modifier = Modifier.size(20.dp))
                 Text(uiContext.getString(if (refreshing) R.string.ux_refreshing else R.string.ux_refresh), Modifier.padding(start = 8.dp))
             }
@@ -141,7 +150,7 @@ fun HomeSection(repo: Repository, playlist: Playlist, actions: HomeActions) {
                 Column(Modifier.fillMaxSize()) {
                     shown?.let { FeaturedHero(repo, playlist, it) }
                     MediaRows(rows, playlist, actions, onFocused = { if (it.type != ContentType.LIVE) focusedVod = it },
-                        modifier = Modifier.weight(1f))
+                        modifier = Modifier.weight(1f), focusTrigger = focusTrigger)
                 }
             }
         }

@@ -80,8 +80,11 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.unit.dp
 import dev.iptv.player.data.Content
 import dev.iptv.player.data.ContentRules
@@ -115,7 +118,7 @@ private suspend fun allContent(repo: Repository, playlist: Playlist): Map<Conten
     ContentType.entries.associateWith { t -> runCatching { repo.content(playlist, t) }.getOrDefault(Content(emptyList(), emptyList())) }
 
 @Composable
-fun VodSection(repo: Repository, playlist: Playlist, type: ContentType, actions: HomeActions, onSearch: () -> Unit = {}) {
+fun VodSection(repo: Repository, playlist: Playlist, type: ContentType, actions: HomeActions, onSearch: () -> Unit = {}, focusTrigger: Int = 0) {
     val uiContext = LocalContext.current
     // Lint misses the direct ProduceStateScope.value assignment in this producer.
     @SuppressLint("ProduceStateDoesNotAssignValue")
@@ -128,7 +131,7 @@ fun VodSection(repo: Repository, playlist: Playlist, type: ContentType, actions:
         is Load.Ok -> if (s.value.items.isEmpty()) {
             EmptyState(Icons.Rounded.Movie, if (type == ContentType.MOVIE) uiContext.getString(R.string.ui_no_movie) else uiContext.getString(R.string.ui_no_series))
         } else {
-            VodBrowser(repo, playlist, type, s.value, actions, onSearch)
+            VodBrowser(repo, playlist, type, s.value, actions, onSearch, focusTrigger = focusTrigger)
         }
     }
 }
@@ -161,6 +164,7 @@ private fun VodBrowser(
     onSearch: () -> Unit,
     categoryWidth: Dp = 200.dp,
     columns: Int = 5,
+    focusTrigger: Int = 0,
 ) {
     val uiContext = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -198,6 +202,13 @@ private fun VodBrowser(
     val catState = rememberLazyListState(initialFirstVisibleItemIndex = (categories.indexOfFirst { it.key == selected.key } - 3).coerceAtLeast(0))
     val selectedReq = remember { FocusRequester() }
     val firstItemReq = remember { FocusRequester() }
+    val gridEntry = remember { FocusRequester() }
+    val searchFocus = remember { FocusRequester() }
+    val clearFocus = remember { FocusRequester() }
+    val sortFocus = remember { FocusRequester() }
+    val genreFocus = remember { FocusRequester() }
+    val showClear = selected.special == SpecialCategory.RECENT && raw.isNotEmpty()
+    val catVisible = { catState.layoutInfo.visibleItemsInfo.any { it.key == selected.key } }
     // OK on a category moves focus into its grid (top-left poster), like Netflix's category rail.
     var gridFocusIndex by remember { mutableIntStateOf(-1) }
     var jumpToGrid by remember { mutableIntStateOf(0) }
@@ -215,6 +226,12 @@ private fun VodBrowser(
         }
         if (restore.itemId != null || restore.initial) restore.done()
     }
+    LaunchedEffect(focusTrigger) {
+        if (focusTrigger > 0) {
+            withFrameNanos { }
+            runCatching { (if (catVisible()) selectedReq else searchFocus).requestFocus() }
+        }
+    }
     var handledJump by remember { mutableIntStateOf(0) }
     // Waits for the background result of the newly selected category before moving focus into its grid.
     LaunchedEffect(jumpToGrid, view) {
@@ -231,12 +248,28 @@ private fun VodBrowser(
     Row(Modifier.fillMaxSize()) {
         Column(Modifier.width(categoryWidth).fillMaxHeight()) {
             ScreenTitle(uiContext.getString(if (type == ContentType.MOVIE) R.string.ui_movies else R.string.ui_series))
-            HeaderButton(uiContext.getString(R.string.ui_search), Icons.Rounded.Search, onSearch)
+            HeaderButton(
+                uiContext.getString(R.string.ui_search),
+                Icons.Rounded.Search,
+                onSearch,
+                Modifier.focusRequester(searchFocus).focusProperties {
+                    left = FocusRequester.Cancel
+                    right = if (showClear) clearFocus else sortFocus
+                    down = if (catVisible()) selectedReq else FocusRequester.Default
+                },
+            )
             Spacer(Modifier.height(8.dp))
             LazyColumn(
                 Modifier.focusProperties {
                     // Entering the list from the grid lands on the selected category, not the nearest row.
-                    enter = { if (catState.layoutInfo.visibleItemsInfo.any { it.key == selected.key }) selectedReq else FocusRequester.Default }
+                    enter = { if (catVisible()) selectedReq else FocusRequester.Default }
+                    exit = { dir ->
+                        when (dir) {
+                            FocusDirection.Up -> searchFocus
+                            FocusDirection.Right -> if (shown.isNotEmpty()) gridEntry else sortFocus
+                            else -> FocusRequester.Default
+                        }
+                    }
                 },
                 state = catState,
                 verticalArrangement = Arrangement.spacedBy(4.dp),
@@ -266,13 +299,42 @@ private fun VodBrowser(
                     Text(selected.name, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = Palette.Text, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     Text(uiContext.getString(R.string.ui_item_count, shown.size), style = MaterialTheme.typography.bodySmall, color = Palette.TextMuted)
                 }
-                if (selected.special == SpecialCategory.RECENT && raw.isNotEmpty()) {
-                    HeaderButton(uiContext.getString(R.string.ui_clear_history), Icons.Rounded.DeleteSweep) { confirmClear = true }
+                if (showClear) {
+                    HeaderButton(
+                        uiContext.getString(R.string.ui_clear_history),
+                        Icons.Rounded.DeleteSweep,
+                        onClick = { confirmClear = true },
+                        modifier = Modifier.focusRequester(clearFocus).focusProperties {
+                            left = searchFocus
+                            right = sortFocus
+                            down = if (shown.isNotEmpty()) gridEntry else FocusRequester.Cancel
+                        },
+                    )
                 }
-                DropdownButton(uiContext.getString(R.string.ui_sort), VodSort.entries.map { it to sortLabel(uiContext, it) }, sort, { sort = it })
+                DropdownButton(
+                    uiContext.getString(R.string.ui_sort),
+                    VodSort.entries.map { it to sortLabel(uiContext, it) },
+                    sort,
+                    { sort = it },
+                    Modifier.focusRequester(sortFocus).focusProperties {
+                        left = if (showClear) clearFocus else searchFocus
+                        right = genreFocus
+                        down = if (shown.isNotEmpty()) gridEntry else FocusRequester.Cancel
+                    },
+                )
                 run {
                     val options = listOf<String?>(null) + genres
-                    DropdownButton(uiContext.getString(R.string.ui_genre), options.map { it to (it ?: uiContext.getString(R.string.ui_all)) }, genreSel, { genre = it })
+                    DropdownButton(
+                        uiContext.getString(R.string.ui_genre),
+                        options.map { it to (it ?: uiContext.getString(R.string.ui_all)) },
+                        genreSel,
+                        { genre = it },
+                        Modifier.focusRequester(genreFocus).focusProperties {
+                            left = sortFocus
+                            right = FocusRequester.Cancel
+                            down = if (shown.isNotEmpty()) gridEntry else FocusRequester.Cancel
+                        },
+                    )
                 }
             }
             Spacer(Modifier.height(8.dp))
@@ -296,6 +358,9 @@ private fun VodBrowser(
                     state = gridState,
                     focusIndex = if (gridFocusIndex >= 0) gridFocusIndex else restoreIndex,
                     focusRequester = firstItemReq,
+                    entryRequester = gridEntry,
+                    onLeftTarget = { if (catVisible()) selectedReq else FocusRequester.Default },
+                    onUpTarget = sortFocus,
                     categoryName = selPid?.let { selected.name },
                     onFocused = { focused = it },
                     modifier = Modifier.weight(1f),
@@ -324,10 +389,10 @@ private fun VodBrowser(
 
 /** Header button with an icon (e.g. "clear history"); same look and 48dp tap target as [DropdownButton]. */
 @Composable
-internal fun HeaderButton(label: String, icon: ImageVector, onClick: () -> Unit) {
+internal fun HeaderButton(label: String, icon: ImageVector, onClick: () -> Unit, modifier: Modifier = Modifier) {
     Surface(
         onClick = onClick,
-        modifier = Modifier.heightIn(min = MinTapTarget).pointerClick(onClick),
+        modifier = modifier.heightIn(min = MinTapTarget).pointerClick(onClick),
         shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(50)),
         colors = ClickableSurfaceDefaults.colors(
             containerColor = Palette.Surface,
@@ -359,6 +424,9 @@ internal fun PosterGrid(
     categoryName: String?,
     onFocused: (Stream) -> Unit,
     modifier: Modifier = Modifier,
+    entryRequester: FocusRequester = remember { FocusRequester() },
+    onLeftTarget: () -> FocusRequester = { FocusRequester.Default },
+    onUpTarget: FocusRequester = FocusRequester.Default,
 ) {
     // Coming back from the category list returns to the last focused poster if it is on screen, else the
     // top-left visible one. (Modifier.focusRestorer crashed inside lazy layouts.)
@@ -369,10 +437,18 @@ internal fun PosterGrid(
             if (state.layoutInfo.visibleItemsInfo.any { it.index == i }) i else state.firstVisibleItemIndex
         }
     }
-    val entry = remember { FocusRequester() }
     LazyVerticalGrid(
         GridCells.Fixed(columns),
-        modifier.fillMaxWidth().focusProperties { enter = { entry } },
+        modifier.fillMaxWidth().focusProperties {
+            enter = { entryRequester }
+            exit = { dir ->
+                when (dir) {
+                    FocusDirection.Left -> onLeftTarget()
+                    FocusDirection.Up -> onUpTarget
+                    else -> FocusRequester.Default
+                }
+            }
+        },
         state = state,
         contentPadding = PaddingValues(start = 6.dp, end = 6.dp, top = 8.dp, bottom = 32.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
@@ -388,7 +464,7 @@ internal fun PosterGrid(
                 onFocused = { lastFocused = i; onFocused(s) },
                 modifier = Modifier.fillMaxWidth()
                     .then(if (i == focusIndex) Modifier.focusRequester(focusRequester) else Modifier)
-                    .then(if (i == entryIndex) Modifier.focusRequester(entry) else Modifier),
+                    .then(if (i == entryIndex) Modifier.focusRequester(entryRequester) else Modifier),
                 progress = actions.progress[key],
                 badge = actions.badges[key],
             )
@@ -403,12 +479,21 @@ fun MediaRows(
     actions: HomeActions,
     onFocused: (Stream) -> Unit,
     modifier: Modifier = Modifier,
+    focusTrigger: Int = 0,
 ) {
     val restore = actions.restore
     val columnState = rememberLazyListState()
     val restoreRow = restore.itemId?.let { id -> rows.indexOfFirst { r -> r.items.any { it.id == id } } } ?: -1
     val initialRow = if (restoreRow < 0 && restore.initial) 0 else -1
+    var row0FocusTrigger by remember { mutableIntStateOf(0) }
     LaunchedEffect(Unit) { if (restoreRow >= 0) columnState.scrollToItem(restoreRow) }
+    LaunchedEffect(focusTrigger) {
+        if (focusTrigger > 0 && rows.isNotEmpty()) {
+            columnState.scrollToItem(0)
+            withFrameNanos { }
+            row0FocusTrigger++
+        }
+    }
 
     LazyColumn(
         modifier.fillMaxWidth(),
@@ -423,15 +508,31 @@ fun MediaRows(
                 initialRow -> 0
                 else -> -1
             }
-            MediaRowView(row, playlist, actions, target, onFocused)
+            MediaRowView(row, playlist, actions, target, onFocused, focusTrigger = if (r == 0) row0FocusTrigger else 0)
         }
     }
 }
 
+@OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
 @Composable
-private fun MediaRowView(row: MediaRow, playlist: Playlist, actions: HomeActions, target: Int, onFocused: (Stream) -> Unit) {
+private fun MediaRowView(
+    row: MediaRow,
+    playlist: Playlist,
+    actions: HomeActions,
+    target: Int,
+    onFocused: (Stream) -> Unit,
+    focusTrigger: Int = 0,
+) {
     val rowState = rememberLazyListState()
     val requester = remember { FocusRequester() }
+    val entryReq = remember { FocusRequester() }
+    var lastFocused by remember { mutableIntStateOf(-1) }
+    val entryIndex by remember(rowState) {
+        derivedStateOf {
+            val i = lastFocused
+            if (rowState.layoutInfo.visibleItemsInfo.any { it.index == i }) i else rowState.firstVisibleItemIndex
+        }
+    }
     var targetFocused by remember { mutableStateOf(false) }
     LaunchedEffect(target) {
         if (target >= 0) {
@@ -446,26 +547,42 @@ private fun MediaRowView(row: MediaRow, playlist: Playlist, actions: HomeActions
             actions.restore.done()
         }
     }
+    LaunchedEffect(focusTrigger) {
+        if (focusTrigger > 0 && row.items.isNotEmpty()) {
+            withFrameNanos { }
+            runCatching { entryReq.requestFocus() }
+        }
+    }
     Column {
         SectionTitle(row.title, "${row.items.size}")
         LazyRow(
+            modifier = Modifier.focusProperties {
+                enter = { if (row.items.isNotEmpty()) entryReq else FocusRequester.Default }
+            },
             state = rowState,
             horizontalArrangement = Arrangement.spacedBy(14.dp),
             contentPadding = PaddingValues(vertical = 10.dp, horizontal = 6.dp),
         ) {
             // Typed items let the row reuse card compositions while scrolling instead of building new ones.
             itemsIndexed(row.items, contentType = { _, s -> if (s.type == ContentType.LIVE) 0 else if (row.direct) 1 else 2 }) { i, s ->
-                val mod = if (i == target) Modifier.focusRequester(requester) else Modifier
+                val mod = Modifier
+                    .then(if (i == target) Modifier.focusRequester(requester) else Modifier)
+                    .then(if (i == entryIndex) Modifier.focusRequester(entryReq) else Modifier)
                 val open = { if (row.direct) actions.resume(s) else actions.open(row.items, i) }
                 val toggle = { actions.longPress(s, row.categoryName) }
+                val onFocusItem = {
+                    lastFocused = i
+                    if (i == target) targetFocused = true
+                    onFocused(s)
+                }
                 if (s.type == ContentType.LIVE) {
-                    ChannelCard(s, open, toggle, { if (i == target) targetFocused = true; onFocused(s) }, mod)
+                    ChannelCard(s, open, toggle, onFocusItem, mod)
                 } else if (row.direct) {
                     // "İzlemeye devam et": wide stills with progress, like streaming services (design v2).
-                    LandscapeCard(s, open, toggle, { if (i == target) targetFocused = true; onFocused(s) }, mod,
+                    LandscapeCard(s, open, toggle, onFocusItem, mod,
                         progress = actions.progress[favoriteKey(playlist, s)], badge = actions.badges[favoriteKey(playlist, s)])
                 } else {
-                    PosterCard(s, favoriteKey(playlist, s) in actions.favorites, open, toggle, { if (i == target) targetFocused = true; onFocused(s) }, mod, progress = actions.progress[favoriteKey(playlist, s)], badge = actions.badges[favoriteKey(playlist, s)])
+                    PosterCard(s, favoriteKey(playlist, s) in actions.favorites, open, toggle, onFocusItem, mod, progress = actions.progress[favoriteKey(playlist, s)], badge = actions.badges[favoriteKey(playlist, s)])
                 }
             }
         }
@@ -509,7 +626,7 @@ fun FavoritesSection(repo: Repository, playlist: Playlist, actions: HomeActions)
 }
 
 @Composable
-fun SearchSection(repo: Repository, playlist: Playlist, actions: HomeActions, initialQuery: String? = null, type: ContentType) {
+fun SearchSection(repo: Repository, playlist: Playlist, actions: HomeActions, initialQuery: String? = null, type: ContentType, focusTrigger: Int = 0) {
     val uiContext = LocalContext.current
     var query by rememberSaveable(initialQuery) { mutableStateOf(initialQuery.orEmpty()) }
     // Lint misses the direct ProduceStateScope.value assignment in this producer.
@@ -536,11 +653,15 @@ fun SearchSection(repo: Repository, playlist: Playlist, actions: HomeActions, in
     }.orEmpty()
     // Opening Search from the menu puts focus on the search field.
     val fieldFocus = remember { FocusRequester() }
-    LaunchedEffect(Unit) {
-        if (actions.restore.initial) {
-            withFrameNanos { }
-            runCatching { fieldFocus.requestFocus() }
-            actions.restore.done()
+    var fieldFocused by remember { mutableStateOf(false) }
+    LaunchedEffect(actions.restore.initial, focusTrigger) {
+        if (actions.restore.initial || focusTrigger > 0) {
+            for (attempt in 0 until 8) {
+                withFrameNanos { }
+                if (fieldFocused) break
+                runCatching { fieldFocus.requestFocus() }
+            }
+            if (actions.restore.initial) actions.restore.done()
         }
     }
     Column(Modifier.fillMaxSize()) {
@@ -558,7 +679,13 @@ fun SearchSection(repo: Repository, playlist: Playlist, actions: HomeActions, in
             r.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)?.firstOrNull()?.let { query = it }
         }
         Row(Modifier.widthIn(max = 760.dp), verticalAlignment = Alignment.CenterVertically) {
-            TvTextField(query, { query = it }, uiContext.getString(R.string.ui_search_prompt), Modifier.weight(1f).focusRequester(fieldFocus), leadingIcon = Icons.Rounded.Search)
+            TvTextField(
+                query,
+                { query = it },
+                uiContext.getString(R.string.ui_search_prompt),
+                Modifier.weight(1f).focusRequester(fieldFocus).onFocusChanged { fieldFocused = it.isFocused || it.hasFocus },
+                leadingIcon = Icons.Rounded.Search,
+            )
             if (voiceAvailable) {
                 Spacer(Modifier.width(10.dp))
                 MicButton { runCatching { launcher.launch(voiceIntent) } }

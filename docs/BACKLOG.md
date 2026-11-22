@@ -1,10 +1,10 @@
 # Seyir backlog
 
-Bu dosyada kullanıcının istekleri ve testlerde bulunan sorunlar tutulur. Biten maddeler işaretlenir, silinmez. Son güncelleme: 2026-11-22 (TMDB tmdb_id + süre eşleştirmesi; sıradaki: D-pad odak geçişleri denetimi, Ana Sayfa/Detay içerik logoları).
+Bu dosyada kullanıcının istekleri ve testlerde bulunan sorunlar tutulur. Biten maddeler işaretlenir, silinmez. Son güncelleme: 2026-11-22 (D-pad odak geçişleri + oynatıcı Geri/odak dönüşü; sıradaki: Ana Sayfa/Detay içerik logoları, canlı/VOD ayrımı).
 
 ## P0 — Şu an açık
 
-- [ ] **D-pad (sağ/sol/yukarı/aşağı) odak geçişleri öngörülebilir değil** (kullanıcı, 2026-11-22): ekran genelinde yön tuşlarıyla gezinirken odak sürekli yanlış/beklenmeyen yerlere atlıyor. Tüm ekranlarda (Ana Sayfa, Canlı TV, Filmler/Diziler, Arama, Detay, Oynatıcı, sol menü) odak akışı baştan sona denetlenip deterministik hale getirilecek.
+- [x] **D-pad (sağ/sol/yukarı/aşağı) odak geçişleri öngörülebilir değil** (2026-11-22, TV'de doğrulandı): Sol menü (sağ ile tek basışta içeriğe geçiş ve kapanış), Ana Sayfa, Canlı TV (`Ara`/`Kayıtlar`/`Sırala`/kategoriler/kanal listesi/`İzle` + `.focusGroup()`), Filmler/Diziler (üst çubuk/kategoriler/ızgara ilk öğe), Bölüm araması (doğrudan arama kutusu → ilk sonuç) ve Dizi Detay (bilgi/sezon/bölüm deterministik geçişleri) düzeltilip TCL TV'de 7 akışla doğrulandı.
 - [x] **Sol menüde öğeler üst üste biniyor** (düzeltildi, TV'de doğrulandı 2026-11-22) (TV, kullanıcı geri bildirimi). Menü kapalıyken seçili Ana Sayfa göstergesi logoya değiyor. Menü açıkken öğeler üstte sıkışıyor, altta boş alan kalıyor.
   - Başlanan düzeltme (`HomeScreen.kt`, commit'lenmedi, TV'de doğrulanmadı):
     - Zorla verilen 42 dp yükseklik kaldırıldı; öğeler drawer'ın kendi 56 dp yüksekliğini kullanıyor.
@@ -47,7 +47,7 @@ Bu dosyada kullanıcının istekleri ve testlerde bulunan sorunlar tutulur. Bite
 - [ ] **Varsayılan ses ve altyazı** (kullanıcı, 2026-11-22): ses varsayılan olarak içeriğin orijinal dili, altyazı varsayılan olarak Türkçe olmalı. Kullanıcı bir içerikte değiştirirse o seçim korunmalı.
 - [ ] **Ayarlar ekranı:** satırlar hâlâ "< değer >" şeklinde değer çeviriyor (Dil, Varsayılan bölüm, Ses/Altyazı dili, Altyazı stili…). Kullanıcı açılır liste istedi. "User-Agent" ve "Tampon süresi" gibi teknik ayarlar "Gelişmiş" altına taşınmalı. Rehber kaldırıldığı halde ayarlarda "EPG" sayfası duruyor; adı/yeri gözden geçirilmeli.
 - [ ] **Oynatıcı ayarları paneli:** satırların solunda boş ikon alanı var. İkon eklenmeli ya da boşluk kaldırılmalı.
-- [ ] **Canlı oynatıcıda Geri tuşu:** panel → kontroller → çıkış sırasında kaç basış gerektiği doğrulanmalı. "Geri: kontrolleri gizle" sonrasında kontroller hâlâ görünüyordu.
+- [x] **Canlı oynatıcıda Geri tuşu:** (2026-11-22, TV'de doğrulandı) `onPreviewKeyEvent` `Key.Back` akışı paneller ve açık kontroller (`panel → kontroller → çıkış`) için birleştirildi; `Kanal listesi` → `Geri` → `Kanal listesi` odağı → `Geri` → kontrollerin tek basışta kapanması → `Geri` → çıkış ve doğrudan panel (`DPAD_LEFT`) kapatmada hayalet kontrol çıkmaması TV'de doğrulandı.
 
 ## P1 — Özellikler ve doğruluk
 
@@ -101,9 +101,9 @@ Bu dosyada kullanıcının istekleri ve testlerde bulunan sorunlar tutulur. Bite
   - Indian Police Force S1B1: 10'dan fazla ses parçasından Hintçe (orijinal) seçildi, TR altyazı.
   - Werewolf Castle: tek EN parça, TR altyazı.
   - "Göz Açıp Kapayıncaya Kadar (2021)": panelde başlık yanlış (bkz. TMDB maddesi).
-- [ ] Altyazı/ses paneli Geri ile kapanınca odak paneli açan düğmeye değil "Duraklat"a dönüyor.
-- [ ] Arama sonuçlarında aşağı tuşu ilk sonuca değil, geometrik olarak en yakın sonuca gidiyor.
-- [ ] Bölüm aramasını menüden açınca odak bazen arama kutusuna değil sol menüye düşüyor (Filmler → Ara).
+- [x] Altyazı/ses paneli Geri ile kapanınca odak paneli açan düğmeye değil "Duraklat"a dönüyor. (2026-11-22, TV'de doğrulandı: `VodControls` ve `LiveControls` `PlayerControlFocus` ile paneli açan düğmeye dönüyor.)
+- [x] Arama sonuçlarında aşağı tuşu ilk sonuca değil, geometrik olarak en yakın sonuca gidiyor. (2026-11-22, TV'de doğrulandı: `Search` satırına `Aşağı` ile sonuç #0 odaklanıyor.)
+- [x] Bölüm aramasını menüden açınca odak bazen arama kutusuna değil sol menüye düşüyor (Filmler → Ara). (2026-11-22, TV'de doğrulandı: `Filmler → Ara` doğrudan arama kutusuna odaklanıyor.)
 - [ ] Oynatıcıdan Geri: aramadan açılan dizi bölümünde dönüş arama sonuçlarına değil dizi sayfasına gidiyor (beklenen olabilir, değerlendirilecek).
 - [ ] İsteğe bağlı: gömülü TR altyazı yoksa OpenSubtitles'tan otomatik TR altyazı.
 
