@@ -112,4 +112,6 @@
     <string name="vod_sheet_size">Boyut</string>
     <string name="vod_watching">İzliyorsun</string>
     <string name="vod_paused_hint">OK devam · ▲ kontroller</string>
+    <string name="live_controls_hint">▲▼ kanal · ◀ liste</string>
+    <string name="ui_no_programme_info">Program bilgisi yok</string>
 </resources>

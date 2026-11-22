@@ -124,6 +124,8 @@ Kullanıcı kararları:
 
 Logo ayrıca çalışılacak; şu an sade bir göz-oynat işareti.
 - [x] Oynatıcı v2 (film/dizi) uygulandı — 2026-11-22, TV'de doğrulandı. Eksik: "Bölümler" paneli, sararken küçük resim önizleme (trick-play görselleri yok), Inter Tight yazı tipi.
+- [x] Canlı yayın kontrolleri v2 diline geçti (2026-11-22, TV'de doğrulandı): kanal kimliği + CANLI rozeti, şu anki program ilerlemesi ve "Sonra", oynat/duraklat (timeshift), Kanal listesi, Kaydet, Ses-altyazı (seçenek varsa), Diğer. Eski kontrol çubuğu ve SeekBar silindi.
+- [ ] Canlı: "▲▼ kanal" ipucu kontroller açıkken yanıltıcı (o anda ▲▼ odak taşıyor); kanal listesi paneli ve tam ekran bilgi paneli v2 diline taşınacak.
 - [ ] Ana Sayfa v2'yi uygula
 - [ ] Detay v2'yi uygula
 - [ ] Canlı TV v2'yi uygula

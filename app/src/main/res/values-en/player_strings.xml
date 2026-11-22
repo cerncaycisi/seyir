@@ -112,4 +112,6 @@
     <string name="vod_sheet_size">Size</string>
     <string name="vod_watching">You are watching</string>
     <string name="vod_paused_hint">OK resume · ▲ controls</string>
+    <string name="live_controls_hint">▲▼ channel · ◀ list</string>
+    <string name="ui_no_programme_info">No programme info</string>
 </resources>

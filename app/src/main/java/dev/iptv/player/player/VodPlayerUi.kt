@@ -79,8 +79,8 @@ import dev.iptv.player.ui.pointerClick
  * duraklatınca karartılmış bilgi ekranı. Canlı yayın kendi arayüzünü kullanır.
  */
 
-private val Ink = Color(0xFFF5F5F7)
-private val InkMuted = Color(0xB3F5F5F7)
+internal val Ink = Color(0xFFF5F5F7)
+internal val InkMuted = Color(0xB3F5F5F7)
 private val InkFaint = Color(0x80F5F5F7)
 internal val Amber = Color(0xFFF2B544)
 private val Chip = Color(0x24F5F5F7)
@@ -231,7 +231,7 @@ private fun ScrubBar(
 }
 
 @Composable
-private fun PlayPauseButton(playing: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
+internal fun PlayPauseButton(playing: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
     Surface(
         onClick = onClick,
         modifier = modifier.size(46.dp).pointerClick(onClick),
@@ -251,7 +251,7 @@ private fun PlayPauseButton(playing: Boolean, onClick: () -> Unit, modifier: Mod
 }
 
 @Composable
-private fun RoundIconButton(icon: ImageVector, description: String, onClick: () -> Unit) {
+internal fun RoundIconButton(icon: ImageVector, description: String, onClick: () -> Unit) {
     Surface(
         onClick = onClick,
         modifier = Modifier.size(40.dp).pointerClick(onClick),
@@ -264,7 +264,7 @@ private fun RoundIconButton(icon: ImageVector, description: String, onClick: () 
 }
 
 @Composable
-private fun PillButton(label: String, icon: ImageVector, onClick: () -> Unit) {
+internal fun PillButton(label: String, icon: ImageVector, onClick: () -> Unit) {
     Surface(
         onClick = onClick,
         modifier = Modifier.height(40.dp).pointerClick(onClick),

@@ -826,62 +826,27 @@ private fun PlayerContent(repo: Repository, cfg: PlayerConfig, onBack: () -> Uni
         }
 
         if (live && overlay && panel == Panel.None && !nextVisible && !inPip) {
-            Text(
-                formatClock(System.currentTimeMillis() / 1000),
-                modifier = Modifier.align(Alignment.TopEnd).padding(horizontal = 40.dp, vertical = 24.dp),
-                style = MaterialTheme.typography.headlineSmall,
-                color = Color.White,
+            val liveAudio = trackOptions(context, tracks, trackParams, C.TRACK_TYPE_AUDIO, null)
+            val liveSubs = trackOptions(context, tracks, trackParams, C.TRACK_TYPE_TEXT, null)
+            LiveControls(
+                number = index + 1,
+                stream = current,
+                epg = epg,
+                playing = playRequested,
+                active = controlsActive,
+                behindLabel = if (canReturnToLive) {
+                    if (behindSec < 60) stringResource(R.string.play_behind_seconds, behindSec)
+                    else stringResource(R.string.play_behind_minutes, behindSec / 60, behindSec % 60)
+                } else null,
+                recording = activeRecording != null,
+                sleepLabel = if (sleepMinutes > 0) stringResource(R.string.play_sleep_remaining, sleepMinutes) else null,
+                onToggle = { if (player.playWhenReady) player.pause() else player.play(); showOverlay() },
+                onChannels = { panel = Panel.Channels },
+                onRecord = ::toggleRecording,
+                onTracks = if (liveAudio.size > 1 || liveSubs.isNotEmpty()) ({ panel = Panel.Tracks }) else null,
+                onMore = { openSettings() },
+                onReturnToLive = if (canReturnToLive) ({ returnToLive(); showOverlay() }) else null,
             )
-            if (sleepMinutes > 0) {
-                Pill(
-                    stringResource(R.string.play_sleep_remaining, sleepMinutes),
-                    modifier = Modifier.align(Alignment.TopStart).padding(horizontal = 40.dp, vertical = 28.dp),
-                    color = Color(0x33FFFFFF),
-                    contentColor = Color.White,
-                )
-            }
-            Column(
-                Modifier
-                    .align(Alignment.BottomCenter)
-                    .fillMaxWidth()
-                    .background(Brush.verticalGradient(listOf(Color.Transparent, Color(0xCC000000), Color(0xF2000000))))
-                    .padding(start = 40.dp, end = 40.dp, top = 56.dp, bottom = 28.dp),
-            ) {
-                if (live && (!playRequested || canReturnToLive)) {
-                    Row(Modifier.padding(bottom = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                        if (!playRequested) Pill(context.getString(R.string.play_paused), color = Color(0x33FFFFFF), contentColor = Color.White)
-                        if (canReturnToLive) {
-                            Spacer(Modifier.size(10.dp))
-                            Pill(if (behindSec < 60) stringResource(R.string.play_behind_seconds, behindSec) else stringResource(R.string.play_behind_minutes, behindSec / 60, behindSec % 60), color = Palette.Gold, contentColor = Color.Black)
-                            Text(context.getString(R.string.play_live_hint), style = MaterialTheme.typography.labelMedium, color = Palette.TextMuted)
-                        }
-                    }
-                }
-                if (live) LiveOverlay(index + 1, current, epg) else VodOverlay(current.name, position, duration,
-                    onSeek = { player.seekTo(it); showOverlay() }, onInteraction = { controlsActive = true; showOverlay() })
-                Spacer(Modifier.height(12.dp))
-                PlayerControlsBar(
-                    live = live, playing = playRequested, active = controlsActive,
-                    onToggle = { if (player.playWhenReady) player.pause() else player.play(); showOverlay() },
-                    onChannels = { panel = Panel.Channels },
-                    onSettings = ::openSettings,
-                    onRecord = ::toggleRecording,
-                    recording = activeRecording != null,
-                    canReturnToLive = canReturnToLive,
-                    onReturnToLive = { returnToLive(); showOverlay() },
-                    onInfo = { showInfo = true },
-                )
-                if (!live && !playRequested) {
-                    pauseCast?.let { Text(context.getString(R.string.ui_cast) + ": " + it,
-                        modifier = Modifier.padding(top = 12.dp), style = MaterialTheme.typography.titleSmall,
-                        color = Color.White, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis) }
-                    Text(titleInfo?.takeIf { it.isNotBlank() } ?: stringResource(if (titleInfoLoading) R.string.ux_info_loading else R.string.ux_info_unknown),
-                        modifier = Modifier.padding(top = 12.dp), style = MaterialTheme.typography.bodyMedium,
-                        color = Palette.TextMuted, maxLines = 2, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
-                }
-                Text(stringResource(if (controlsActive) R.string.ux_close_controls else if (live) R.string.ux_player_hint else R.string.ux_vod_hint),
-                    style = MaterialTheme.typography.labelSmall, color = Palette.TextMuted, modifier = Modifier.padding(top = 8.dp))
-            }
         }
 
         if (nextVisible && panel == Panel.None && !inPip) {

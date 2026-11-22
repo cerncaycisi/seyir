@@ -51,46 +51,6 @@ import dev.iptv.player.ui.formatClock
 import dev.iptv.player.ui.pointerClick
 import kotlinx.coroutines.android.awaitFrame
 
-@Composable
-internal fun LiveOverlay(number: Int, stream: Stream, epg: List<EpgEntry>) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        LogoTile(stream.name, stream.logo, Modifier.size(width = 112.dp, height = 64.dp), MaterialTheme.typography.titleLarge)
-        Spacer(Modifier.width(20.dp))
-        Column(Modifier.weight(1f)) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                Pill("$number", color = Color(0x33FFFFFF), contentColor = Color.White)
-                Text(stream.name, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = Color.White, maxLines = 1)
-                Pill(stringResource(R.string.play_live), color = Palette.Live, contentColor = Color.White)
-            }
-            val now = epg.firstOrNull()
-            if (now != null) {
-                Spacer(Modifier.height(10.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(now.title, style = MaterialTheme.typography.titleLarge, color = Color.White, maxLines = 1, modifier = Modifier.weight(1f, fill = false))
-                    Spacer(Modifier.width(12.dp))
-                    Text("${formatClock(now.start)} – ${formatClock(now.end)}", style = MaterialTheme.typography.bodyMedium, color = Palette.TextMuted)
-                }
-                if (now.end > now.start) {
-                    Spacer(Modifier.height(10.dp))
-                    val nowSec = System.currentTimeMillis() / 1000
-                    ProgressBar((nowSec - now.start).toFloat() / (now.end - now.start), Modifier.widthIn(max = 480.dp))
-                }
-                epg.getOrNull(1)?.let { next ->
-                    Spacer(Modifier.height(10.dp))
-                    Text(stringResource(R.string.play_next_programme, formatClock(next.start), next.title), style = MaterialTheme.typography.bodyMedium, color = Palette.TextMuted, maxLines = 1)
-                }
-            }
-        }
-    }
-}
-
-@Composable
-internal fun VodOverlay(title: String, position: Long, duration: Long, onSeek: (Long) -> Unit, onInteraction: () -> Unit) {
-    Text(title, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = Color.White, maxLines = 1)
-    Spacer(Modifier.height(20.dp))
-    SeekBar(position, duration, onSeek, onInteraction)
-}
-
 /** Countdown card shown near the end of a series episode; stringResource(R.string.play_now) is focused, BACK cancels. */
 @Composable
 internal fun NextEpisodeCard(nextTitle: String, seconds: Int, onPlayNow: () -> Unit, onCancel: () -> Unit, modifier: Modifier = Modifier) {
