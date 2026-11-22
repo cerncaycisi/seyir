@@ -391,7 +391,50 @@ private suspend fun migrateSpectreJson(repo: Repository, rawJson: String) {
 
     arr("liveRecent").mapNotNull { findStream(live, it) }.forEach { addHistory(it) }
     arr("moviesResume").mapNotNull { findStream(movies, it) }.forEach { addHistory(it, posMs = 120_000L, durMs = 5_400_000L) }
-    arr("seriesRecent").mapNotNull { findStream(series, it) }.forEach { addHistory(it, seriesId = it.id) }
+
+    val epArr = obj.optJSONArray("seriesEpisodes")
+    val epByTitle = HashMap<String, org.json.JSONObject>()
+    if (epArr != null) {
+        for (i in 0 until epArr.length()) {
+            val item = epArr.optJSONObject(i) ?: continue
+            val sTitle = item.optString("series")
+            if (sTitle.isNotBlank()) epByTitle[norm(sTitle)] = item
+        }
+    }
+    for (title in arr("seriesRecent")) {
+        val sStream = findStream(series, title) ?: continue
+        val epObj = epByTitle[norm(title)] ?: epByTitle[norm(sStream.name)]
+        if (epObj != null) {
+            val season = epObj.optInt("season", 1).coerceAtLeast(1)
+            val episode = epObj.optInt("episode", 1).coerceAtLeast(1)
+            val hasSeekbar = epObj.optBoolean("hasSeekbar", true)
+            val pos = if (hasSeekbar) 600_000L else 20_000L
+            val dur = 2_400_000L
+            val fk = dev.iptv.player.data.favoriteKey(playlist, sStream)
+            val scoped = repo.history.scoped(fk)
+            if (historyEntries.none { it.key == scoped }) {
+                historyEntries += dev.iptv.player.data.HistoryEntry(
+                    key = scoped,
+                    favKey = fk,
+                    playlistId = playlist.id,
+                    id = sStream.id,
+                    type = ContentType.SERIES,
+                    name = sStream.name,
+                    logo = sStream.logo,
+                    url = sStream.url,
+                    categoryId = sStream.categoryId,
+                    seriesId = sStream.id,
+                    season = season,
+                    episode = episode,
+                    positionMs = pos,
+                    durationMs = dur,
+                    updatedAt = now - (order++ * 1000L),
+                )
+            }
+        } else {
+            addHistory(sStream, seriesId = sStream.id)
+        }
+    }
 
     repo.store.resetAndSetFavorites(favKeys)
     repo.history.replaceAll(historyEntries)

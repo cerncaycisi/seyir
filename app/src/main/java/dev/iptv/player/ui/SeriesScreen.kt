@@ -132,19 +132,22 @@ private fun SeriesDetail(repo: Repository, playlist: Playlist, seriesId: String,
     val watchLater by repo.store.watchLater.collectAsState(initial = emptySet())
     val isLater = favKey in watchLater
     val history by repo.history.entries.collectAsState(initial = emptyList())
-    val progressById = remember(history) {
+    val idBySeasonEp = remember(all) { all.associate { (it.season to it.episode) to it.id } }
+    fun resolvedId(e: dev.iptv.player.data.HistoryEntry): String =
+        if (all.any { it.id == e.id }) e.id else idBySeasonEp[e.season to e.episode] ?: e.id
+    val progressById = remember(history, idBySeasonEp) {
         history.filter { it.seriesId == seriesId && it.playlistId == playlist.id }
-            .associate { it.id to (if (it.finished) 1f else it.fraction) }
+            .associate { resolvedId(it) to (if (it.finished) 1f else it.fraction) }
     }
-    val resumeById = remember(history) {
+    val resumeById = remember(history, idBySeasonEp) {
         history.filter { it.seriesId == seriesId && it.playlistId == playlist.id && !it.finished && it.positionMs >= dev.iptv.player.data.HistoryEntry.MIN_RESUME_MS }
-            .associate { it.id to it.positionMs }
+            .associate { resolvedId(it) to it.positionMs }
     }
     var pendingEpisode by remember { mutableStateOf<Int?>(null) }
-    val lastEntry = remember(history, all) {
-        history.filter { it.seriesId == seriesId && it.playlistId == playlist.id && all.any { s -> s.id == it.id } }.maxByOrNull { it.updatedAt }
+    val lastEntry = remember(history, all, idBySeasonEp) {
+        history.filter { it.seriesId == seriesId && it.playlistId == playlist.id && all.any { s -> s.id == resolvedId(it) } }.maxByOrNull { it.updatedAt }
     }
-    val target = remember(lastEntry, info) { seriesContinue(info.episodes, lastEntry?.id, lastEntry?.finished == true) }
+    val target = remember(lastEntry, info, idBySeasonEp) { seriesContinue(info.episodes, lastEntry?.let(::resolvedId), lastEntry?.finished == true) }
     var chosenSeason by rememberSaveable { mutableIntStateOf(-1) }
     val season = when {
         chosenSeason >= 0 -> chosenSeason
