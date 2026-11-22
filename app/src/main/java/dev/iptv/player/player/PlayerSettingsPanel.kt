@@ -27,6 +27,23 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.automirrored.rounded.List
+import androidx.compose.material.icons.rounded.AspectRatio
+import androidx.compose.material.icons.rounded.Audiotrack
+import androidx.compose.material.icons.rounded.Bedtime
+import androidx.compose.material.icons.rounded.CloudDownload
+import androidx.compose.material.icons.rounded.FiberManualRecord
+import androidx.compose.material.icons.rounded.FormatSize
+import androidx.compose.material.icons.rounded.GridView
+import androidx.compose.material.icons.rounded.HighQuality
+import androidx.compose.material.icons.rounded.History
+import androidx.compose.material.icons.rounded.Info
+import androidx.compose.material.icons.rounded.LiveTv
+import androidx.compose.material.icons.rounded.Palette
+import androidx.compose.material.icons.rounded.PictureInPicture
+import androidx.compose.material.icons.rounded.Speed
+import androidx.compose.material.icons.rounded.Subtitles
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -91,7 +108,13 @@ enum class PlayerPage(val title: Int) {
     Info(R.string.ux_info),
 }
 
-private class RowSpec(val label: String, val value: String? = null, val checked: Boolean = false, val onClick: () -> Unit)
+private class RowSpec(
+    val label: String,
+    val value: String? = null,
+    val checked: Boolean = false,
+    val icon: androidx.compose.ui.graphics.vector.ImageVector? = null,
+    val onClick: () -> Unit,
+)
 
 /** Right-hand settings panel; every page is a D-pad list, BACK goes up one level and finally closes. */
 @Composable
@@ -140,36 +163,54 @@ fun PlayerSettingsPanel(
             .background(Color(0xF2111620))
             .padding(horizontal = 20.dp, vertical = 24.dp),
     ) {
-        Text(stringResource(page.title), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = Color.White)
+        val title = if (page == PlayerPage.Main) stringResource(if (live) R.string.play_panel_live else R.string.play_panel_vod) else stringResource(page.title)
+        Text(title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = Color.White)
         Spacer(Modifier.height(16.dp))
 
         key(page) {
             when (page) {
                 PlayerPage.Main -> {
+                    // Live channels and movies/episodes get different menus: channel actions first for TV,
+                    // track and subtitle settings first for VOD. Rows without real choices are hidden.
                     val rows = ArrayList<RowSpec>()
-                    fun add(label: String, value: String?, target: PlayerPage) {
+                    fun add(label: String, value: String?, target: PlayerPage, icon: ImageVector) {
                         val i = rows.size
-                        rows += RowSpec(label, value) { mainFocus = i; page = target }
+                        rows += RowSpec(label, value, icon = icon) { mainFocus = i; page = target }
                     }
-                    if (onBackToLive != null) rows += RowSpec(stringResource(R.string.play_back_live)) { onBackToLive() }
-                    if (onPreviousChannel != null) rows += RowSpec(stringResource(R.string.play_previous_channel)) { onPreviousChannel() }
-                    if (onChannelList != null) rows += RowSpec(stringResource(R.string.play_channel_list)) { onChannelList() }
-                    if (onRecordToggle != null) rows += RowSpec(if (recording) stringResource(R.string.play_stop_recording) else stringResource(R.string.play_record), if (recording) stringResource(R.string.play_record_badge) else null) { onRecordToggle() }
-                    if (onMultiView != null) {
-                        rows += RowSpec(stringResource(R.string.play_multiview), stringResource(R.string.play_two_channels)) { onMultiView(2) }
-                        rows += RowSpec(stringResource(R.string.play_multiview), stringResource(R.string.play_four_channels)) { onMultiView(4) }
+                    val audioValue = audio.firstOrNull { it.selected }?.label ?: if (audio.isEmpty()) stringResource(R.string.play_none) else "—"
+                    val subtitleValue = subtitles.firstOrNull { it.selected && it.group != null }?.label ?: stringResource(R.string.play_off)
+                    val qualityValue = if (quality.isEmpty()) stringResource(R.string.play_auto) else offOrAuto(quality)
+                    if (live) {
+                        if (onBackToLive != null) rows += RowSpec(stringResource(R.string.play_back_live), icon = Icons.Rounded.LiveTv) { onBackToLive() }
+                        if (onPreviousChannel != null) rows += RowSpec(stringResource(R.string.play_previous_channel), icon = Icons.Rounded.History) { onPreviousChannel() }
+                        if (onChannelList != null) rows += RowSpec(stringResource(R.string.play_channel_list), icon = Icons.AutoMirrored.Rounded.List) { onChannelList() }
+                        if (onRecordToggle != null) rows += RowSpec(
+                            if (recording) stringResource(R.string.play_stop_recording) else stringResource(R.string.play_record),
+                            if (recording) stringResource(R.string.play_record_badge) else null,
+                            icon = Icons.Rounded.FiberManualRecord,
+                        ) { onRecordToggle() }
+                        if (onMultiView != null) {
+                            rows += RowSpec(stringResource(R.string.play_multiview), stringResource(R.string.play_two_channels), icon = Icons.Rounded.GridView) { onMultiView(2) }
+                            rows += RowSpec(stringResource(R.string.play_multiview), stringResource(R.string.play_four_channels), icon = Icons.Rounded.GridView) { onMultiView(4) }
+                        }
+                        if (onPip != null) rows += RowSpec(stringResource(R.string.play_pip), icon = Icons.Rounded.PictureInPicture) { onPip() }
+                        add(stringResource(R.string.play_aspect), aspect.label, PlayerPage.Aspect, Icons.Rounded.AspectRatio)
+                        if (quality.isNotEmpty()) add(stringResource(R.string.play_quality), qualityValue, PlayerPage.Quality, Icons.Rounded.HighQuality)
+                        if (audio.size > 1) add(stringResource(R.string.play_audio), audioValue, PlayerPage.Audio, Icons.Rounded.Audiotrack)
+                        if (subtitles.any { it.group != null }) add(stringResource(R.string.play_subtitles), subtitleValue, PlayerPage.Subtitle, Icons.Rounded.Subtitles)
+                    } else {
+                        add(stringResource(R.string.play_audio), audioValue, PlayerPage.Audio, Icons.Rounded.Audiotrack)
+                        add(stringResource(R.string.play_subtitles), subtitleValue, PlayerPage.Subtitle, Icons.Rounded.Subtitles)
+                        add(stringResource(R.string.sub_style_title), stringResource(subtitleStyle.labelRes), PlayerPage.SubStyle, Icons.Rounded.Palette)
+                        add(stringResource(R.string.play_sub_size), "%$subtitleScale", PlayerPage.SubSize, Icons.Rounded.FormatSize)
+                        if (subtitleSearch != null) add(stringResource(R.string.play_online_subtitles), null, PlayerPage.Online, Icons.Rounded.CloudDownload)
+                        add(stringResource(R.string.play_speed), speedLabel(speed), PlayerPage.Speed, Icons.Rounded.Speed)
+                        add(stringResource(R.string.play_aspect), aspect.label, PlayerPage.Aspect, Icons.Rounded.AspectRatio)
+                        if (quality.isNotEmpty()) add(stringResource(R.string.play_quality), qualityValue, PlayerPage.Quality, Icons.Rounded.HighQuality)
+                        if (onPip != null) rows += RowSpec(stringResource(R.string.play_pip), icon = Icons.Rounded.PictureInPicture) { onPip() }
                     }
-                    if (onPip != null) rows += RowSpec(stringResource(R.string.play_pip)) { onPip() }
-                    add(stringResource(R.string.play_aspect), aspect.label, PlayerPage.Aspect)
-                    if (!live) add(stringResource(R.string.play_speed), speedLabel(speed), PlayerPage.Speed)
-                    add(stringResource(R.string.play_quality), if (quality.isEmpty()) stringResource(R.string.play_auto) else offOrAuto(quality), PlayerPage.Quality)
-                    add(stringResource(R.string.play_audio), audio.firstOrNull { it.selected }?.label ?: if (audio.isEmpty()) stringResource(R.string.play_none) else "—", PlayerPage.Audio)
-                    add(stringResource(R.string.play_subtitles), subtitles.firstOrNull { it.selected }?.label ?: stringResource(R.string.play_off), PlayerPage.Subtitle)
-                    add(stringResource(R.string.sub_style_title), stringResource(subtitleStyle.labelRes), PlayerPage.SubStyle)
-                    add(stringResource(R.string.play_sub_size), "%$subtitleScale", PlayerPage.SubSize)
-                    add(stringResource(R.string.play_sleep), sleepLabel(sleepMinutes), PlayerPage.Sleep)
-                    if (subtitleSearch != null) add(stringResource(R.string.play_online_subtitles), null, PlayerPage.Online)
-                    add(stringResource(R.string.ux_info), null, PlayerPage.Info)
+                    add(stringResource(R.string.play_sleep), sleepLabel(sleepMinutes), PlayerPage.Sleep, Icons.Rounded.Bedtime)
+                    add(stringResource(R.string.ux_info), null, PlayerPage.Info, Icons.Rounded.Info)
                     PanelList(rows, mainFocus.coerceIn(0, rows.lastIndex))
                 }
                 PlayerPage.Aspect -> {
@@ -254,6 +295,8 @@ private fun OnlineSubtitlePage(search: SubtitleSearch, onDone: () -> Unit) {
 @Composable
 private fun PanelList(rows: List<RowSpec>, startIndex: Int) {
     val state = rememberLazyListState()
+    // Reserve the tick column only on choice lists; menu rows show their icon instead of an empty gap.
+    val checkSlot = rows.any { it.checked }
     val focus = remember { FocusRequester() }
     LaunchedEffect(Unit) {
         state.scrollToItem((startIndex - 2).coerceAtLeast(0))
@@ -262,13 +305,13 @@ private fun PanelList(rows: List<RowSpec>, startIndex: Int) {
     }
     LazyColumn(Modifier.fillMaxSize(), state = state, verticalArrangement = Arrangement.spacedBy(6.dp)) {
         itemsIndexed(rows) { i, row ->
-            PanelRow(row, if (i == startIndex) Modifier.focusRequester(focus) else Modifier)
+            PanelRow(row, checkSlot, if (i == startIndex) Modifier.focusRequester(focus) else Modifier)
         }
     }
 }
 
 @Composable
-private fun PanelRow(row: RowSpec, modifier: Modifier) {
+private fun PanelRow(row: RowSpec, checkSlot: Boolean, modifier: Modifier) {
     val shape = RoundedCornerShape(10.dp)
     Surface(
         onClick = row.onClick,
@@ -284,12 +327,12 @@ private fun PanelRow(row: RowSpec, modifier: Modifier) {
         scale = ClickableSurfaceDefaults.scale(focusedScale = 1.02f),
     ) {
         Row(Modifier.fillMaxSize().padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically) {
-            if (row.checked) {
-                Icon(Icons.Rounded.Check, contentDescription = null, modifier = Modifier.size(20.dp))
-            } else {
-                Spacer(Modifier.width(20.dp))
+            when {
+                row.icon != null -> Icon(row.icon, contentDescription = null, modifier = Modifier.size(20.dp))
+                row.checked -> Icon(Icons.Rounded.Check, contentDescription = null, modifier = Modifier.size(20.dp))
+                checkSlot -> Spacer(Modifier.width(20.dp))
             }
-            Spacer(Modifier.width(10.dp))
+            if (row.icon != null || checkSlot) Spacer(Modifier.width(12.dp))
             Text(row.label, modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
             row.value?.let {
                 Spacer(Modifier.width(8.dp))

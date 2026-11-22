@@ -57,6 +57,8 @@
     <string name="play_off">Kapalı</string>
     <string name="play_online_subtitles">Altyazı ara (OpenSubtitles)</string>
     <string name="play_panel_title">Oynatıcı ayarları</string>
+    <string name="play_panel_live">Kanal ayarları</string>
+    <string name="play_panel_vod">Oynatma ayarları</string>
     <string name="play_paused">DURAKLATILDI</string>
     <string name="play_pin_needed">Kilitlemek için önce Ayarlar &gt; Ebeveyn kontrolü\'nden PIN belirleyin</string>
     <string name="play_pip">Resim içinde resim</string>

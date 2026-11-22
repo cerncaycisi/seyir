@@ -57,6 +57,8 @@
     <string name="play_off">Off</string>
     <string name="play_online_subtitles">Find subtitles (OpenSubtitles)</string>
     <string name="play_panel_title">Player settings</string>
+    <string name="play_panel_live">Channel settings</string>
+    <string name="play_panel_vod">Playback settings</string>
     <string name="play_paused">PAUSED</string>
     <string name="play_pin_needed">Set a PIN in Settings &gt; Parental controls before locking content</string>
     <string name="play_pip">Picture-in-picture</string>
