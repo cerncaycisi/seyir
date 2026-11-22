@@ -324,12 +324,28 @@ fun ChannelRow(
                 maxLines = 1,
             )
             Spacer(Modifier.width(10.dp))
-            Box(Modifier.size(width = 44.dp, height = 26.dp), contentAlignment = Alignment.Center) {
+            // Missing or broken logo: a dim initials tile instead of an empty gap.
+            var logoLoaded by remember(stream.logo) { mutableStateOf(false) }
+            Box(
+                Modifier.size(width = 44.dp, height = 26.dp).clip(RoundedCornerShape(6.dp))
+                    .then(if (logoLoaded) Modifier else Modifier.background(LocalContentColor.current.copy(alpha = 0.10f))),
+                contentAlignment = Alignment.Center,
+            ) {
+                if (!logoLoaded) {
+                    Text(
+                        initials(stream.name),
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = LocalContentColor.current.copy(alpha = 0.6f),
+                        maxLines = 1,
+                    )
+                }
                 if (!stream.logo.isNullOrBlank()) {
                     AsyncImage(
                         model = stream.logo,
                         contentDescription = null,
                         contentScale = ContentScale.Fit,
+                        onState = { logoLoaded = it is AsyncImagePainter.State.Success },
                         modifier = Modifier.fillMaxSize(),
                     )
                 }
