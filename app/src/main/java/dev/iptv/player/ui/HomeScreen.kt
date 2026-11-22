@@ -320,12 +320,12 @@ fun HomeScreen(
                 Modifier.width(240.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                BrandMark(28.dp)
+                BrandMark(30.dp)
                 Spacer(Modifier.width(10.dp))
                 Text(
                     stringResource(R.string.app_name),
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
+                    style = MaterialTheme.typography.titleMedium.copy(fontFamily = InterTightFamily),
+                    fontWeight = FontWeight.ExtraBold,
                     color = Palette.Text,
                     maxLines = 1,
                 )

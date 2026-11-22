@@ -56,7 +56,12 @@ object EpgSources {
 class EpgService private constructor(context: Context) {
     private val appContext = context.applicationContext
     val settings = SettingsStore(appContext)
-    private val db = Room.databaseBuilder(appContext, EpgDatabase::class.java, "epg.db").fallbackToDestructiveMigration().build()
+    private val db = Room.databaseBuilder(appContext, EpgDatabase::class.java, "epg.db")
+        .addMigrations(EpgDatabase.MIGRATION_1_2)
+        .setQueryExecutor(dev.iptv.player.util.BackgroundWork.dbExecutor)
+        .setTransactionExecutor(dev.iptv.player.util.BackgroundWork.dbExecutor)
+        .fallbackToDestructiveMigration()
+        .build()
     private val dao = db.epg()
     val reminderDao = db.reminders()
     val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -167,7 +172,7 @@ class EpgService private constructor(context: Context) {
                 var count = 0
                 XmltvParser.parse(
                     parser, input,
-                    onChannel = { c -> channels += EpgChannel(c.id, c.names.firstOrNull() ?: c.id, c.names.joinToString("\n")) },
+                    onChannel = { c -> channels += EpgChannel(c.id, c.names.firstOrNull() ?: c.id, c.names.joinToString("\n"), c.icon) },
                     onProgramme = { p ->
                         job?.ensureActive()
                         if (p.stop > lo && p.start < hi) {
@@ -224,6 +229,13 @@ class EpgService private constructor(context: Context) {
     suspend fun currentMatch(playlistId: String, stream: Stream): EpgChannel? {
         val id = resolve(playlistId, stream) ?: return null
         return channelIndex().channels.firstOrNull { it.id == id }
+    }
+
+    /** Returns the XMLTV `<channel><icon src="..."/>` URL for [stream], if matched in the loaded guide. */
+    suspend fun channelIcon(stream: Stream): String? = withContext(Dispatchers.Default) {
+        val idx = channelIndex()
+        val id = idx.match(stream.epgId, stream.name) ?: return@withContext null
+        idx.channels.firstOrNull { it.id == id }?.icon?.takeIf { it.isNotBlank() }
     }
 
     suspend fun isManual(playlistId: String, stream: Stream): Boolean = "$playlistId|${stream.id}" in overrides()

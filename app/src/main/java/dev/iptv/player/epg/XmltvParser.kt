@@ -5,7 +5,7 @@ import java.io.InputStream
 import java.util.GregorianCalendar
 import java.util.TimeZone
 
-data class XmltvChannel(val id: String, val names: List<String>)
+data class XmltvChannel(val id: String, val names: List<String>, val icon: String? = null)
 
 /**
  * Streaming XMLTV reader: only the current element is held in memory, so 100+ MB guides are fine.
@@ -36,15 +36,24 @@ object XmltvParser {
     private fun readChannel(p: XmlPullParser): XmltvChannel? {
         val id = p.getAttributeValue(null, "id")?.trim().orEmpty()
         val names = ArrayList<String>(2)
+        var icon: String? = null
         while (true) {
             val e = p.next()
             if (e == XmlPullParser.END_DOCUMENT) break
             if (e == XmlPullParser.END_TAG && p.name == "channel") break
             if (e == XmlPullParser.START_TAG) {
-                if (p.name == "display-name") safeText(p).takeIf { it.isNotBlank() }?.let { names += it.trim() } else skip(p)
+                when (p.name) {
+                    "display-name" -> safeText(p).takeIf { it.isNotBlank() }?.let { names += it.trim() }
+                    "icon" -> {
+                        val src = p.getAttributeValue(null, "src")?.trim()?.takeIf { it.startsWith("http://") || it.startsWith("https://") }
+                        if (icon == null && src != null) icon = src
+                        skip(p)
+                    }
+                    else -> skip(p)
+                }
             }
         }
-        return if (id.isEmpty()) null else XmltvChannel(id, names)
+        return if (id.isEmpty()) null else XmltvChannel(id, names, icon)
     }
 
     private fun readProgramme(p: XmlPullParser): Programme? {

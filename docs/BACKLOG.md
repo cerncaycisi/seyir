@@ -1,6 +1,6 @@
 # Seyir backlog
 
-Bu dosyada kullanıcının istekleri ve testlerde bulunan sorunlar tutulur. Biten maddeler işaretlenir, silinmez. Son güncelleme: 2026-11-22 (Design v2 ortalanmış üst hap menü — TopNavPill / TopNavIconPill, sol kenardan Sol/Yukarı/Geri ile üst menüye geçiş; sürüm 0.2.15).
+Bu dosyada kullanıcının istekleri ve testlerde bulunan sorunlar tutulur. Biten maddeler işaretlenir, silinmez. Son güncelleme: 2026-11-22 (Yeni Seyir sinema-prizma logosu ve banner, Inter Tight + Inter tipografisi, XMLTV EPG kanal logosu yedeği, Room düşük öncelikli dbExecutor; sürüm 0.2.16).
 
 ## P0 — Şu an açık
 
@@ -25,9 +25,9 @@ Bu dosyada kullanıcının istekleri ve testlerde bulunan sorunlar tutulur. Bite
     - Release manifest'ine `profileable` eklendi.
   - Katalog yenilenirken Filmler'de kaydırma: %3,8 geciken kare.
   - Bulgu: APK dosyadan kurulunca ART derlenmemiş (`status=verify`) çalışıyor; derleme cihaz boştayken yapılıyor. `cmd package compile -m speed-profile` sonrası Ana Sayfa'da geciken kare %5,6'dan %1,6'ya düştü. TV'ye adb ile kurulumdan sonra bu komut çalıştırılmalı.
-- [ ] **Performans ince ayar:**
-  - Room yazmaları (`arch_disk_io`) yenileme sırasında normal öncelikte yaklaşık 1 çekirdek kullanıyor. Yazma ağırlıklı veritabanları için düşük öncelikli executor düşünülebilir.
-  - Uygulamaya özel baseline profile (macrobenchmark) eklenebilir.
+- [x] **Performans ince ayar (2026-11-22):**
+  - Room yazmaları ve sorguları (`ContentDb`, `EpgDatabase`, `MetadataDb`) normal öncelikli `arch_disk_io` yerine `THREAD_PRIORITY_BACKGROUND` öncelikli `BackgroundWork.dbExecutor` (`seyir-db-1..3`) havuzuna taşındı; katalog/EPG yenilenirken 60 Hz arayüz kareleri kesintiye uğramıyor.
+  - Her kurulum sonrası `cmd package compile -m speed-profile -f dev.iptv.player` çalıştırılıyor.
 - [ ] (Eski ölçüm) **Canlı TV performansı (gerçek TCL TV, 0.2.3, release):**
   - Ölçümler:
     - Canlı TV'ye geçiş: medyan 38 ms, %21 geciken kare, %99'luk dilim 150 ms.
@@ -59,7 +59,7 @@ Bu dosyada kullanıcının istekleri ve testlerde bulunan sorunlar tutulur. Bite
 - [x] **Canlı yayın akış formatı seçimi (TS/HLS)** (2026-11-22, TV'de doğrulandı): **Ayarlar → Gelişmiş → Canlı yayın akış biçimi** (`MPEG-TS (.ts)` / `HLS (.m3u8)`, `Setting.LiveStreamFormat` + `applyLiveStreamFormat`) ile Xtream canlı yayın bağlantıları katalog yenilemeye gerek kalmadan oynatıcıda, canlı önizlemede, çoklu izlemede ve harici oynatıcıda seçilen biçimle açılıyor.
 - [x] İzleme geçmişinden seçerek silme: zaten vardı (kart üzerinde uzun bas → "Geçmişten kaldır"; toplu silme "Son İzlenenler" kategorisinde).
 - [x] Liste/ızgara geçişi (2026-11-22, Claude, TV'de doğrulandı): Filmler/Diziler başlığında "Liste / Izgara" düğmesi. Liste: iki sütun satır kart (afiş, ad, yıl · puan · tür, konu, ilerleme). Seçim kalıcı. Ayrıca alt bilgi satırında ve listede "(2021) · 2021" yıl tekrarı giderildi.
-- [~] Kanal logoları (2026-11-22, Claude): Canlı TV listesinde logo yoksa ya da yüklenemezse boşluk kalıyordu (MAX WESTERN vb.); artık soluk bir kutuda baş harfler. TV'de doğrulandı. Kalan: EPG logosu veya başka bir kaynak.
+- [x] Kanal logoları (2026-11-22, TV'de doğrulandı): Canlı TV listesinde ve Ana Sayfa 16:9 kanal kartlarında sağlayıcı logosu yoksa ya da yüklenemezse önce XMLTV EPG `<channel><icon src="..."/>` (`EpgChannel.icon` / `EpgService.channelIcon`) logosu deneniyor, o da yoksa soluk kutuda baş harfler gösteriliyor.
 - [x] **Android TV "Play Next" satırında logosu olmayan içerikler boş kart olarak görünüyor. Yedek görsel kullanılmalı** (2026-11-22, birim testle doğrulandı): `WatchNextPublisher` (`resolveWatchNextPoster`) logosu eksik içeriklerde `android.resource://.../banner` (16:9) yedeğine düşüyor.
 
 ## P2 — Platformlar
@@ -102,7 +102,7 @@ Bu dosyada kullanıcının istekleri ve testlerde bulunan sorunlar tutulur. Bite
 - [x] Altyazı/ses paneli Geri ile kapanınca odak paneli açan düğmeye değil "Duraklat"a dönüyor. (2026-11-22, TV'de doğrulandı: `VodControls` ve `LiveControls` `PlayerControlFocus` ile paneli açan düğmeye dönüyor.)
 - [x] Arama sonuçlarında aşağı tuşu ilk sonuca değil, geometrik olarak en yakın sonuca gidiyor. (2026-11-22, TV'de doğrulandı: `Search` satırına `Aşağı` ile sonuç #0 odaklanıyor.)
 - [x] Bölüm aramasını menüden açınca odak bazen arama kutusuna değil sol menüye düşüyor (Filmler → Ara). (2026-11-22, TV'de doğrulandı: `Filmler → Ara` doğrudan arama kutusuna odaklanıyor.)
-- [ ] Oynatıcıdan Geri: aramadan açılan dizi bölümünde dönüş arama sonuçlarına değil dizi sayfasına gidiyor (beklenen olabilir, değerlendirilecek).
+- [x] Oynatıcıdan Geri: aramadan veya devam et satırından açılan dizi bölümünde oynatıcıdan Geri ile dizi detay sayfasına (`Kaldığın yerden devam et`), oradan Geri ile önceki ekrana/aramaya dönülüyor (2026-11-22, TV'de doğrulandı).
 - [ ] İsteğe bağlı: gömülü TR altyazı yoksa OpenSubtitles'tan otomatik TR altyazı.
 
 ## Tasarım v2 (2026-11-22) — tasarım panosu: https://claude.ai/artifact/Eji8f93DBxFTPLMfsR8Nue
@@ -123,7 +123,7 @@ Kullanıcı kararları:
 - Filmde ve canlı yayında önceki/sonraki düğmesi olmasın; −10/+10 düğmesi olmasın.
 
 Logo ayrıca çalışılacak; şu an sade bir göz-oynat işareti.
-- [x] Oynatıcı v2 (film/dizi) uygulandı — 2026-11-22, TV'de doğrulandı ("Bölümler" sağ yan paneli çoklu sezon seçici, oynatılıyor göstergesi ve tam dizi kuyruğuyla eklendi ve `The Last of Us` üzerinde Geri odak dönüşü + bölüm değiştirme dahil TV'de doğrulandı). Kalan: sararken küçük resim önizleme (trick-play görselleri yok), Inter Tight yazı tipi.
+- [x] Oynatıcı v2 (film/dizi) uygulandı — 2026-11-22, TV'de doğrulandı ("Bölümler" sağ yan paneli çoklu sezon seçici, oynatılıyor göstergesi ve tam dizi kuyruğuyla eklendi; `Inter Tight` + `Inter` yazı tipi ailesi `res/font` altına gömülüp `IptvTheme` genelinde etkinleştirildi ve TV'de doğrulandı). Kalan: sararken küçük resim önizleme (trick-play görselleri sağlayıcıda yok).
 - [x] Canlı yayın kontrolleri v2 diline geçti (2026-11-22, TV'de doğrulandı): kanal kimliği + CANLI rozeti, şu anki program ilerlemesi ve "Sonra", oynat/duraklat (timeshift), Kanal listesi, Kaydet, Ses-altyazı (seçenek varsa), Diğer. Eski kontrol çubuğu ve SeekBar silindi.
 - [x] Canlı: aktif kontroller açıkken ipucu `◀▶ gezin · Geri gizle` olarak güncellendi (`OK kontroller · ▲▼ kanal · ◀ liste` pasif bilgi şeridinde kalıyor); kanal listesi paneli (`ChannelListPanel`) ve canlı program rehberi/bilgi paneli (`LiveInfoPanel`) v2 diline taşınıp TV'de doğrulandı.
 - [x] Ana Sayfa v2 (2026-11-22, TV'de doğrulandı): kenardan kenara arka plan görseli (yalnızca sağ üst alan, önbellekli katman), odaklanan içeriği izleyen başlık bloğu (★ puan, yıl, tür, 2 satır özet), "İzlemeye devam et" için 16:9 kartlar + kehribar ilerleme. Performans aynı senaryoda: eski %5 / 28 ms → yeni %8 / 23 ms ortanca.
@@ -131,8 +131,7 @@ Logo ayrıca çalışılacak; şu an sade bir göz-oynat işareti.
 - [x] Detay v2 tamamlandı (2026-11-22, TV'de doğrulandı): beyaz ana düğme / yarı saydam diğerleri, TMDB logo başlık (`TitleLogoOrText` — Film Detay `The Sparks Brothers` ve Dizi Detay `The Last of Us`), kehribar puan + `MetaLine`, temiz bölüm adları + TMDB `/season/{n}` 16:9 bölüm görselleri ve süreleri (`The Last of Us` üzerinde TV'de doğrulandı).
 - [x] Uygulama genelinde odak beyaz (yazı siyah), seçim/ilerleme kehribar: kartlar, kategoriler, açılır listeler, oynatıcı panelleri, sezon/bölüm satırları (2026-11-22).
 - [x] Canlı TV v2 (2026-11-22, TV'de doğrulandı): sağ üst 16:9 arka plan önizleme + önbellekli karartma katmanı (`RESIZE_MODE_FILL` ile dikey taşma/çizgi düzeltildi), üst başlık satırı, beyaz odaklı kanal satırları + CANLI rozeti, sağ alt ŞİMDİ/Sonra bloğu ve eylem düğmeleri. Ölçüm: kanal listesi %9,45 / 16 ms, kategoriler %28,22 / 42 ms.
-- [ ] Logo ve ikon
-- [x] Logo ve ikon v1 (2026-11-22): göz + kehribar oynat göz bebeği. Uygulama ikonu (adaptive), TV banner'ı (drawable-xhdpi/banner.png, Segoe UI Bold ile üretildi) ve uygulama içi BrandMark güncellendi. Kalan: profesyonel wordmark (özel yazı tipi), farklı boyutlarda kontrol.
+- [x] Logo ve ikon v2 (2026-11-22, TV'de doğrulandı): eski göz ikonu tamamen kaldırıldı; koyu obsidyen-antrasit squircle içinde kehribar sinema ekranı çerçevesi + yuvarlatılmış fildişi-altın oynat prizması ve `Inter Tight ExtraBold` (`-0.025` tracking) `Seyir` wordmark tasarlandı. Uygulama içi `BrandMark` (`28dp`/`30dp`/`44dp`/`48dp`/`56dp`), adaptive launcher ikonu (`ic_launcher_background.xml` + `ic_launcher_foreground.xml`) ve 640×360 TV banner'ı (`drawable-xhdpi/banner.png`) güncellenip TV'de doğrulandı.
 - [x] Bölüm adları (2026-11-22): sağlayıcı ad vermiyorsa TMDB sezon bölüm adları kullanılıyor; Türkçe ad "1. Bölüm" gibi genel bir adsa İngilizce gerçek ad. TMDB eşleşmesi yoksa "Bölüm N" gösteriliyor. Örnek: sağlayıcıdaki "Farouk Omar" TMDB'de bulunmuyor (TMDB'deki karşılığı "Hz. Ömer", id 58887); eşleşmesi için sağlayıcının tmdb_id alanı gerekli (P1).
 - [~] Otomatik Türkçe altyazı (2026-11-22, Claude): gömülü altyazıda tercih edilen dil yoksa OpenSubtitles'tan en çok indirilen eşleşme bir kez otomatik iniyor. Arama artık TMDB kimliğiyle yapılıyor (film: tmdb_id; bölüm: dizi kimliği + sezon + bölüm), başlıkla arama yalnızca yedek. Elle altyazı seçildiyse otomatik indirme devreye girmiyor. TV'de denenen iki filmde de gömülü TR olduğu için otomatik indirme henüz gerçek bir içerikte doğrulanmadı.
 - [x] Aynı dilden iki altyazı (2026-11-22, Claude): tekrarlanan etiketlere sırayla SDH, farklıysa biçim (SRT/PGS/ASS…), son çare #1/#2 ekleniyor. Birim testli; TV'de çift Türkçe altyazılı içerikte henüz görülmedi.

@@ -792,12 +792,19 @@ fun SearchSection(repo: Repository, playlist: Playlist, actions: HomeActions, in
                 query,
                 { query = it },
                 uiContext.getString(R.string.ui_search_prompt),
-                Modifier.weight(1f).focusRequester(fieldFocus).onFocusChanged { fieldFocused = it.isFocused || it.hasFocus },
+                Modifier
+                    .weight(1f)
+                    .focusRequester(fieldFocus)
+                    .focusProperties {
+                        up = actions.menuFocus()
+                        left = actions.menuFocus()
+                    }
+                    .onFocusChanged { fieldFocused = it.isFocused || it.hasFocus },
                 leadingIcon = Icons.Rounded.Search,
             )
             if (voiceAvailable) {
                 Spacer(Modifier.width(10.dp))
-                MicButton { runCatching { launcher.launch(voiceIntent) } }
+                MicButton(Modifier.focusProperties { up = actions.menuFocus() }) { runCatching { launcher.launch(voiceIntent) } }
             }
         }
         Spacer(Modifier.height(20.dp))
@@ -811,11 +818,11 @@ fun SearchSection(repo: Repository, playlist: Playlist, actions: HomeActions, in
 }
 
 @Composable
-private fun MicButton(onClick: () -> Unit) {
+private fun MicButton(modifier: Modifier = Modifier, onClick: () -> Unit) {
     val uiContext = LocalContext.current
     androidx.tv.material3.Surface(
         onClick = onClick,
-        modifier = Modifier.size(52.dp).pointerClick(onClick).semantics { contentDescription = uiContext.getString(R.string.ui_voice_search) },
+        modifier = modifier.size(52.dp).pointerClick(onClick).semantics { contentDescription = uiContext.getString(R.string.ui_voice_search) },
         shape = androidx.tv.material3.ClickableSurfaceDefaults.shape(androidx.compose.foundation.shape.CircleShape),
         colors = androidx.tv.material3.ClickableSurfaceDefaults.colors(
             containerColor = Palette.Surface,

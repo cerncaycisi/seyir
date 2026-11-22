@@ -46,6 +46,9 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.Font
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
@@ -54,8 +57,23 @@ import androidx.compose.ui.unit.sp
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.LocalContentColor
 import androidx.tv.material3.Text
+import androidx.tv.material3.Typography
 import androidx.tv.material3.darkColorScheme
+import dev.iptv.player.R
 import kotlin.coroutines.cancellation.CancellationException
+
+internal val InterFamily = FontFamily(
+    Font(R.font.inter_regular, FontWeight.Normal),
+    Font(R.font.inter_medium, FontWeight.Medium),
+    Font(R.font.inter_semibold, FontWeight.SemiBold),
+    Font(R.font.inter_bold, FontWeight.Bold),
+)
+
+internal val InterTightFamily = FontFamily(
+    Font(R.font.inter_tight_semibold, FontWeight.SemiBold),
+    Font(R.font.inter_tight_bold, FontWeight.Bold),
+    Font(R.font.inter_tight_extrabold, FontWeight.ExtraBold),
+)
 
 sealed interface Load<out T> {
     data object Loading : Load<Nothing>
@@ -81,6 +99,26 @@ fun IptvTheme(content: @Composable () -> Unit) {
 
 @Composable
 private fun IptvThemeInner(content: @Composable () -> Unit) {
+    val base = MaterialTheme.typography
+    val typography = remember(base) {
+        Typography(
+            displayLarge = base.displayLarge.copy(fontFamily = InterTightFamily),
+            displayMedium = base.displayMedium.copy(fontFamily = InterTightFamily),
+            displaySmall = base.displaySmall.copy(fontFamily = InterTightFamily),
+            headlineLarge = base.headlineLarge.copy(fontFamily = InterTightFamily),
+            headlineMedium = base.headlineMedium.copy(fontFamily = InterTightFamily),
+            headlineSmall = base.headlineSmall.copy(fontFamily = InterTightFamily),
+            titleLarge = base.titleLarge.copy(fontFamily = InterTightFamily),
+            titleMedium = base.titleMedium.copy(fontFamily = InterFamily),
+            titleSmall = base.titleSmall.copy(fontFamily = InterFamily),
+            bodyLarge = base.bodyLarge.copy(fontFamily = InterFamily),
+            bodyMedium = base.bodyMedium.copy(fontFamily = InterFamily),
+            bodySmall = base.bodySmall.copy(fontFamily = InterFamily),
+            labelLarge = base.labelLarge.copy(fontFamily = InterFamily),
+            labelMedium = base.labelMedium.copy(fontFamily = InterFamily),
+            labelSmall = base.labelSmall.copy(fontFamily = InterFamily),
+        )
+    }
     MaterialTheme(
         colorScheme = darkColorScheme(
             primary = Palette.Primary,
@@ -94,6 +132,7 @@ private fun IptvThemeInner(content: @Composable () -> Unit) {
             onBackground = Palette.Text,
             surface = Palette.Surface,
         ),
+        typography = typography,
     ) {
         // Keep the window root free of Surface's clipping/graphics layer: the player
         // contains a native SurfaceView, which must punch through to the video surface.

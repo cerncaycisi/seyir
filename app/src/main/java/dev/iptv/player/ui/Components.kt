@@ -124,21 +124,58 @@ fun formatClock(epochSeconds: Long): String {
 
 @Composable
 fun BrandMark(size: Dp = 40.dp) {
-    // Seyir mark (design v2): white rounded square, dark eye, amber play-triangle pupil. Same as the launcher icon.
+    // Seyir mark: dark obsidian squircle with warm amber border, golden cinema screen portal arc, and ivory-gold rounded play wedge.
     androidx.compose.foundation.Canvas(Modifier.size(size)) {
         val s = this.size.minDimension
-        drawRoundRect(Color(0xFFF5F5F7), cornerRadius = androidx.compose.ui.geometry.CornerRadius(s * 0.3f))
-        val eye = androidx.compose.ui.graphics.Path().apply {
-            moveTo(s * 0.17f, s * 0.5f)
-            cubicTo(s * 0.3f, s * 0.28f, s * 0.7f, s * 0.28f, s * 0.83f, s * 0.5f)
-            cubicTo(s * 0.7f, s * 0.72f, s * 0.3f, s * 0.72f, s * 0.17f, s * 0.5f)
+        val cr = androidx.compose.ui.geometry.CornerRadius(s * 0.28f)
+        drawRoundRect(
+            brush = Brush.linearGradient(listOf(Color(0xFF181E2C), Color(0xFF090C12))),
+            cornerRadius = cr,
+        )
+        drawRoundRect(
+            color = Color(0x5AF2B544),
+            cornerRadius = cr,
+            style = Stroke(width = (s * 0.032f).coerceAtLeast(1f)),
+        )
+        val fx = s * 0.21f
+        val fy = s * 0.25f
+        val fw = s * 0.50f
+        val fh = s * 0.50f
+        val fr = s * 0.13f
+        val endX = fx + fw * 0.76f
+        val portal = androidx.compose.ui.graphics.Path().apply {
+            moveTo(endX, fy)
+            lineTo(fx + fr, fy)
+            quadraticTo(fx, fy, fx, fy + fr)
+            lineTo(fx, fy + fh - fr)
+            quadraticTo(fx, fy + fh, fx + fr, fy + fh)
+            lineTo(endX, fy + fh)
+        }
+        drawPath(
+            path = portal,
+            brush = Brush.linearGradient(listOf(Color(0xFFFFCF60), Color(0xFFD98A1B))),
+            style = Stroke(
+                width = s * 0.092f,
+                cap = StrokeCap.Round,
+                join = androidx.compose.ui.graphics.StrokeJoin.Round,
+            ),
+        )
+        // Normalized from the 60-unit safe zone in ic_launcher_foreground.xml
+        fun nx(v: Float) = ((v - 24f) / 60f) * s
+        fun ny(v: Float) = ((v - 24f) / 60f) * s
+        val play = androidx.compose.ui.graphics.Path().apply {
+            moveTo(nx(50.39f), ny(45.79f))
+            quadraticTo(nx(50.39f), ny(42.07f), nx(53.66f), ny(43.83f))
+            lineTo(nx(69.29f), ny(52.24f))
+            quadraticTo(nx(72.57f), ny(54.0f), nx(69.29f), ny(55.76f))
+            lineTo(nx(53.66f), ny(64.17f))
+            quadraticTo(nx(50.39f), ny(65.93f), nx(50.39f), ny(62.21f))
             close()
         }
-        drawPath(eye, Color(0xFF07080A))
-        val play = androidx.compose.ui.graphics.Path().apply {
-            moveTo(s * 0.43f, s * 0.385f); lineTo(s * 0.63f, s * 0.5f); lineTo(s * 0.43f, s * 0.615f); close()
-        }
-        drawPath(play, Color(0xFFF2B544))
+        drawPath(
+            path = play,
+            brush = Brush.linearGradient(listOf(Color(0xFFFFFFFF), Color(0xFFFFDF9E))),
+        )
     }
 }
 
@@ -328,6 +365,20 @@ fun PosterListRow(
     }
 }
 
+/** Resolves [stream]'s provider logo, falling back to XMLTV `<channel><icon src="..."/>` only when missing or broken. */
+@android.annotation.SuppressLint("ProduceStateDoesNotAssignValue")
+@Composable
+private fun rememberChannelLogo(stream: Stream): Pair<String?, () -> Unit> {
+    val context = LocalContext.current
+    val primary = stream.logo?.takeIf { it.isNotBlank() }
+    var primaryFailed by remember(stream.id, primary) { mutableStateOf(primary == null) }
+    val epgLogo by androidx.compose.runtime.produceState<String?>(null, stream.id, primaryFailed) {
+        value = if (primaryFailed) runCatching { dev.iptv.player.epg.EpgService.get(context).channelIcon(stream) }.getOrNull() else null
+    }
+    val active = if (!primaryFailed) primary else epgLogo
+    return active to { if (!primaryFailed) primaryFailed = true }
+}
+
 /** 16:9 live channel card for the Home row: clean dark surface with centered logo (or dim initials badge) and channel name below. */
 @Composable
 fun ChannelCard(
@@ -339,7 +390,8 @@ fun ChannelCard(
 ) {
     val uiContext = LocalContext.current
     var focused by remember { mutableStateOf(false) }
-    var logoLoaded by remember(stream.logo) { mutableStateOf(false) }
+    val (logoUrl, onLogoError) = rememberChannelLogo(stream)
+    var logoLoaded by remember(logoUrl) { mutableStateOf(false) }
     val shape = RoundedCornerShape(10.dp)
     Column(Modifier.width(180.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Surface(
@@ -376,12 +428,15 @@ fun ChannelCard(
                         )
                     }
                 }
-                if (!stream.logo.isNullOrBlank()) {
+                if (!logoUrl.isNullOrBlank()) {
                     AsyncImage(
-                        model = stream.logo,
+                        model = logoUrl,
                         contentDescription = null,
                         contentScale = ContentScale.Fit,
-                        onState = { logoLoaded = it is AsyncImagePainter.State.Success },
+                        onState = {
+                            if (it is AsyncImagePainter.State.Success) logoLoaded = true
+                            else if (it is AsyncImagePainter.State.Error) onLogoError()
+                        },
                         modifier = Modifier.fillMaxSize().padding(horizontal = 24.dp, vertical = 14.dp),
                     )
                 }
@@ -449,8 +504,9 @@ fun ChannelRow(
                 maxLines = 1,
             )
             Spacer(Modifier.width(10.dp))
-            // Missing or broken logo: a dim initials tile instead of an empty gap.
-            var logoLoaded by remember(stream.logo) { mutableStateOf(false) }
+            // Missing or broken logo: try XMLTV channel icon, else show a dim initials tile.
+            val (logoUrl, onLogoError) = rememberChannelLogo(stream)
+            var logoLoaded by remember(logoUrl) { mutableStateOf(false) }
             Box(
                 Modifier.size(width = 44.dp, height = 26.dp).clip(RoundedCornerShape(6.dp))
                     .then(if (logoLoaded) Modifier else Modifier.background(LocalContentColor.current.copy(alpha = 0.10f))),
@@ -465,12 +521,15 @@ fun ChannelRow(
                         maxLines = 1,
                     )
                 }
-                if (!stream.logo.isNullOrBlank()) {
+                if (!logoUrl.isNullOrBlank()) {
                     AsyncImage(
-                        model = stream.logo,
+                        model = logoUrl,
                         contentDescription = null,
                         contentScale = ContentScale.Fit,
-                        onState = { logoLoaded = it is AsyncImagePainter.State.Success },
+                        onState = {
+                            if (it is AsyncImagePainter.State.Success) logoLoaded = true
+                            else if (it is AsyncImagePainter.State.Error) onLogoError()
+                        },
                         modifier = Modifier.fillMaxSize(),
                     )
                 }

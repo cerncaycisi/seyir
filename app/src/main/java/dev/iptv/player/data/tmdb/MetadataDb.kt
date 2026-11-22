@@ -74,6 +74,8 @@ abstract class MetadataDb : RoomDatabase() {
         fun get(context: Context): MetadataDb = instance ?: synchronized(this) {
             instance ?: Room.databaseBuilder(context.applicationContext, MetadataDb::class.java, "tmdb-catalog.db")
                 .addMigrations(MIGRATION_1_2)
+                .setQueryExecutor(dev.iptv.player.util.BackgroundWork.dbExecutor)
+                .setTransactionExecutor(dev.iptv.player.util.BackgroundWork.dbExecutor)
                 .fallbackToDestructiveMigration()
                 .build().also { instance = it }
         }

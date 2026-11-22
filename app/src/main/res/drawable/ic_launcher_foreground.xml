@@ -1,7 +1,31 @@
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
     android:width="108dp" android:height="108dp"
     android:viewportWidth="108" android:viewportHeight="108">
-    <!-- Seyir mark (design v2): an eye whose pupil is a play triangle; inside the 66dp safe zone. -->
-    <path android:fillColor="#F5F5F7" android:pathData="M24,54 C33,38.5 75,38.5 84,54 C75,69.5 33,69.5 24,54 Z" />
-    <path android:fillColor="#F2B544" android:pathData="M47.5,44.5 L64,54 L47.5,63.5 Z" />
+    <!-- Seyir Cinema Portal + Rounded Play Wedge inside the 66dp adaptive icon safe zone. -->
+    <path
+        android:pathData="M59.4,39 L44.4,39 Q36.6,39 36.6,46.8 L36.6,61.2 Q36.6,69 44.4,69 L59.4,69"
+        android:strokeWidth="5.6"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round">
+        <aapt:attr name="android:strokeColor">
+            <gradient
+                android:type="linear"
+                android:startX="36.6" android:startY="39"
+                android:endX="60" android:endY="69"
+                android:startColor="#FFCF60"
+                android:endColor="#D98A1B" />
+        </aapt:attr>
+    </path>
+    <path
+        android:pathData="M50.39,45.79 Q50.39,42.07 53.66,43.83 L69.29,52.24 Q72.57,54.0 69.29,55.76 L53.66,64.17 Q50.39,65.93 50.39,62.21 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:type="linear"
+                android:startX="50" android:startY="42"
+                android:endX="72" android:endY="66"
+                android:startColor="#FFFFFF"
+                android:endColor="#FFDF9E" />
+        </aapt:attr>
+    </path>
 </vector>

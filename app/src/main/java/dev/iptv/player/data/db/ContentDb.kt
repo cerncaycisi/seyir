@@ -143,6 +143,8 @@ abstract class ContentDb : RoomDatabase() {
         fun get(context: Context): ContentDb = instance ?: synchronized(this) {
             instance ?: Room.databaseBuilder(context.applicationContext, ContentDb::class.java, "content.db")
                 // The database is only a cache of what the provider serves, so a schema change just refetches.
+                .setQueryExecutor(dev.iptv.player.util.BackgroundWork.dbExecutor)
+                .setTransactionExecutor(dev.iptv.player.util.BackgroundWork.dbExecutor)
                 .fallbackToDestructiveMigration()
                 .build()
                 .also { instance = it }

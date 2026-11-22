@@ -13,10 +13,20 @@ import java.util.concurrent.atomic.AtomicInteger
  */
 object BackgroundWork {
     private val count = AtomicInteger()
+    private val dbCount = AtomicInteger()
+
     val dispatcher: CoroutineDispatcher = Executors.newFixedThreadPool(2) { r ->
         Thread({
             Process.setThreadPriority(Process.THREAD_PRIORITY_BACKGROUND)
             r.run()
         }, "seyir-bg-${count.incrementAndGet()}").apply { isDaemon = true }
     }.asCoroutineDispatcher()
+
+    /** Low-priority executor for Room databases so bulk catalog/EPG writes do not preempt 60 Hz UI frames. */
+    val dbExecutor: java.util.concurrent.Executor = Executors.newFixedThreadPool(3) { r ->
+        Thread({
+            Process.setThreadPriority(Process.THREAD_PRIORITY_BACKGROUND)
+            r.run()
+        }, "seyir-db-${dbCount.incrementAndGet()}").apply { isDaemon = true }
+    }
 }

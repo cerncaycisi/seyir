@@ -65,10 +65,18 @@ interface ReminderDao {
 
 @Database(
     entities = [Programme::class, EpgChannel::class, EpgMeta::class, Reminder::class],
-    version = 1,
+    version = 2,
     exportSchema = false,
 )
 abstract class EpgDatabase : RoomDatabase() {
     abstract fun epg(): EpgDao
     abstract fun reminders(): ReminderDao
+
+    companion object {
+        val MIGRATION_1_2 = object : androidx.room.migration.Migration(1, 2) {
+            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE epg_channel ADD COLUMN icon TEXT")
+            }
+        }
+    }
 }

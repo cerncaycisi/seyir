@@ -13,7 +13,7 @@ class EpgTest {
     private val xml = """<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE tv SYSTEM "xmltv.dtd">
 <tv>
-  <channel id="trt1.tr"><display-name>TRT 1 HD</display-name><display-name>TRT1</display-name></channel>
+  <channel id="trt1.tr"><display-name>TRT 1 HD</display-name><display-name>TRT1</display-name><icon src="https://example.com/trt1.png"/></channel>
   <programme start="20240101120000 +0300" stop="20240101130000 +0300" channel="trt1.tr">
     <title lang="tr">Haber &amp; Spor</title><desc>Açıklama</desc><category>Haber</category>
   </programme>
@@ -27,6 +27,7 @@ class EpgTest {
         val progs = mutableListOf<Programme>()
         XmltvParser.parse(KXmlParser(), xml.byteInputStream(), { channels += it }, { progs += it })
         assertEquals(listOf("TRT 1 HD", "TRT1"), channels.single().names)
+        assertEquals("https://example.com/trt1.png", channels.single().icon)
         assertEquals(2, progs.size)
         assertEquals("Haber & Spor", progs[0].title)
         assertEquals("Haber", progs[0].category)

@@ -16,9 +16,9 @@ data class Programme(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
 )
 
-/** XMLTV `<channel>`; [names] are all `<display-name>` values joined by newlines. */
+/** XMLTV `<channel>`; [names] are all `<display-name>` values joined by newlines; [icon] is `<icon src="..."/>`. */
 @Entity(tableName = "epg_channel")
-data class EpgChannel(@PrimaryKey val id: String, val name: String, val names: String = name) {
+data class EpgChannel(@PrimaryKey val id: String, val name: String, val names: String = name, val icon: String? = null) {
     val allNames: List<String> get() = names.split('\n').filter { it.isNotBlank() }
 }
 
