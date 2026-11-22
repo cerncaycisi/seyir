@@ -32,6 +32,7 @@ data class PlayerConfig(
     val autoReconnect: Boolean,
     val externalPlayer: String,
     val matchFrameRate: Boolean,
+    val liveStreamFormat: String = "ts",
 ) {
     companion object {
         suspend fun load(s: SettingsStore) = PlayerConfig(
@@ -45,6 +46,7 @@ data class PlayerConfig(
             autoReconnect = s.get(Setting.AutoReconnect),
             externalPlayer = s.get(Setting.ExternalPlayer),
             matchFrameRate = s.get(Setting.MatchFrameRate),
+            liveStreamFormat = s.get(Setting.LiveStreamFormat),
         )
     }
 }

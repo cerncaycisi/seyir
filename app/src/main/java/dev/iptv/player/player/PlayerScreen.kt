@@ -134,7 +134,10 @@ fun PlayerScreen(repo: Repository, onBack: () -> Unit, onMultiView: (Int) -> Uni
         if (c != null && mode == 0) {
             LaunchedEffect(Unit) {
                 val stream = items[PlayerQueue.index.coerceIn(0, items.lastIndex)]
-                if (launchExternalPlayer(context, c.externalPlayer, stream)) {
+                val target = if (stream.type == ContentType.LIVE) {
+                    stream.copy(url = dev.iptv.player.data.applyLiveStreamFormat(stream.url, c.liveStreamFormat))
+                } else stream
+                if (launchExternalPlayer(context, c.externalPlayer, target)) {
                     mode = 1
                     onBack()
                 } else {
@@ -371,7 +374,8 @@ private fun PlayerContent(repo: Repository, cfg: PlayerConfig, onBack: () -> Uni
         pausedAtMs = 0
         if (shiftStartSec != null) {
             shiftStartSec = null
-            player.setMediaItem(MediaItem.Builder().setUri(current.url).setMediaMetadata(MediaMetadata.Builder().setTitle(current.name).build()).build())
+            val liveUrl = dev.iptv.player.data.applyLiveStreamFormat(current.url, cfg.liveStreamFormat)
+            player.setMediaItem(MediaItem.Builder().setUri(liveUrl).setMediaMetadata(MediaMetadata.Builder().setTitle(current.name).build()).build())
             player.prepare()
         } else {
             player.seekToDefaultPosition()
@@ -410,11 +414,14 @@ private fun PlayerContent(repo: Repository, cfg: PlayerConfig, onBack: () -> Uni
         if (!item.id.startsWith("rec:")) repo.history.record(playlist, item, pos, duration)
     }
 
-    fun buildItem(s: Stream): MediaItem = MediaItem.Builder()
-        .setUri(s.url)
-        .setMediaMetadata(MediaMetadata.Builder().setTitle(s.name).build())
-        .setSubtitleConfigurations(externalSubs.toList())
-        .build()
+    fun buildItem(s: Stream): MediaItem {
+        val url = if (s.type == ContentType.LIVE) dev.iptv.player.data.applyLiveStreamFormat(s.url, cfg.liveStreamFormat) else s.url
+        return MediaItem.Builder()
+            .setUri(url)
+            .setMediaMetadata(MediaMetadata.Builder().setTitle(s.name).build())
+            .setSubtitleConfigurations(externalSubs.toList())
+            .build()
+    }
 
     fun scheduleReconnect(cause: PlaybackException) {
         val attempt = reconnectAttempt

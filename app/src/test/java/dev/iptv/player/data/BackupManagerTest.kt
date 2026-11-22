@@ -29,6 +29,7 @@ class BackupManagerTest {
                     stringSetPreferencesKey("hidden_channels") to setOf("x", "y"),
                 ),
             ),
+            groups = listOf(ChannelGroup("g1", "Ulusal", listOf("a|LIVE|1", "a|LIVE|2"))),
         )
         val json = BackupManager.toJson(data)
         assertEquals(data, BackupManager.fromJson(json))

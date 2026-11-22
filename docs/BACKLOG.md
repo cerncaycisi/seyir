@@ -1,6 +1,6 @@
 # Seyir backlog
 
-Bu dosyada kullanıcının istekleri ve testlerde bulunan sorunlar tutulur. Biten maddeler işaretlenir, silinmez. Son güncelleme: 2026-11-22 (Dizi Detay bölüm kartı görselleri + oynatıcı Bölümler paneli + Play Next yedek görsel; sıradaki: Ana Sayfa üst hap menü / kategori gizleme).
+Bu dosyada kullanıcının istekleri ve testlerde bulunan sorunlar tutulur. Biten maddeler işaretlenir, silinmez. Son güncelleme: 2026-11-22 (Gruplarım yeniden adlandırma/sıralama/yedekleme + Canlı yayın TS/HLS akış biçimi seçimi + Ayarlar sayfa başı odak girişi; sürüm 0.2.13).
 
 ## P0 — Şu an açık
 
@@ -42,7 +42,7 @@ Bu dosyada kullanıcının istekleri ve testlerde bulunan sorunlar tutulur. Bite
   - Yapılacaklar: manifest'e `profileable` ekleyip simpleperf/Perfetto ile profil almak. Gerekirse önizlemeyi ayardan kapatılabilir yapmak.
   - Cihaz: TCL Smart TV Pro, rtd6748, armeabi-v7a, 1,8 GB RAM, Android 12, 60 Hz.
 - [x] **Varsayılan ses ve altyazı** (2026-11-22, TV'de doğrulandı): Ses varsayılanı "Orijinal dil", altyazı varsayılanı "Türkçe" olarak uygulandı; gerçek içeriklerde (bkz. aşağıdaki TV e2e notları) ve Ayarlar → Oynatıcı ekranında doğrulandı.
-- [x] **Ayarlar ekranı:** (2026-11-22, TV'de doğrulandı) Tüm satırlardaki `< değer >` okları kaldırılıp açılır liste (`ListPickerDialog` + `ArrowDropDown`) yapısına geçildi; Sol tuş değer kaydırmak yerine kenar menüye dönüyor. Teknik oynatıcı ayarları (`Tampon süresi`, `User-Agent`, yeniden bağlanma, harici oynatıcı, kare hızı) ve `EPG` ayarları yeni **Gelişmiş** sekmesi altında gruplandı.
+- [x] **Ayarlar ekranı:** (2026-11-22, TV'de doğrulandı) Tüm satırlardaki `< değer >` okları kaldırılıp açılır liste (`ListPickerDialog` + `ArrowDropDown`) yapısına geçildi; Sol tuş değer kaydırmak yerine kenar menüye dönüyor, Sağ/OK tuşu ise seçili sekmenin hizasındaki rastgele satır yerine her zaman sayfanın en üst satırına (`SafeFocusRequester`) odaklanıyor. Teknik oynatıcı ayarları (`Canlı yayın akış biçimi`, `Tampon süresi`, `User-Agent`, yeniden bağlanma, harici oynatıcı, kare hızı) ve `EPG` ayarları yeni **Gelişmiş** sekmesi altında gruplandı.
 - [x] **Oynatıcı ayarları paneli:** (`PlayerSettingsPanel.kt`, `PanelRow` / `checkSlot`) Menü satırları sol ikonlarıyla hizalandı; yalnızca seçim işaretli alt listelerde tik alanı ayrılıyor, ana menüde boş ikon boşluğu bırakılmıyor.
 - [x] **Canlı oynatıcıda Geri tuşu:** (2026-11-22, TV'de doğrulandı) `onPreviewKeyEvent` `Key.Back` akışı paneller ve açık kontroller (`panel → kontroller → çıkış`) için birleştirildi; `Kanal listesi` → `Geri` → `Kanal listesi` odağı → `Geri` → kontrollerin tek basışta kapanması → `Geri` → çıkış ve doğrudan panel (`DPAD_LEFT`) kapatmada hayalet kontrol çıkmaması TV'de doğrulandı.
 
@@ -53,10 +53,10 @@ Bu dosyada kullanıcının istekleri ve testlerde bulunan sorunlar tutulur. Bite
 - [x] **TMDB eşleştirmesi (2026-11-22, doğrulandı):** Xtream liste/info yanıtlarındaki `tmdb_id`/`tmdb` alanı `Stream`/`SeriesInfo`/`VodInfo` ve Room (`ContentDb` v2, `MetadataDb` v2 `MIGRATION_1_2`) katmanlarına eklendi; birebir TMDB ID eşleşmesi, süre tutmazsa başlık/süre doğrulamasına düşme ve `withCatalogMetadata` ile listelerde eksik poster/backdrop/yıl tamamlama uygulandı. Not: "Farouk Omar" dizisinde sağlayıcı `tmdb_id` göndermediği için (`Dram, Belgesel`, özetsiz Xtream verisi) bu örnekte yine başlık eşleşmesine düşüyor.
 - [x] **Son seçilen kategori ve sıralama, uygulama yeniden açıldığında hatırlanmalı (Canlı/Film/Dizi)** (2026-11-22, TV'de doğrulandı): `SettingsStore` (`browse_prefs_json` / `BrowseMemory`) üzerinden profil ve playlist bazında (`Filmler`, `Diziler`, `Canlı TV`) son seçilen kategori + sıralama kaydedilip açılışta geri yükleniyor (`force-stop` sonrası TV'de doğrulandı); ayrıca `visibleEntryIndex` + `SafeFocusRequester` ile hızlı kategori/sıralama geçişindeki `FocusRequester is not initialized` çökmesi giderildi.
 - [x] Kategori gizleme, çoklu (2026-11-22, Claude, TV'de doğrulandı): Ayarlar → Kategoriler. Bölüm seçilir (Canlı TV / Filmler / Diziler), her kategori için aç/kapa, "Tümünü göster / Tümünü gizle" tek yazımla, "x / y kategori görünüyor" sayacı. Yetişkin adlar "yetişkin içeriği gizle" açıkken listelenmiyor.
-- [x] "Gruplarım" (2026-11-22, Claude, TV'de uçtan uca doğrulandı): kanala uzun bas → "Gruba ekle" → grup seç (işaretli = içinde; seçmek ekler/çıkarır) ya da "Yeni grup…" ile ad ver. Gruplar Canlı TV'de Favoriler'in altında, kanallar ekleniş sırasıyla. Gruba uzun bas → "Grubu sil". Profile özel; playlist silinince o listenin kanalları gruplardan düşer. Kalan: yedeğe dahil etme, yeniden adlandırma, sıralama.
+- [x] "Gruplarım" (2026-11-22, TV'de uçtan uca doğrulandı): kanala uzun bas → "Gruba ekle" → grup seç (işaretli = içinde; seçmek ekler/çıkarır) ya da "Yeni grup…" ile ad ver. Gruplar Canlı TV'de Favoriler'in altında, kanallar ekleniş sırasıyla. Gruba uzun bas → **Adı değiştir**, **Yukarı taşı** / **Aşağı taşı**, **Grubu sil** (TV'de iki grupla yukarı taşıma, yeniden adlandırma ve silme doğrulandı). Profile özel; playlist silinince o listenin kanalları gruplardan düşer; yedekleme/geri yüklemeye (`BackupData.groups` + `ChannelGroups.merge`) dahil edildi.
 - [ ] Tam ekran canlı yayın bilgi paneli (IBO tarzı): logo, şimdi/sonra, EPG, kilit, favori, altyazı, ses. Sağ/sol tuşları ile kanal değişimi.
 - [x] Catch-up gün listesi (2026-11-22, Claude): "Geçmiş yayınlar" penceresinde üstte gün sekmeleri (Bugün, Dün, Cmt 21…), altında o günün programları yeniden eskiye. Gün sınırı yerel saate göre (birim testli). TV'de arşivli kanal bulunamadığı için görsel olarak doğrulanmadı.
-- [ ] Canlı yayın akış formatı seçimi (TS/HLS).
+- [x] **Canlı yayın akış formatı seçimi (TS/HLS)** (2026-11-22, TV'de doğrulandı): **Ayarlar → Gelişmiş → Canlı yayın akış biçimi** (`MPEG-TS (.ts)` / `HLS (.m3u8)`, `Setting.LiveStreamFormat` + `applyLiveStreamFormat`) ile Xtream canlı yayın bağlantıları katalog yenilemeye gerek kalmadan oynatıcıda, canlı önizlemede, çoklu izlemede ve harici oynatıcıda seçilen biçimle açılıyor.
 - [x] İzleme geçmişinden seçerek silme: zaten vardı (kart üzerinde uzun bas → "Geçmişten kaldır"; toplu silme "Son İzlenenler" kategorisinde).
 - [x] Liste/ızgara geçişi (2026-11-22, Claude, TV'de doğrulandı): Filmler/Diziler başlığında "Liste / Izgara" düğmesi. Liste: iki sütun satır kart (afiş, ad, yıl · puan · tür, konu, ilerleme). Seçim kalıcı. Ayrıca alt bilgi satırında ve listede "(2021) · 2021" yıl tekrarı giderildi.
 - [~] Kanal logoları (2026-11-22, Claude): Canlı TV listesinde logo yoksa ya da yüklenemezse boşluk kalıyordu (MAX WESTERN vb.); artık soluk bir kutuda baş harfler. TV'de doğrulandı. Kalan: EPG logosu veya başka bir kaynak.
@@ -71,7 +71,7 @@ Bu dosyada kullanıcının istekleri ve testlerde bulunan sorunlar tutulur. Bite
 
 - [ ] Release keystore tanımlanmalı (şu an release, debug anahtarıyla imzalanıyor).
 - [x] CI: eylemler güncel ana sürümlere taşındı (checkout v7, setup-java v6, setup-gradle v6, upload-artifact v7; Node 20 uyarıları gitti).
-- [ ] `docs/QA-2026-11-21.md` içindeki eskimiş satır düzeltilmeli.
+- [x] `docs/QA-2026-11-21.md` içindeki eskimiş satır düzeltildi (`OWNER` yer tutucu notu GitHub repo bağlantısıyla güncellendi).
 - [ ] Test notu: TV'de video katmanı ekran görüntüsüne yansımıyor. Oynatma durumu `dumpsys media_session` ile doğrulanmalı.
 
 ## Bitenler (son)

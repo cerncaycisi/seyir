@@ -97,6 +97,7 @@ fun <T> rememberPref(repo: Repository, setting: Setting<T>): Pref<T> {
 @OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
 fun SettingsScreen(repo: Repository, onProfileSwitched: () -> Unit, playlist: dev.iptv.player.data.Playlist? = null) {
     val uiContext = LocalContext.current
+    val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
     var page by rememberSaveable { mutableStateOf(Page.GENERAL) }
     val menuFocus = remember { Page.entries.map { FocusRequester() } }
     val first = menuFocus.first()
@@ -113,7 +114,10 @@ fun SettingsScreen(repo: Repository, onProfileSwitched: () -> Unit, playlist: de
                         name = uiContext.getString(p.labelRes),
                         count = null,
                         selected = p == page,
-                        onClick = { page = p },
+                        onClick = {
+                            page = p
+                            focusManager.moveFocus(FocusDirection.Right)
+                        },
                         modifier = Modifier
                             .onFocusChanged { if (it.isFocused || it.hasFocus) page = p }
                             .focusRequester(menuFocus[p.ordinal])
@@ -190,6 +194,10 @@ private val trackLanguageOptions = listOf("tr" to "Türkçe", "en" to "English",
 private fun audioLangOptions(uiContext: android.content.Context) = listOf(dev.iptv.player.data.ORIGINAL_AUDIO to uiContext.getString(R.string.ui_audio_original)) + trackLanguageOptions
 private fun subtitleLangOptions(uiContext: android.content.Context) = listOf("" to uiContext.getString(R.string.ui_off)) + trackLanguageOptions
 private fun externalOptions(uiContext: android.content.Context) = listOf("" to uiContext.getString(R.string.ui_none), "vlc" to "VLC", "mx" to "MX Player")
+private fun liveFormatOptions(uiContext: android.content.Context) = listOf(
+    "ts" to uiContext.getString(R.string.ui_live_format_ts),
+    "m3u8" to uiContext.getString(R.string.ui_live_format_hls),
+)
 
 private val refreshPresets = listOf(0, 6, 12, 24, 48, 72)
 private val subtitleScalePresets = listOf(50, 75, 100, 125, 150, 175, 200)
@@ -216,8 +224,9 @@ private fun GeneralPage(repo: Repository, onExitLeft: () -> FocusRequester) {
     val section = rememberPref(repo, Setting.DefaultSection)
     val refresh = rememberPref(repo, Setting.AutoRefreshHours)
     val tmdb = rememberPref(repo, Setting.TmdbEnabled)
-    PageList(onExitLeft) {
-        item { PickerRow(uiContext.getString(R.string.ui_language), languageOptions(uiContext), language.value, language.set) }
+    val top = remember { SafeFocusRequester() }
+    PageList(onExitLeft, enter = { top.target }) {
+        item { PickerRow(uiContext.getString(R.string.ui_language), languageOptions(uiContext), language.value, language.set, top.attach()) }
         item { ToggleRow(uiContext.getString(R.string.ui_clock_24), clock.value, clock.set) }
         item { ToggleRow(uiContext.getString(R.string.ui_start_last), last.value, last.set, subtitle = uiContext.getString(R.string.ui_start_last_hint)) }
         item { PickerRow(uiContext.getString(R.string.ui_default_section), sectionOptions(uiContext), section.value, section.set) }
@@ -244,8 +253,9 @@ private fun PlayerPage(repo: Repository, onExitLeft: () -> FocusRequester) {
     val sub = rememberPref(repo, Setting.PreferredSubtitleLanguage)
     val subScale = rememberPref(repo, Setting.SubtitleScale)
     val subStyle = rememberPref(repo, Setting.SubtitleStyle)
-    PageList(onExitLeft) {
-        item { PickerRow(uiContext.getString(R.string.ui_aspect), aspectOptions(uiContext), aspect.value, aspect.set) }
+    val top = remember { SafeFocusRequester() }
+    PageList(onExitLeft, enter = { top.target }) {
+        item { PickerRow(uiContext.getString(R.string.ui_aspect), aspectOptions(uiContext), aspect.value, aspect.set, top.attach()) }
         item { PickerRow(uiContext.getString(R.string.ui_audio_language), audioLangOptions(uiContext), audio.value, audio.set) }
         item { PickerRow(uiContext.getString(R.string.ui_subtitle_language), subtitleLangOptions(uiContext), sub.value, sub.set) }
         item { PickerRow(uiContext.getString(R.string.sub_style_title), dev.iptv.player.player.SubtitleStyle.entries.map { it.key to uiContext.getString(it.labelRes) }, subStyle.value, subStyle.set) }
@@ -265,14 +275,26 @@ private fun PlayerPage(repo: Repository, onExitLeft: () -> FocusRequester) {
 private fun AdvancedPage(repo: Repository, onExitLeft: () -> FocusRequester) {
     val uiContext = LocalContext.current
     val buffer = rememberPref(repo, Setting.BufferSeconds)
+    val liveFormat = rememberPref(repo, Setting.LiveStreamFormat)
     val ua = rememberPref(repo, Setting.UserAgent)
     val reconnect = rememberPref(repo, Setting.AutoReconnect)
     val external = rememberPref(repo, Setting.ExternalPlayer)
     val fps = rememberPref(repo, Setting.MatchFrameRate)
     val epgUrl = rememberPref(repo, Setting.EpgUrlOverride)
     val epgOffset = rememberPref(repo, Setting.EpgOffsetMinutes)
-    PageList(onExitLeft) {
+    val top = remember { SafeFocusRequester() }
+    PageList(onExitLeft, enter = { top.target }) {
         item { GroupHeader(uiContext.getString(R.string.ui_advanced_player_group)) }
+        item {
+            PickerRow(
+                uiContext.getString(R.string.ui_live_format),
+                liveFormatOptions(uiContext),
+                liveFormat.value,
+                liveFormat.set,
+                modifier = top.attach(),
+                subtitle = uiContext.getString(R.string.ui_live_format_hint),
+            )
+        }
         item {
             PickerRow(
                 uiContext.getString(R.string.ui_buffer),
@@ -331,10 +353,12 @@ private fun ParentalPage(repo: Repository, onExitLeft: () -> FocusRequester) {
         if (!hasPin || ParentalSession.unlocked) action() else task = PinTask.Verify(action)
     }
 
-    PageList(onExitLeft) {
+    val top = remember { SafeFocusRequester() }
+    PageList(onExitLeft, enter = { top.target }) {
         item {
             SettingRow(
                 if (hasPin) uiContext.getString(R.string.ui_pin_change) else uiContext.getString(R.string.ui_pin_set),
+                modifier = top.attach(),
                 subtitle = if (hasPin) uiContext.getString(R.string.ui_pin_set_hint) else uiContext.getString(R.string.ui_pin_unset_hint),
                 icon = Icons.Rounded.Lock,
                 onClick = { guarded { task = PinTask.Create } },
@@ -468,7 +492,7 @@ private fun ProfilesPage(repo: Repository, onSwitched: () -> Unit, onExitLeft: (
     val profiles by repo.profiles.profiles.collectAsState(initial = emptyList())
     val active by ProfileStore.activeIdFlow.collectAsState()
     var editing by remember { mutableStateOf<Profile?>(null) }
-    val firstRow = remember { FocusRequester() }
+    val firstRow = remember { SafeFocusRequester() }
     var returningFromEditor by remember { mutableStateOf(false) }
     BackHandler(enabled = editing != null) { editing = null }
     LaunchedEffect(editing) {
@@ -477,17 +501,17 @@ private fun ProfilesPage(repo: Repository, onSwitched: () -> Unit, onExitLeft: (
             returningFromEditor = false
             withFrameNanos { }
             // Returning from the editor: put focus back on the list.
-            runCatching { firstRow.requestFocus() }
+            firstRow.requestFocus()
         }
     }
 
     val current = editing
     if (current == null) {
-        PageList(onExitLeft) {
+        PageList(onExitLeft, enter = { firstRow.target }) {
             items(profiles, key = { it.id }) { p ->
                 SettingRow(
                     p.name,
-                    modifier = if (p.id == profiles.firstOrNull()?.id) Modifier.focusRequester(firstRow) else Modifier,
+                    modifier = if (p.id == profiles.firstOrNull()?.id) firstRow.attach() else Modifier,
                     subtitle = listOfNotNull(if (p.id == active) uiContext.getString(R.string.ui_selected) else null, if (p.pin.isNotEmpty()) uiContext.getString(R.string.ui_pin_protected) else null).joinToString(" · ").ifEmpty { null },
                     onClick = { editing = p },
                     trailing = { AvatarBubble(p.name, p.color, 36.dp) },

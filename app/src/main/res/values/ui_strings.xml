@@ -268,4 +268,11 @@
     <string name="ui_series_badge">S%1$d B%2$d</string>
     <string name="ui_next_at">Sonra %1$s · %2$s</string>
     <string name="ui_live_hint">OK önizle · tekrar OK tam ekran · uzun bas: seçenekler</string>
+    <string name="ui_rename_group">Adı değiştir</string>
+    <string name="ui_move_up">Yukarı taşı</string>
+    <string name="ui_move_down">Aşağı taşı</string>
+    <string name="ui_live_format">Canlı yayın akış biçimi</string>
+    <string name="ui_live_format_hint">Xtream canlı kanalları için kapsayıcı biçimi</string>
+    <string name="ui_live_format_ts">MPEG-TS (.ts)</string>
+    <string name="ui_live_format_hls">HLS (.m3u8)</string>
 </resources>

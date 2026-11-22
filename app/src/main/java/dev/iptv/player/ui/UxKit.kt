@@ -412,9 +412,16 @@ internal fun accentOn(content: Color): Color = if (content.luminance() > 0.5f) P
 
 /** Asks for a short name (e.g. a new channel group). The field opens the keyboard on OK, like other TV fields. */
 @Composable
-fun NameInputDialog(title: String, placeholder: String, confirmLabel: String, onConfirm: (String) -> Unit, onDismiss: () -> Unit) {
+fun NameInputDialog(
+    title: String,
+    placeholder: String,
+    confirmLabel: String,
+    onConfirm: (String) -> Unit,
+    onDismiss: () -> Unit,
+    initialValue: String = "",
+) {
     val uiContext = LocalContext.current
-    var name by remember { mutableStateOf("") }
+    var name by remember(initialValue) { mutableStateOf(initialValue) }
     val fieldFocus = remember { FocusRequester() }
     LaunchedEffect(Unit) {
         withFrameNanos { }

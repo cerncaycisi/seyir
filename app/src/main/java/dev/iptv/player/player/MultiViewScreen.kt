@@ -168,7 +168,7 @@ private fun MultiViewContent(cfg: PlayerConfig, channels: List<Stream>, start: I
             degraded[i] = false
             headers[i].value = ch.headers
             val p = players[i]
-            p.setMediaItem(MediaItem.fromUri(ch.url))
+            p.setMediaItem(MediaItem.fromUri(dev.iptv.player.data.applyLiveStreamFormat(ch.url, cfg.liveStreamFormat)))
             p.prepare()
             p.play()
         }

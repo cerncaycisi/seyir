@@ -189,4 +189,29 @@ class XtreamApiTest {
         assertEquals(100L, epg[0].start)
         assertEquals(200L, epg[0].end)
     }
+
+    @Test
+    fun applyLiveStreamFormatRewritesXtreamLiveUrlsOnly() {
+        assertEquals(
+            "http://s:8080/live/u/p/101.m3u8",
+            applyLiveStreamFormat("http://s:8080/live/u/p/101.ts", "m3u8"),
+        )
+        assertEquals(
+            "http://s:8080/live/u/p/101.ts?token=abc",
+            applyLiveStreamFormat("http://s:8080/live/u/p/101.m3u8?token=abc", "ts"),
+        )
+        // VOD, catch-up and external M3U URLs remain untouched.
+        assertEquals(
+            "http://s:8080/movie/u/p/55.mp4",
+            applyLiveStreamFormat("http://s:8080/movie/u/p/55.mp4", "m3u8"),
+        )
+        assertEquals(
+            "http://s:8080/timeshift/u/p/60/2026-11-22:12-00/101.ts",
+            applyLiveStreamFormat("http://s:8080/timeshift/u/p/60/2026-11-22:12-00/101.ts", "m3u8"),
+        )
+        assertEquals(
+            "https://cdn.example.com/hls/live/index.m3u8",
+            applyLiveStreamFormat("https://cdn.example.com/hls/live/index.m3u8", "ts"),
+        )
+    }
 }

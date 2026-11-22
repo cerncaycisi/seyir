@@ -27,6 +27,10 @@ import androidx.compose.material.icons.rounded.GridView
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.CheckBox
 import androidx.compose.material.icons.rounded.CheckBoxOutlineBlank
+import androidx.compose.material.icons.rounded.Delete
+import androidx.compose.material.icons.rounded.Edit
+import androidx.compose.material.icons.rounded.KeyboardArrowDown
+import androidx.compose.material.icons.rounded.KeyboardArrowUp
 import androidx.compose.material.icons.automirrored.rounded.PlaylistAdd
 import dev.iptv.player.data.ChannelGroups
 import androidx.compose.material.icons.rounded.Favorite
@@ -135,6 +139,8 @@ private sealed interface ActionTarget {
     data class GroupPicker(val stream: Stream) : ActionTarget
     data class NewGroup(val stream: Stream) : ActionTarget
     data class Group(val id: String, val name: String) : ActionTarget
+    data class RenameGroup(val id: String, val name: String) : ActionTarget
+    data class ConfirmDeleteGroup(val id: String, val name: String) : ActionTarget
 }
 
 @OptIn(ExperimentalComposeUiApi::class)
@@ -485,6 +491,44 @@ private fun HomeOverlays(
             )
         }
         is ActionTarget.Group -> {
+            val idx = groups.indexOfFirst { it.id == target.id }
+            val currentName = groups.getOrNull(idx)?.name ?: target.name
+            val actions = buildList {
+                add(CardAction(context.getString(R.string.ui_rename_group), Icons.Rounded.Edit) {
+                    setTarget(ActionTarget.RenameGroup(target.id, currentName))
+                })
+                if (idx > 0) {
+                    add(CardAction(context.getString(R.string.ui_move_up), Icons.Rounded.KeyboardArrowUp) {
+                        scope.launch { repo.store.editGroups { ChannelGroups.move(it, target.id, -1) } }
+                        dismiss()
+                    })
+                }
+                if (idx in 0 until groups.lastIndex) {
+                    add(CardAction(context.getString(R.string.ui_move_down), Icons.Rounded.KeyboardArrowDown) {
+                        scope.launch { repo.store.editGroups { ChannelGroups.move(it, target.id, 1) } }
+                        dismiss()
+                    })
+                }
+                add(CardAction(context.getString(R.string.ui_delete_group), Icons.Rounded.Delete) {
+                    setTarget(ActionTarget.ConfirmDeleteGroup(target.id, currentName))
+                })
+            }
+            ActionCard(currentName, null, actions, onDismiss = dismiss)
+        }
+        is ActionTarget.RenameGroup -> {
+            NameInputDialog(
+                title = context.getString(R.string.ui_rename_group),
+                placeholder = context.getString(R.string.ui_group_name),
+                confirmLabel = context.getString(R.string.ui_save),
+                initialValue = target.name,
+                onConfirm = { newName ->
+                    scope.launch { repo.store.editGroups { ChannelGroups.rename(it, target.id, newName) } }
+                    dismiss()
+                },
+                onDismiss = dismiss,
+            )
+        }
+        is ActionTarget.ConfirmDeleteGroup -> {
             ConfirmDialog(
                 context.getString(R.string.ui_delete_group),
                 context.getString(R.string.ui_delete_group_message, target.name),

@@ -225,3 +225,15 @@ private fun archiveDays(o: JsonObject): Int {
     if (o.str("tv_archive")?.trim() != "1") return 0
     return o.str("tv_archive_duration")?.trim()?.toIntOrNull()?.takeIf { it > 0 } ?: 1
 }
+
+private val xtreamLiveUrlRegex = Regex("""(?i)^(.*/live/[^/?#]+/[^/?#]+/[^/?#.]+)\.(ts|m3u8)(\?.*)?$""")
+
+/**
+ * Rewrites Xtream live stream URLs (`/live/<user>/<pass>/<id>.(ts|m3u8)`) to the chosen container
+ * (`"m3u8"` for HLS, `"ts"` for MPEG-TS). Leaves non-Xtream M3U URLs, catch-up, and VOD URLs untouched.
+ */
+fun applyLiveStreamFormat(url: String, format: String): String {
+    val m = xtreamLiveUrlRegex.matchEntire(url) ?: return url
+    val ext = if (format.equals("m3u8", ignoreCase = true) || format.equals("hls", ignoreCase = true)) "m3u8" else "ts"
+    return "${m.groupValues[1]}.$ext${m.groupValues[3]}"
+}

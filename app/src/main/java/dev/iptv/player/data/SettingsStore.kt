@@ -70,6 +70,8 @@ sealed class Setting<T>(val key: Preferences.Key<T>, val default: T) {
     data object BrowsePrefs : Setting<String>(stringPreferencesKey("browse_prefs_json"), "{}")
     /** Movies/Series as a list of rows instead of a poster grid. */
     data object VodListView : Setting<Boolean>(booleanPreferencesKey("vod_list_view"), false)
+    /** Xtream live stream container format: "ts" (MPEG-TS, default) or "m3u8" (HLS). */
+    data object LiveStreamFormat : Setting<String>(stringPreferencesKey("live_stream_format"), "ts")
 }
 
 class SettingsStore(context: Context) {

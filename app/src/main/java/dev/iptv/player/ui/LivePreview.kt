@@ -78,7 +78,8 @@ class LivePreview(private val context: Context, private val config: PlayerConfig
         ready = false
         error = null
         headers.value = stream.headers
-        player.setMediaItem(MediaItem.Builder().setUri(stream.url).setMediaMetadata(MediaMetadata.Builder().setTitle(stream.name).build()).build())
+        val url = dev.iptv.player.data.applyLiveStreamFormat(stream.url, config.liveStreamFormat)
+        player.setMediaItem(MediaItem.Builder().setUri(url).setMediaMetadata(MediaMetadata.Builder().setTitle(stream.name).build()).build())
         player.prepare()
         player.playWhenReady = true
     }

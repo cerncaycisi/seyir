@@ -268,4 +268,11 @@
     <string name="ui_series_badge">S%1$d B%2$d</string>
     <string name="ui_next_at">Next %1$s · %2$s</string>
     <string name="ui_live_hint">OK preview · OK again fullscreen · long press: options</string>
+    <string name="ui_rename_group">Rename group</string>
+    <string name="ui_move_up">Move up</string>
+    <string name="ui_move_down">Move down</string>
+    <string name="ui_live_format">Live stream format</string>
+    <string name="ui_live_format_hint">Container format for Xtream live channels</string>
+    <string name="ui_live_format_ts">MPEG-TS (.ts)</string>
+    <string name="ui_live_format_hls">HLS (.m3u8)</string>
 </resources>

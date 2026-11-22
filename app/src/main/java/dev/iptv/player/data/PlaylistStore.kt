@@ -23,6 +23,7 @@ data class StoreSnapshot(
     val favorites: Set<String>,
     val positions: Map<String, Long>,
     val watchLater: Set<String> = emptySet(),
+    val groups: List<ChannelGroup> = emptyList(),
 )
 
 class PlaylistStore(context: Context, private val codec: Codec = SecretBox) {
@@ -140,7 +141,13 @@ class PlaylistStore(context: Context, private val codec: Codec = SecretBox) {
         val positions = prefs.asMap().mapNotNull { (key, value) ->
             if (key.name.startsWith(scoped) && value is Long) key.name.removePrefix(scoped) to value else null
         }.toMap()
-        return StoreSnapshot(decode(prefs[playlistsKey]).map(::open), prefs[favoritesKey()].orEmpty(), positions, prefs[watchLaterKey()].orEmpty())
+        return StoreSnapshot(
+            playlists = decode(prefs[playlistsKey]).map(::open),
+            favorites = prefs[favoritesKey()].orEmpty(),
+            positions = positions,
+            watchLater = prefs[watchLaterKey()].orEmpty(),
+            groups = decodeGroups(prefs[groupsKey()]),
+        )
     }
 
     /** Merges [data] into the store in one atomic edit; see [BackupManager.mergePlaylists] for the rules. */
@@ -150,6 +157,10 @@ class PlaylistStore(context: Context, private val codec: Codec = SecretBox) {
             prefs[playlistsKey] = json.encodeToString(BackupManager.mergePlaylists(current, data.playlists).map(::seal))
             prefs[favoritesKey()] = prefs[favoritesKey()].orEmpty() + data.favorites
             if (data.watchLater.isNotEmpty()) prefs[watchLaterKey()] = prefs[watchLaterKey()].orEmpty() + data.watchLater
+            if (data.groups.isNotEmpty()) {
+                val gk = groupsKey()
+                prefs[gk] = json.encodeToString(ChannelGroups.merge(decodeGroups(prefs[gk]), data.groups))
+            }
             data.positions.forEach { (key, ms) ->
                 val k = longPreferencesKey(ProfileStore.profileScopedKey("$POSITION_PREFIX$key"))
                 if (ms > (prefs[k] ?: 0L)) prefs[k] = ms

@@ -34,6 +34,7 @@ data class BackupData(
     val watchLater: List<String> = emptyList(),
     val positions: Map<String, Long> = emptyMap(),
     val settings: List<BackupSetting> = emptyList(),
+    val groups: List<ChannelGroup> = emptyList(),
 )
 
 data class ImportResult(val playlistsAdded: Int, val playlistsUpdated: Int, val favorites: Int, val positions: Int, val settings: Int)
@@ -59,6 +60,7 @@ class BackupManager(private val store: PlaylistStore, private val settings: Sett
                 watchLater = snapshot.watchLater.sorted(),
                 positions = snapshot.positions,
                 settings = settings.exportAll(),
+                groups = snapshot.groups,
             ),
         )
     }
@@ -67,7 +69,7 @@ class BackupManager(private val store: PlaylistStore, private val settings: Sett
     suspend fun importJson(json: String): ImportResult {
         val data = fromJson(json)
         val before = store.snapshot()
-        store.merge(StoreSnapshot(data.playlists, data.favorites.toSet(), data.positions, data.watchLater.toSet()))
+        store.merge(StoreSnapshot(data.playlists, data.favorites.toSet(), data.positions, data.watchLater.toSet(), data.groups))
         val settingsApplied = settings.importAll(data.settings)
         val existing = before.playlists.map { it.id }.toSet()
         return ImportResult(
