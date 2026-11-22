@@ -176,7 +176,7 @@ private fun AppNav(repo: Repository, prefs: dev.iptv.player.data.ReleasePrefs, d
             ProfilePicker(st.profiles, onPicked = { nav.goHome() })
         }
         composable("settings") {
-            SettingsScreen(repo, onProfileSwitched = { nav.goHome() })
+            SettingsScreen(repo, onProfileSwitched = { nav.goHome() }, playlist = active)
         }
         composable("playlists") {
             PlaylistsScreen(

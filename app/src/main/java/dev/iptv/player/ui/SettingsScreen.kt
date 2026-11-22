@@ -31,6 +31,7 @@ import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.LockOpen
 import androidx.compose.material.icons.rounded.Visibility
+import androidx.compose.material.icons.rounded.VisibilityOff
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -59,6 +60,7 @@ import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import dev.iptv.player.data.ContentPrefs
 import dev.iptv.player.data.ParentalSession
+import dev.iptv.player.data.ParentalFilter
 import dev.iptv.player.data.Profile
 import dev.iptv.player.data.ProfileStore
 import dev.iptv.player.data.Repository
@@ -70,6 +72,7 @@ private enum class Page(val labelRes: Int) {
     PLAYER(R.string.ui_player),
     PARENTAL(R.string.ui_parental),
     PROFILES(R.string.ui_profiles),
+    CATEGORIES(R.string.ui_categories_page),
     HIDDEN(R.string.ui_hidden),
     ADVANCED(R.string.ui_advanced),
     ABOUT(R.string.ui_about),
@@ -92,7 +95,7 @@ fun <T> rememberPref(repo: Repository, setting: Setting<T>): Pref<T> {
 
 @Composable
 @OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
-fun SettingsScreen(repo: Repository, onProfileSwitched: () -> Unit) {
+fun SettingsScreen(repo: Repository, onProfileSwitched: () -> Unit, playlist: dev.iptv.player.data.Playlist? = null) {
     val uiContext = LocalContext.current
     var page by rememberSaveable { mutableStateOf(Page.GENERAL) }
     val menuFocus = remember { Page.entries.map { FocusRequester() } }
@@ -130,6 +133,7 @@ fun SettingsScreen(repo: Repository, onProfileSwitched: () -> Unit) {
                 Page.PLAYER -> PlayerPage(repo, backToMenu)
                 Page.PARENTAL -> ParentalPage(repo, backToMenu)
                 Page.PROFILES -> ProfilesPage(repo, onProfileSwitched, backToMenu)
+                Page.CATEGORIES -> CategoriesPage(repo, playlist, backToMenu)
                 Page.HIDDEN -> HiddenPage(repo, backToMenu)
                 Page.ADVANCED -> AdvancedPage(repo, backToMenu)
                 Page.ABOUT -> AboutPage()
@@ -142,14 +146,19 @@ fun SettingsScreen(repo: Repository, onProfileSwitched: () -> Unit) {
 @Composable
 private fun PageList(
     onExitLeft: () -> FocusRequester = { FocusRequester.Default },
+    // Where Right from the menu lands; null = the row level with the menu item (Compose default).
+    enter: (() -> FocusRequester)? = null,
+    state: androidx.compose.foundation.lazy.LazyListState = androidx.compose.foundation.lazy.rememberLazyListState(),
     content: LazyListScope.() -> Unit,
 ) {
     LazyColumn(
         Modifier
             .fillMaxSize()
             .focusProperties {
+                if (enter != null) this.enter = { enter() }
                 exit = { dir -> if (dir == FocusDirection.Left) onExitLeft() else FocusRequester.Default }
             },
+        state = state,
         verticalArrangement = Arrangement.spacedBy(8.dp),
         contentPadding = PaddingValues(top = 4.dp, bottom = 48.dp, start = 4.dp, end = 4.dp),
         content = content,
@@ -564,4 +573,61 @@ private fun ColorChip(color: Color, selected: Boolean, description: String, onCl
         ),
         scale = androidx.tv.material3.ClickableSurfaceDefaults.scale(focusedScale = 1.15f),
     ) { Box(Modifier.size(34.dp)) }
+}
+
+// ---- Categories (bulk hide / show) ----------------------------------------------------------------
+
+@Composable
+private fun CategoriesPage(repo: Repository, playlist: dev.iptv.player.data.Playlist?, onExitLeft: () -> FocusRequester) {
+    val uiContext = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val types = listOf(
+        dev.iptv.player.data.ContentType.LIVE to uiContext.getString(R.string.ui_live_tv),
+        dev.iptv.player.data.ContentType.MOVIE to uiContext.getString(R.string.ui_movies),
+        dev.iptv.player.data.ContentType.SERIES to uiContext.getString(R.string.ui_series),
+    )
+    var type by rememberSaveable { mutableStateOf(dev.iptv.player.data.ContentType.LIVE) }
+    val rules by repo.prefs.rules.collectAsState(initial = dev.iptv.player.data.ContentRules())
+    // Lint misses the direct ProduceStateScope.value assignment in this producer.
+    @android.annotation.SuppressLint("ProduceStateDoesNotAssignValue")
+    val all by androidx.compose.runtime.produceState<List<dev.iptv.player.data.Category>?>(null, playlist?.id, type) {
+        value = null
+        value = playlist?.let { p -> runCatching { repo.content(p, type).categories }.getOrNull() }.orEmpty()
+    }
+    // Adult names stay out of this list while "hide adult" is on (they are filtered anyway).
+    val cats = all?.filterNot { rules.hideAdult && ParentalFilter.isAdultName(it.name) }
+    fun hidden(c: dev.iptv.player.data.Category) =
+        playlist != null && ParentalFilter.categoryKey(playlist.id, type, c.id) in rules.hiddenCategories
+
+    // Right from the menu starts at the section picker, not at whichever category is level with the menu.
+    val listState = androidx.compose.foundation.lazy.rememberLazyListState()
+    val top = remember { FocusRequester() }
+    PageList(onExitLeft, enter = { if (listState.firstVisibleItemIndex == 0) top else FocusRequester.Default }, state = listState) {
+        item {
+            PickerRow(uiContext.getString(R.string.ui_categories_type), types, type, { type = it }, Modifier.focusRequester(top))
+        }
+        item { Text(uiContext.getString(R.string.ui_categories_hint), style = MaterialTheme.typography.bodySmall, color = Palette.TextMuted, modifier = Modifier.padding(horizontal = 8.dp)) }
+        when {
+            playlist == null || cats == null -> item { Text(uiContext.getString(R.string.ui_loading), color = Palette.TextMuted, modifier = Modifier.padding(8.dp)) }
+            else -> {
+                val visible = cats.count { !hidden(it) }
+                item { GroupHeader(uiContext.getString(R.string.ui_categories_visible, visible, cats.size)) }
+                item {
+                    SettingRow(uiContext.getString(R.string.ui_show_all), icon = Icons.Rounded.Visibility, onClick = {
+                        scope.launch { repo.prefs.setCategoriesHidden(playlist, type, cats, false) }
+                    })
+                }
+                item {
+                    SettingRow(uiContext.getString(R.string.ui_hide_all), icon = Icons.Rounded.VisibilityOff, onClick = {
+                        scope.launch { repo.prefs.setCategoriesHidden(playlist, type, cats, true) }
+                    })
+                }
+                items(cats, key = { "k${it.id}" }) { c ->
+                    ToggleRow(c.name, checked = !hidden(c), onChange = { show ->
+                        scope.launch { repo.prefs.setCategoryHidden(playlist, type, c.id, c.name, !show) }
+                    })
+                }
+            }
+        }
+    }
 }

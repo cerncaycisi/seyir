@@ -44,6 +44,17 @@ class ContentPrefs(private val settings: SettingsStore) {
     suspend fun setCategoryHidden(playlist: Playlist, type: ContentType, id: String, name: String, hidden: Boolean) =
         toggle(Setting.HiddenCategories, ParentalFilter.categoryKey(playlist.id, type, id), hidden, name)
 
+    /** One write for many categories (the bulk "hide all / show all" on the Categories settings page). */
+    suspend fun setCategoriesHidden(playlist: Playlist, type: ContentType, categories: List<Category>, hidden: Boolean) {
+        val keys = categories.associate { ParentalFilter.categoryKey(playlist.id, type, it.id) to it.name }
+        val cur = settings.get(Setting.HiddenCategories)
+        settings.set(Setting.HiddenCategories, if (hidden) cur + keys.keys else cur - keys.keys)
+        if (hidden) {
+            val map = decodeLabels(settings.get(Setting.HiddenLabels)) + keys
+            settings.set(Setting.HiddenLabels, json.encodeToString(map))
+        }
+    }
+
     suspend fun setCategoryLocked(playlist: Playlist, type: ContentType, id: String, name: String, locked: Boolean) =
         toggle(Setting.LockedCategories, ParentalFilter.categoryKey(playlist.id, type, id), locked, name)
 
