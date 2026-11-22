@@ -161,18 +161,15 @@ private fun SeriesDetail(repo: Repository, playlist: Playlist, seriesId: String,
             Column(Modifier.width(290.dp).fillMaxHeight().verticalScroll(rememberScrollState())) {
                 Text(
                     info.name,
-                    style = MaterialTheme.typography.headlineMedium,
-                    fontWeight = FontWeight.Bold,
+                    style = MaterialTheme.typography.headlineLarge,
+                    fontWeight = FontWeight.ExtraBold,
                     color = Palette.Text,
                     maxLines = 3,
                     overflow = TextOverflow.Ellipsis,
                 )
-                Row(Modifier.padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    listOfNotNull(info.year, info.rating?.let { "★ $it" }).forEach { Pill(it) }
-                }
-                Row(Modifier.padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    listOf(uiContext.getString(R.string.ui_season_count, seasons.size), uiContext.getString(R.string.ui_episode_count, info.episodes.size)).forEach { Pill(it) }
-                }
+                MetaLine(info.rating, listOfNotNull(info.year, uiContext.getString(R.string.ui_season_count, seasons.size)), Modifier.padding(top = 10.dp))
+                Text(uiContext.getString(R.string.ui_episode_count, info.episodes.size), Modifier.padding(top = 4.dp),
+                    style = MaterialTheme.typography.labelLarge, color = Palette.TextMuted)
                 info.genre?.let { Text(it, Modifier.padding(top = 6.dp), style = MaterialTheme.typography.labelLarge, color = Palette.TextFaint, maxLines = 1, overflow = TextOverflow.Ellipsis) }
                 info.plot?.let {
                     if (info.plotLanguage == "en") Text(uiContext.getString(R.string.ux_plot_english), color = Palette.TextFaint, style = MaterialTheme.typography.labelSmall)
@@ -220,11 +217,14 @@ private fun SeriesDetail(repo: Repository, playlist: Playlist, seriesId: String,
                     verticalArrangement = Arrangement.spacedBy(6.dp),
                     contentPadding = PaddingValues(vertical = 4.dp, horizontal = 4.dp),
                 ) {
+                    // When every episode carries the same leftover name (provider "Hz Omer.S01.E01" style), show "Bölüm N".
+                    val cleaned = seasons[season].orEmpty().map { DisplayText.episodeTitle(it.title, info.name) }
+                    val uninformative = cleaned.size > 1 && cleaned.distinct().size == 1
                     itemsIndexed(episodes, key = { _, e -> e.id }) { i, e ->
                         val ep = seasons[season]?.getOrNull(i)
                         EpisodeRow(
                             number = ep?.number ?: (i + 1),
-                            title = DisplayText.episodeTitle(ep?.title, info.name).ifEmpty { uiContext.getString(R.string.ui_episode_number, ep?.number ?: (i + 1)) },
+                            title = (if (uninformative) "" else cleaned.getOrNull(i).orEmpty()).ifEmpty { uiContext.getString(R.string.ui_episode_number, ep?.number ?: (i + 1)) },
                             progress = progressById[e.id],
                             onClick = { if (resumeById[e.id] != null) pendingEpisode = i else onPlay(episodes, i) },
                         )
@@ -259,8 +259,8 @@ private fun SeasonChip(label: String, selected: Boolean, modifier: Modifier = Mo
         colors = ClickableSurfaceDefaults.colors(
             containerColor = if (selected) Palette.Text else Palette.Surface,
             contentColor = if (selected) Palette.Background else Palette.TextMuted,
-            focusedContainerColor = Palette.Primary,
-            focusedContentColor = Color.White,
+            focusedContainerColor = Color(0xFFF5F5F7),
+            focusedContentColor = Color(0xFF07080A),
         ),
         scale = ClickableSurfaceDefaults.scale(focusedScale = 1.06f),
     ) {
@@ -289,12 +289,12 @@ private fun EpisodeRow(number: Int, title: String, progress: Float?, onClick: ()
             focusedContainerColor = Palette.SurfaceHigh,
             focusedContentColor = Color.White,
         ),
-        border = ClickableSurfaceDefaults.border(focusedBorder = Border(BorderStroke(2.dp, Palette.Primary), shape = shape)),
+        border = ClickableSurfaceDefaults.border(focusedBorder = Border(BorderStroke(2.dp, Color(0xFFF5F5F7)), shape = shape)),
         scale = ClickableSurfaceDefaults.scale(focusedScale = 1.02f),
     ) {
         Row(Modifier.fillMaxSize().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(
-                Modifier.size(32.dp).clip(CircleShape).background(if (focused) Palette.Primary else Palette.SurfaceHigh),
+                Modifier.size(32.dp).clip(CircleShape).background(if (focused) Color(0xFFF2B544) else Palette.SurfaceHigh),
                 contentAlignment = Alignment.Center,
             ) {
                 if (focused) {

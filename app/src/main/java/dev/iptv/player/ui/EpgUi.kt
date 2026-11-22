@@ -95,8 +95,8 @@ fun EpgButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifier, 
         colors = ClickableSurfaceDefaults.colors(
             containerColor = if (primary) Palette.Primary.copy(alpha = 0.35f) else Palette.SurfaceHigh,
             contentColor = Palette.Text,
-            focusedContainerColor = Palette.Primary,
-            focusedContentColor = Color.White,
+            focusedContainerColor = Color(0xFFF5F5F7),
+            focusedContentColor = Color(0xFF07080A),
         ),
         scale = ClickableSurfaceDefaults.scale(focusedScale = 1.02f),
     ) {

@@ -264,8 +264,8 @@ private fun PinKey(
         colors = ClickableSurfaceDefaults.colors(
             containerColor = Palette.SurfaceHigh,
             contentColor = Palette.Text,
-            focusedContainerColor = Palette.Primary,
-            focusedContentColor = Color.White,
+            focusedContainerColor = Color(0xFFF5F5F7),
+            focusedContentColor = Color(0xFF07080A),
         ),
         scale = ClickableSurfaceDefaults.scale(focusedScale = 1.06f),
     ) {

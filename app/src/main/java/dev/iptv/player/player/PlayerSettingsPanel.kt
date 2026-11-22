@@ -320,8 +320,8 @@ private fun PanelRow(row: RowSpec, checkSlot: Boolean, modifier: Modifier) {
         colors = ClickableSurfaceDefaults.colors(
             containerColor = Palette.SurfaceHigh,
             contentColor = Palette.Text,
-            focusedContainerColor = Palette.Primary,
-            focusedContentColor = Color.White,
+            focusedContainerColor = Color(0xFFF5F5F7),
+            focusedContentColor = Color(0xFF07080A),
         ),
         border = ClickableSurfaceDefaults.border(focusedBorder = Border(BorderStroke(2.dp, Color.White), shape = shape)),
         scale = ClickableSurfaceDefaults.scale(focusedScale = 1.02f),

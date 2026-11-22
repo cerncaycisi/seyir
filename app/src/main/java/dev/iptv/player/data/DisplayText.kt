@@ -11,7 +11,7 @@ object DisplayText {
     fun isPlaceholderTitle(title: String?): Boolean =
         title == null || title.trim().lowercase().trimEnd('.', '!') in placeholderTitles
 
-    private val episodeCode = Regex("""(?i)\bS\s?\d{1,3}\s?[EB]\s?\d{1,4}\b""")
+    private val episodeCode = Regex("""(?i)\bS\s?\d{1,3}[\s._-]?[EB]\s?\d{1,4}\b""")
     private val seasonEpisodeWords = Regex("""(?i)\b(sezon|season)\s*\d+\s*[,.-]?\s*(bölüm|bolum|episode|ep)\s*\d+\b""")
     private val separators = " -–—:|·.,_"
 

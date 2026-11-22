@@ -584,8 +584,8 @@ private fun MicButton(onClick: () -> Unit) {
         colors = androidx.tv.material3.ClickableSurfaceDefaults.colors(
             containerColor = Palette.Surface,
             contentColor = Palette.Text,
-            focusedContainerColor = Palette.Primary,
-            focusedContentColor = androidx.compose.ui.graphics.Color.White,
+            focusedContainerColor = androidx.compose.ui.graphics.Color(0xFFF5F5F7),
+            focusedContentColor = androidx.compose.ui.graphics.Color(0xFF07080A),
         ),
         scale = androidx.tv.material3.ClickableSurfaceDefaults.scale(focusedScale = 1.08f),
     ) {

@@ -133,7 +133,7 @@ fun Pill(text: String, modifier: Modifier = Modifier, color: Color = Palette.Sur
 }
 
 @Composable
-fun ProgressBar(fraction: Float, modifier: Modifier = Modifier, color: Color = Palette.Primary) {
+fun ProgressBar(fraction: Float, modifier: Modifier = Modifier, color: Color = Color(0xFFF2B544)) {
     Box(modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)).background(Color(0x33FFFFFF))) {
         Box(Modifier.fillMaxWidth(fraction.coerceIn(0f, 1f)).fillMaxHeight().clip(RoundedCornerShape(3.dp)).background(color))
     }
@@ -180,7 +180,7 @@ fun PosterCard(
         modifier = modifier.width(width).aspectRatio(2f / 3f).pointerClick(onClick, onLongClick).onFocusChanged { if (it.isFocused || it.hasFocus) onFocused() },
         shape = CardDefaults.shape(cardShape),
         scale = CardDefaults.scale(focusedScale = 1.08f),
-        border = CardDefaults.border(focusedBorder = Border(BorderStroke(3.dp, Palette.Primary), shape = cardShape)),
+        border = CardDefaults.border(focusedBorder = Border(BorderStroke(3.dp, Color(0xFFF5F5F7)), shape = cardShape)),
         colors = CardDefaults.colors(containerColor = Palette.Surface),
     ) {
         var loaded by remember(stream.logo) { mutableStateOf(false) }
@@ -246,7 +246,7 @@ fun ChannelCard(
         modifier = modifier.width(168.dp).aspectRatio(16f / 10f).pointerClick(onClick, onLongClick).onFocusChanged { if (it.isFocused || it.hasFocus) onFocused() },
         shape = CardDefaults.shape(cardShape),
         scale = CardDefaults.scale(focusedScale = 1.06f),
-        border = CardDefaults.border(focusedBorder = Border(BorderStroke(3.dp, Palette.Primary), shape = cardShape)),
+        border = CardDefaults.border(focusedBorder = Border(BorderStroke(3.dp, Color(0xFFF5F5F7)), shape = cardShape)),
         colors = CardDefaults.colors(containerColor = Palette.Surface),
     ) {
         Box(Modifier.fillMaxSize()) {
@@ -286,7 +286,7 @@ fun ChannelRow(
             focusedContainerColor = Palette.SurfaceHigh,
             focusedContentColor = Color.White,
         ),
-        border = ClickableSurfaceDefaults.border(focusedBorder = Border(BorderStroke(2.dp, Palette.Primary), shape = cardShape)),
+        border = ClickableSurfaceDefaults.border(focusedBorder = Border(BorderStroke(2.dp, Color(0xFFF5F5F7)), shape = cardShape)),
         scale = ClickableSurfaceDefaults.scale(focusedScale = 1.02f),
     ) {
         Row(Modifier.fillMaxSize().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -345,15 +345,15 @@ fun CategoryItem(
         colors = ClickableSurfaceDefaults.colors(
             containerColor = if (selected) Palette.Surface else Color.Transparent,
             contentColor = if (selected) Palette.Text else Palette.TextMuted,
-            focusedContainerColor = Palette.Primary,
-            focusedContentColor = Color.White,
+            focusedContainerColor = Color(0xFFF5F5F7),
+            focusedContentColor = Color(0xFF07080A),
         ),
         scale = ClickableSurfaceDefaults.scale(focusedScale = 1.02f),
     ) {
         Row(Modifier.fillMaxSize().padding(horizontal = 10.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(
                 Modifier.size(width = 3.dp, height = 16.dp).clip(RoundedCornerShape(2.dp))
-                    .background(if (selected) Palette.Primary else Color.Transparent),
+                    .background(if (selected) Color(0xFFF2B544) else Color.Transparent),
             )
             Spacer(Modifier.width(8.dp))
             Text(
@@ -514,5 +514,17 @@ fun LandscapeCard(
         }
         Text(stream.name, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold,
             color = if (focused) Palette.Text else Palette.TextMuted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
+}
+
+/** Design v2 facts line: amber "★ 7.8" then muted, dot-separated facts (no pills). */
+@Composable
+fun MetaLine(rating: String?, parts: List<String>, modifier: Modifier = Modifier) {
+    Row(modifier, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        rating?.takeIf { it.isNotBlank() }?.let {
+            Text("★ $it", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, color = Color(0xFFF2B544))
+        }
+        Text(parts.filter { it.isNotBlank() }.joinToString("  ·  "), style = MaterialTheme.typography.labelLarge,
+            color = Palette.TextMuted, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }

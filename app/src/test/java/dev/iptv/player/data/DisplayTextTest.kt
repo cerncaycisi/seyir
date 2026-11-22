@@ -24,5 +24,6 @@ class DisplayTextTest {
         assertEquals("İlk Bölüm", DisplayText.episodeTitle("TEST DİZİSİ S1E1 İlk Bölüm", "Test Dizisi"))
         assertEquals("", DisplayText.episodeTitle("Sezon 2 Bölüm 5", "Başka"))
         assertEquals("", DisplayText.episodeTitle(null, "X"))
+        assertEquals("Hz Omer", DisplayText.episodeTitle("Hz Omer.S01.E01", "Farouk Omar"))
     }
 }

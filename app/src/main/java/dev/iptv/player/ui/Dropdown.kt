@@ -68,8 +68,8 @@ fun <T> DropdownButton(
         colors = ClickableSurfaceDefaults.colors(
             containerColor = Palette.Surface,
             contentColor = Palette.Text,
-            focusedContainerColor = Palette.Primary,
-            focusedContentColor = Color.White,
+            focusedContainerColor = Color(0xFFF5F5F7),
+            focusedContentColor = Color(0xFF07080A),
         ),
         scale = ClickableSurfaceDefaults.scale(focusedScale = 1.04f),
     ) {
@@ -123,8 +123,8 @@ fun <T> ListPickerDialog(
                         colors = ClickableSurfaceDefaults.colors(
                             containerColor = Palette.SurfaceHigh.copy(alpha = if (isCurrent) 1f else 0.0f),
                             contentColor = Palette.Text,
-                            focusedContainerColor = Palette.Primary,
-                            focusedContentColor = Color.White,
+                            focusedContainerColor = Color(0xFFF5F5F7),
+                            focusedContentColor = Color(0xFF07080A),
                         ),
                         scale = ClickableSurfaceDefaults.scale(focusedScale = 1.02f),
                     ) {

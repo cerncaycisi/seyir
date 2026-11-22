@@ -148,21 +148,18 @@ private fun MovieDetail(
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 48.dp, vertical = 28.dp)) {
             Text(
                 stream.name,
-                style = MaterialTheme.typography.headlineLarge,
-                fontWeight = FontWeight.Bold,
+                style = MaterialTheme.typography.displaySmall,
+                fontWeight = FontWeight.ExtraBold,
                 color = Palette.Text,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.widthIn(max = 640.dp),
             )
-            Row(Modifier.padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                listOfNotNull(
-                    info?.year ?: stream.year,
-                    (info?.rating ?: stream.rating)?.let { "★ $it" },
-                    info?.genre ?: stream.genre,
-                    durationLabel(uiContext, info),
-                ).forEach { Pill(it) }
-            }
+            MetaLine(
+                info?.rating ?: stream.rating,
+                listOfNotNull(info?.year ?: stream.year, info?.genre ?: stream.genre, durationLabel(uiContext, info)),
+                Modifier.padding(top = 12.dp),
+            )
             (info?.plot ?: stream.plot)?.let {
                 if (info?.plotLanguage == "en") Text(uiContext.getString(R.string.ux_plot_english), color = Palette.TextFaint, style = MaterialTheme.typography.labelSmall)
                 ExpandablePlot(stream.name, it, Modifier.padding(top = 12.dp).widthIn(max = 560.dp))
