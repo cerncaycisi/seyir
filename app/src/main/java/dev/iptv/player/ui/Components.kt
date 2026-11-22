@@ -79,7 +79,10 @@ object Palette {
     val Surface = Color(0xFF111620)
     val SurfaceHigh = Color(0xFF1B2230)
     val Border = Color(0xFF2A3344)
-    val Primary = Color(0xFF5B8CFF)
+    // Design v2 accent (amber); was blue 0xFF5B8CFF.
+    val Primary = Color(0xFFF2B544)
+    // Text on an amber or white fill.
+    val OnLight = Color(0xFF07080A)
     val Accent = Color(0xFF34D1BF)
     val Live = Color(0xFFFF4D5E)
     val Gold = Color(0xFFFFC857)

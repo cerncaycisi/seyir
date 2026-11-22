@@ -276,7 +276,7 @@ private fun PlaylistRow(playlist: Playlist, active: Boolean, onClick: () -> Unit
                 Text(playlist.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text("$kind · $detail", style = MaterialTheme.typography.bodySmall, color = Palette.TextMuted, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
-            if (active) Pill(uiContext.getString(R.string.ui_active_badge), color = Palette.Primary, contentColor = Color.White)
+            if (active) Pill(uiContext.getString(R.string.ui_active_badge), color = Palette.Primary, contentColor = Palette.OnLight)
         }
     }
 }

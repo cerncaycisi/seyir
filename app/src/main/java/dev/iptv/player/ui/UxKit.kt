@@ -37,6 +37,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
@@ -55,6 +56,7 @@ import androidx.compose.ui.window.DialogProperties
 import androidx.tv.material3.Border
 import androidx.tv.material3.ClickableSurfaceDefaults
 import androidx.tv.material3.Icon
+import androidx.tv.material3.LocalContentColor
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Surface
 import androidx.tv.material3.Text
@@ -92,9 +94,10 @@ fun TvButton(
         shape = ClickableSurfaceDefaults.shape(shape),
         colors = ClickableSurfaceDefaults.colors(
             containerColor = if (primary) base.copy(alpha = 0.85f) else Palette.SurfaceHigh,
-            contentColor = Palette.Text,
-            focusedContainerColor = base,
-            focusedContentColor = Color.White,
+            contentColor = if (primary && !destructive) Palette.OnLight else Palette.Text,
+            // Design v2: white focus with dark text; destructive stays red.
+            focusedContainerColor = if (destructive) base else Color(0xFFF5F5F7),
+            focusedContentColor = if (destructive) Color.White else Palette.OnLight,
         ),
         scale = ClickableSurfaceDefaults.scale(focusedScale = 1.04f),
     ) {
@@ -313,20 +316,20 @@ fun SettingRow(
         colors = ClickableSurfaceDefaults.colors(
             containerColor = Palette.Surface,
             contentColor = Palette.Text,
-            focusedContainerColor = Palette.SurfaceHigh,
-            focusedContentColor = Color.White,
+            // Design v2: focused rows turn white with dark text (was a blue ring).
+            focusedContainerColor = Color(0xFFF5F5F7),
+            focusedContentColor = Palette.OnLight,
         ),
-        border = ClickableSurfaceDefaults.border(focusedBorder = Border(BorderStroke(2.dp, Palette.Primary), shape = shape)),
         scale = ClickableSurfaceDefaults.scale(focusedScale = 1.01f),
     ) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 11.dp), verticalAlignment = Alignment.CenterVertically) {
             if (icon != null) {
-                Icon(icon, contentDescription = null, tint = Palette.TextMuted, modifier = Modifier.size(22.dp))
+                Icon(icon, contentDescription = null, tint = LocalContentColor.current.copy(alpha = 0.7f), modifier = Modifier.size(22.dp))
                 Spacer(Modifier.width(12.dp))
             }
             Column(Modifier.weight(1f)) {
                 Text(title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Medium, maxLines = 1)
-                if (subtitle != null) Text(subtitle, style = MaterialTheme.typography.bodySmall, color = Palette.TextMuted, maxLines = 2)
+                if (subtitle != null) Text(subtitle, style = MaterialTheme.typography.bodySmall, color = LocalContentColor.current.copy(alpha = 0.7f), maxLines = 2)
             }
             trailing?.invoke()
         }
@@ -373,7 +376,8 @@ fun <T> PickerRow(
         onClick = { open = true },
         trailing = {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(label, style = MaterialTheme.typography.titleSmall, color = Palette.Primary, fontWeight = FontWeight.SemiBold, maxLines = 1)
+                // Amber on the dark row; on the white focused row amber is unreadable, so use the row's dark text.
+                Text(label, style = MaterialTheme.typography.titleSmall, color = accentOn(LocalContentColor.current), fontWeight = FontWeight.SemiBold, maxLines = 1)
                 Spacer(Modifier.width(4.dp))
                 Icon(Icons.Rounded.ArrowDropDown, contentDescription = null, tint = Palette.TextMuted, modifier = Modifier.size(22.dp))
             }
@@ -389,3 +393,6 @@ fun AvatarBubble(name: String, colorIndex: Int, size: Dp = 44.dp) {
         Text(initials(name).take(2), color = Color.White, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
     }
 }
+
+/** The amber accent on dark content, or [content] itself when it is dark (a white, focused surface). */
+internal fun accentOn(content: Color): Color = if (content.luminance() > 0.5f) Palette.Primary else content

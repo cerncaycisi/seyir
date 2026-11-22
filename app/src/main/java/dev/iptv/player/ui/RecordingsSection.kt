@@ -183,7 +183,7 @@ private fun RecordingRow(rec: Recording, onClick: () -> Unit, onLongClick: () ->
             when (rec.status) {
                 RecStatus.SCHEDULED -> Pill(stringResource(R.string.play_record_scheduled), color = Palette.Gold, contentColor = Color.Black)
                 RecStatus.RECORDING -> Pill(stringResource(R.string.play_record_active), color = Palette.Live, contentColor = Color.White)
-                RecStatus.DONE -> Pill(stringResource(R.string.play_record_ready), color = Palette.Primary, contentColor = Color.White)
+                RecStatus.DONE -> Pill(stringResource(R.string.play_record_ready), color = Palette.Primary, contentColor = Palette.OnLight)
                 else -> Pill(stringResource(R.string.play_record_error))
             }
         }
