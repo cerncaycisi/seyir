@@ -49,6 +49,7 @@ internal fun trackOptions(
         val auto = params.overrides.values.none { it.type == C.TRACK_TYPE_VIDEO }
         return listOf(TrackOption(context.getString(R.string.play_auto), auto)) + sorted.map { it.copy(selected = it.selected && !auto) }
     }
+    disambiguate(out)
     if (noneLabel != null) {
         val anySelected = out.any { it.selected }
         out.add(0, TrackOption(noneLabel, !anySelected))
@@ -67,6 +68,46 @@ internal fun ExoPlayer.selectTrack(type: Int, option: TrackOption) {
         b.setOverrideForType(TrackSelectionOverride(group.mediaTrackGroup, option.index))
     }
     trackSelectionParameters = b.build()
+}
+
+/**
+ * Two tracks with the same label ("Türkçe", "Türkçe") cannot be told apart, so duplicates get what differs:
+ * SDH first, then the subtitle format, and as a last resort a running number.
+ */
+internal fun disambiguate(options: MutableList<TrackOption>) {
+    for (round in 0..2) {
+        val repeated = options.groupingBy { it.label }.eachCount().filterValues { it > 1 }.keys
+        if (repeated.isEmpty()) return
+        val seen = HashMap<String, Int>()
+        val before = options.toList() // decide each round from the labels as they were, not half-renamed
+        for ((k, o) in before.withIndex()) {
+            if (o.label !in repeated) continue
+            val f = o.group?.getTrackFormat(o.index) ?: continue
+            val n = (seen[o.label] ?: 0) + 1
+            seen[o.label] = n
+            val extra = when (round) {
+                0 -> if (f.roleFlags and C.ROLE_FLAG_DESCRIBES_MUSIC_AND_SOUND != 0) "SDH" else null
+                // Only when the format actually differs; "SRT" on every copy would not help.
+                1 -> textFormatLabel(f.sampleMimeType).takeIf {
+                    before.filter { it.label == o.label }.map { d -> d.group?.getTrackFormat(d.index)?.sampleMimeType }.distinct().size > 1
+                }
+                else -> "#$n"
+            } ?: continue
+            options[k] = o.copy(label = "${o.label} · $extra")
+        }
+    }
+}
+
+private fun textFormatLabel(mime: String?) = when (mime) {
+    MimeTypes.APPLICATION_SUBRIP -> "SRT"
+    MimeTypes.TEXT_SSA -> "ASS"
+    MimeTypes.TEXT_VTT -> "VTT"
+    MimeTypes.APPLICATION_TTML -> "TTML"
+    MimeTypes.APPLICATION_PGS -> "PGS"
+    MimeTypes.APPLICATION_DVBSUBS -> "DVB"
+    MimeTypes.APPLICATION_VOBSUB -> "VobSub"
+    MimeTypes.APPLICATION_CEA608, MimeTypes.APPLICATION_CEA708 -> "CC"
+    else -> null
 }
 
 private fun languageName(context: Context, code: String?): String? {
