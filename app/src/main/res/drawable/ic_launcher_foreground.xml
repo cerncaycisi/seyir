@@ -1,12 +1,7 @@
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:aapt="http://schemas.android.com/aapt"
     android:width="108dp" android:height="108dp"
     android:viewportWidth="108" android:viewportHeight="108">
-    <!-- Rounded play triangle, kept inside the 66dp adaptive-icon safe zone. -->
-    <path android:pathData="M43,35 Q43,31 46.5,33 L75,51 Q78,54 75,57 L46.5,75 Q43,77 43,73 Z">
-        <aapt:attr name="android:fillColor">
-            <gradient android:startX="43" android:startY="31" android:endX="78" android:endY="77"
-                android:startColor="#5B8CFF" android:endColor="#34D1BF" />
-        </aapt:attr>
-    </path>
+    <!-- Seyir mark (design v2): an eye whose pupil is a play triangle; inside the 66dp safe zone. -->
+    <path android:fillColor="#F5F5F7" android:pathData="M24,54 C33,38.5 75,38.5 84,54 C75,69.5 33,69.5 24,54 Z" />
+    <path android:fillColor="#F2B544" android:pathData="M47.5,44.5 L64,54 L47.5,63.5 Z" />
 </vector>

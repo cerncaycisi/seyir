@@ -1,6 +1,6 @@
 # Seyir backlog
 
-Bu dosyada kullanıcının istekleri ve testlerde bulunan sorunlar tutulur. Biten maddeler işaretlenir, silinmez. Son güncelleme: 2026-11-22 (detay v2 + uygulama geneli odak renkleri; sıradaki: Canlı TV v2, logo).
+Bu dosyada kullanıcının istekleri ve testlerde bulunan sorunlar tutulur. Biten maddeler işaretlenir, silinmez. Son güncelleme: 2026-11-22 (logo/ikon v1; sıradaki: Canlı TV v2, TMDB bölüm adları, içerik logoları).
 
 ## P0 — Şu an açık
 
@@ -132,3 +132,5 @@ Logo ayrıca çalışılacak; şu an sade bir göz-oynat işareti.
 - [x] Uygulama genelinde odak beyaz (yazı siyah), seçim/ilerleme kehribar: kartlar, kategoriler, açılır listeler, oynatıcı panelleri, sezon/bölüm satırları (2026-11-22).
 - [ ] Canlı TV v2'yi uygula
 - [ ] Logo ve ikon
+- [x] Logo ve ikon v1 (2026-11-22): göz + kehribar oynat göz bebeği. Uygulama ikonu (adaptive), TV banner'ı (drawable-xhdpi/banner.png, Segoe UI Bold ile üretildi) ve uygulama içi BrandMark güncellendi. Kalan: profesyonel wordmark (özel yazı tipi), farklı boyutlarda kontrol.
+- [ ] Bölüm adları: sağlayıcı ad vermiyorsa ya da her bölümde aynı kalıntı varsa ("Hz Omer.S01.E01") şu an "Bölüm N" gösteriliyor; TMDB sezon bölüm adlarını (tv/{id}/season/{n}) çekip gerçek adları göster.

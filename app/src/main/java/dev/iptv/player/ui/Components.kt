@@ -117,11 +117,21 @@ fun formatClock(epochSeconds: Long): String {
 
 @Composable
 fun BrandMark(size: Dp = 40.dp) {
-    Box(
-        Modifier.size(size).clip(CircleShape).background(Brush.linearGradient(listOf(Palette.Primary, Palette.Accent))),
-        contentAlignment = Alignment.Center,
-    ) {
-        Icon(Icons.Rounded.PlayArrow, contentDescription = null, tint = Color.White, modifier = Modifier.size(size * 0.6f))
+    // Seyir mark (design v2): white rounded square, dark eye, amber play-triangle pupil. Same as the launcher icon.
+    androidx.compose.foundation.Canvas(Modifier.size(size)) {
+        val s = this.size.minDimension
+        drawRoundRect(Color(0xFFF5F5F7), cornerRadius = androidx.compose.ui.geometry.CornerRadius(s * 0.3f))
+        val eye = androidx.compose.ui.graphics.Path().apply {
+            moveTo(s * 0.17f, s * 0.5f)
+            cubicTo(s * 0.3f, s * 0.28f, s * 0.7f, s * 0.28f, s * 0.83f, s * 0.5f)
+            cubicTo(s * 0.7f, s * 0.72f, s * 0.3f, s * 0.72f, s * 0.17f, s * 0.5f)
+            close()
+        }
+        drawPath(eye, Color(0xFF07080A))
+        val play = androidx.compose.ui.graphics.Path().apply {
+            moveTo(s * 0.43f, s * 0.385f); lineTo(s * 0.63f, s * 0.5f); lineTo(s * 0.43f, s * 0.615f); close()
+        }
+        drawPath(play, Color(0xFFF2B544))
     }
 }
 
