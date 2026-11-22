@@ -294,6 +294,7 @@ private fun SeriesDetail(repo: Repository, playlist: Playlist, seriesId: String,
                     }
                 }
                 // Right: episodes of the selected season, enriched with TMDB episode stills/titles/runtimes.
+                @android.annotation.SuppressLint("ProduceStateDoesNotAssignValue") // lint misses the assignment below
                 val tmdbEpisodes by produceState(emptyMap<Int, TmdbEpisodeInfo>(), info.name, info.tmdbId, season) {
                     value = emptyMap()
                     if (repo.tmdb.available()) {

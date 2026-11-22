@@ -97,6 +97,10 @@ class WatchNextPublisher(private val context: Context) {
     }
 }
 
+// TvContract.PreviewPrograms.ASPECT_RATIO_2_3 / _16_9; the androidx copies are @RestrictTo (lint RestrictedApi).
+private const val POSTER_ASPECT_2_3 = 4
+private const val POSTER_ASPECT_16_9 = 0
+
 internal fun resolveWatchNextPoster(
     logo: String?,
     packageName: String,
@@ -104,8 +108,8 @@ internal fun resolveWatchNextPoster(
 ): Pair<String, Int> {
     val clean = logo?.trim()?.takeIf { it.isNotEmpty() }
     return if (clean != null) {
-        clean to TvContractCompat.PreviewPrograms.ASPECT_RATIO_2_3
+        clean to POSTER_ASPECT_2_3
     } else {
-        "android.resource://$packageName/$fallbackDrawableId" to TvContractCompat.PreviewPrograms.ASPECT_RATIO_16_9
+        "android.resource://$packageName/$fallbackDrawableId" to POSTER_ASPECT_16_9
     }
 }

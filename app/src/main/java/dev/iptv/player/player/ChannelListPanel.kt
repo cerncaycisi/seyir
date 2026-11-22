@@ -69,6 +69,7 @@ fun ChannelListPanel(
         LazyColumn(Modifier.fillMaxSize(), state = state, verticalArrangement = Arrangement.spacedBy(4.dp)) {
             itemsIndexed(items, key = { i, s -> "$i|${s.id}" }) { i, stream ->
                 // What is on now, like the Live TV list (IBO shows it here too).
+                @android.annotation.SuppressLint("ProduceStateDoesNotAssignValue") // lint misses the assignment below
                 val nowProg by androidx.compose.runtime.produceState<dev.iptv.player.epg.Programme?>(null, stream.id, nowSec / 60) {
                     value = runCatching { epg.nowPlaying(playlistId, stream, nowSec) }.getOrNull()
                 }
