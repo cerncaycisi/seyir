@@ -1,6 +1,6 @@
 # Seyir backlog
 
-Bu dosyada kullanıcının istekleri ve testlerde bulunan sorunlar tutulur. Biten maddeler işaretlenir, silinmez. Son güncelleme: 2026-11-22.
+Bu dosyada kullanıcının istekleri ve testlerde bulunan sorunlar tutulur. Biten maddeler işaretlenir, silinmez. Son güncelleme: 2026-11-22 (canlı yayın kontrolleri v2).
 
 ## P0 — Şu an açık
 
