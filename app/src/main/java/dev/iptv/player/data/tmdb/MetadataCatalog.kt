@@ -18,7 +18,8 @@ class MetadataCatalog(context: Context) {
     internal val dao = MetadataDb.get(context).dao()
     private val json = Json { ignoreUnknownKeys = true }
 
-    suspend fun reconcile(playlist: Playlist, type: ContentType, content: Content) = withContext(Dispatchers.IO) {
+    // Diffing ~20k titles against the index: low priority, the user never waits on it.
+    suspend fun reconcile(playlist: Playlist, type: ContentType, content: Content) = withContext(dev.iptv.player.util.BackgroundWork.dispatcher) {
         if (type != ContentType.LIVE) dao.reconcile(playlist.id, type.name, content.items.map {
             MetadataEntry(playlist.id, type.name, it.id, it.name, it.year, metadataIdentity(it))
         })

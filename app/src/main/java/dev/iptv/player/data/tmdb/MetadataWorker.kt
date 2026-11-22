@@ -16,7 +16,10 @@ import java.util.concurrent.TimeUnit
 
 /** Durable, quiet, bounded batches. No screen lifetime or foreground progress dialog involved. */
 class MetadataWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
-    override suspend fun doWork(): Result {
+    // Bulk work runs on low-priority threads so browsing stays smooth on weak TVs.
+    override suspend fun doWork(): Result = kotlinx.coroutines.withContext(dev.iptv.player.util.BackgroundWork.dispatcher) { work() }
+
+    private suspend fun work(): Result {
         val repo = (applicationContext as App).repository
         val playlistId = inputData.getString("playlist") ?: return Result.failure()
         val type = inputData.getString("type")?.let { runCatching { ContentType.valueOf(it) }.getOrNull() } ?: return Result.failure()

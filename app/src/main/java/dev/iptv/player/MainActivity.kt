@@ -62,17 +62,26 @@ class MainActivity : ComponentActivity() {
     private val deepLink = mutableStateOf<Uri?>(null)
     private val searchQuery = mutableStateOf<String?>(null)
 
+    companion object {
+        var launchSection: String? = null
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen()
         super.onCreate(savedInstanceState)
         val repository = (application as App).repository
         val prefs = (application as App).releasePrefs
         if (savedInstanceState == null) deepLink.value = intent?.data?.takeIf { it.scheme == DeepLinks.SCHEME }
+        // `am start --es section LIVE` opens a section directly (used for on-device QA and launcher shortcuts).
+        if (savedInstanceState == null) launchSection = intent?.getStringExtra("section")
         if (savedInstanceState == null && intent?.action == Intent.ACTION_SEARCH) searchQuery.value = intent.getStringExtra(SearchManager.QUERY).orEmpty()
         dev.iptv.player.epg.ReminderBus.handleIntent(intent)
         PipState.inPip.value = false
         // Picture-in-Picture state for the player screen (hides overlays while shrunk).
         addOnPictureInPictureModeChangedListener { info -> PipState.inPip.value = info.isInPictureInPictureMode }
+        // Compose paints the full-screen background itself; drawing the window background too doubled
+        // every frame's fill on weak TV GPUs (measured with the overdraw debugger on a TCL rtd6748).
+        window.setBackgroundDrawable(null)
         setContent {
             DisplayPreferences(repository.settings) {
                 IptvTheme {
@@ -229,7 +238,7 @@ private fun AppNav(repo: Repository, prefs: dev.iptv.player.data.ReleasePrefs, d
                     onMovie = { s -> nav.navigate("movie/${Uri.encode(s.id)}") },
                     onPlaylists = { nav.navigate("playlists") },
                     onSettings = { nav.navigate("settings") },
-                    initialSection = st.defaultSection,
+                    initialSection = MainActivity.launchSection ?: st.defaultSection,
                     initialSearchQuery = query,
                     onMultiView = { items, index, n ->
                         PlayerQueue.playlist = active

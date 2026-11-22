@@ -19,7 +19,18 @@ Bu dosyada kullanıcının istekleri ve testlerde bulunan sorunlar tutulur. Bite
   - Cesur bir tasarım dili: katmanlı derinlik, büyük görseller, hareket ve geçişler, odak efektleri.
   - Netflix, Apple TV ve Prime Video referans alınacak; kopyalanmayacak.
   - Önce birkaç tasarım önerisi hazırlanıp kullanıcıya onaylatılacak.
-- [ ] **Canlı TV performansı (gerçek TCL TV, 0.2.3, release):**
+- [x] **Canlı TV performansı** (2026-11-22 TV'de ölçülüp düzeltildi):
+  - Tekrar ölçümde Canlı TV kategori kaydırması %0,4-0,8 geciken kare (10 ms). Daha önceki %19, o sırada arka planda çalışan EPG/katalog işlerinden kaynaklanıyordu.
+  - Düzeltmeler:
+    - EPG indirme/işleme, playlist yenileme, TMDB işçisi ve katalog uzlaştırma düşük öncelikli `seyir-bg` iş parçacıklarına taşındı.
+    - Pencere arka planı kaldırıldı; tüm ekranın iki kez boyanması bitti.
+    - Release manifest'ine `profileable` eklendi.
+  - Katalog yenilenirken Filmler'de kaydırma: %3,8 geciken kare.
+  - Bulgu: APK dosyadan kurulunca ART derlenmemiş (`status=verify`) çalışıyor; derleme cihaz boştayken yapılıyor. `cmd package compile -m speed-profile` sonrası Ana Sayfa'da geciken kare %5,6'dan %1,6'ya düştü. TV'ye adb ile kurulumdan sonra bu komut çalıştırılmalı.
+- [ ] **Performans ince ayar:**
+  - Room yazmaları (`arch_disk_io`) yenileme sırasında normal öncelikte yaklaşık 1 çekirdek kullanıyor. Yazma ağırlıklı veritabanları için düşük öncelikli executor düşünülebilir.
+  - Uygulamaya özel baseline profile (macrobenchmark) eklenebilir.
+- [ ] (Eski ölçüm) **Canlı TV performansı (gerçek TCL TV, 0.2.3, release):**
   - Ölçümler:
     - Canlı TV'ye geçiş: medyan 38 ms, %21 geciken kare, %99'luk dilim 150 ms.
     - Kategori listesinde kaydırma: medyan 48 ms, %19 geciken kare. Ana iş parçacığı 32 karede yavaş kaldı.
@@ -32,6 +43,7 @@ Bu dosyada kullanıcının istekleri ve testlerde bulunan sorunlar tutulur. Bite
     - 1408 kanallık liste.
   - Yapılacaklar: manifest'e `profileable` ekleyip simpleperf/Perfetto ile profil almak. Gerekirse önizlemeyi ayardan kapatılabilir yapmak.
   - Cihaz: TCL Smart TV Pro, rtd6748, armeabi-v7a, 1,8 GB RAM, Android 12, 60 Hz.
+- [ ] **Varsayılan ses ve altyazı** (kullanıcı, 2026-11-22): ses varsayılan olarak içeriğin orijinal dili, altyazı varsayılan olarak Türkçe olmalı. Kullanıcı bir içerikte değiştirirse o seçim korunmalı.
 - [ ] **Oynatıcı ayarları paneli:** satırların solunda boş ikon alanı var. İkon eklenmeli ya da boşluk kaldırılmalı.
 - [ ] **Canlı oynatıcıda Geri tuşu:** panel → kontroller → çıkış sırasında kaç basış gerektiği doğrulanmalı. "Geri: kontrolleri gizle" sonrasında kontroller hâlâ görünüyordu.
 

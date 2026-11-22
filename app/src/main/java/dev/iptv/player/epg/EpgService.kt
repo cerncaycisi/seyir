@@ -127,7 +127,8 @@ class EpgService private constructor(context: Context) {
                 return false
             }
             status.value = EpgStatus.Refreshing(0)
-            withContext(Dispatchers.IO) { ingest(url) }
+            // Download + XMLTV parse can take tens of seconds; keep it below UI priority.
+            withContext(dev.iptv.player.util.BackgroundWork.dispatcher) { ingest(url) }
             index = null
             matchMemo.clear()
             cache.evictAll()

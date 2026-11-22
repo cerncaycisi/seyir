@@ -29,6 +29,8 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.Iptv"
         android:usesCleartextTraffic="true">
+        <!-- Lets `simpleperf` / Perfetto sample the release build on a TV (no debugging, no data access). -->
+        <profileable android:shell="true" />
 
         <activity
             android:name=".MainActivity"

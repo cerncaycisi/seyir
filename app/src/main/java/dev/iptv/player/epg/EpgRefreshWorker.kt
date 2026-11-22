@@ -14,7 +14,10 @@ import java.util.concurrent.TimeUnit
 
 /** Daily guide refresh for the active playlist. */
 class EpgRefreshWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
-    override suspend fun doWork(): Result {
+    // Bulk work runs on low-priority threads so browsing stays smooth on weak TVs.
+    override suspend fun doWork(): Result = kotlinx.coroutines.withContext(dev.iptv.player.util.BackgroundWork.dispatcher) { work() }
+
+    private suspend fun work(): Result {
         val store = PlaylistStore(applicationContext)
         val activeId = store.activeId.first()
         val all = store.playlists.first()
