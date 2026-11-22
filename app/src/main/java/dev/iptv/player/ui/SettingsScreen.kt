@@ -149,8 +149,9 @@ private fun PageList(content: LazyListScope.() -> Unit) {
 private fun sectionOptions(uiContext: android.content.Context) = Section.entries.map { it.name to uiContext.getString(it.labelRes) }
 private fun languageOptions(uiContext: android.content.Context) = listOf("system" to uiContext.getString(R.string.ui_system), "tr" to "Türkçe", "en" to "English")
 private fun aspectOptions(uiContext: android.content.Context) = listOf("FIT" to uiContext.getString(R.string.ui_fit), "FILL" to uiContext.getString(R.string.ui_fill), "ZOOM" to uiContext.getString(R.string.ui_zoom))
-private val audioLangOptions = listOf("tr" to "Türkçe", "en" to "English", "de" to "Deutsch", "fr" to "Français", "ar" to "العربية", "ru" to "Русский")
-private fun subtitleLangOptions(uiContext: android.content.Context) = listOf("" to uiContext.getString(R.string.ui_off)) + audioLangOptions
+private val trackLanguageOptions = listOf("tr" to "Türkçe", "en" to "English", "de" to "Deutsch", "fr" to "Français", "ar" to "العربية", "ru" to "Русский")
+private fun audioLangOptions(uiContext: android.content.Context) = listOf(dev.iptv.player.data.ORIGINAL_AUDIO to uiContext.getString(R.string.ui_audio_original)) + trackLanguageOptions
+private fun subtitleLangOptions(uiContext: android.content.Context) = listOf("" to uiContext.getString(R.string.ui_off)) + trackLanguageOptions
 private fun externalOptions(uiContext: android.content.Context) = listOf("" to uiContext.getString(R.string.ui_none), "vlc" to "VLC", "mx" to "MX Player")
 
 @Composable
@@ -193,7 +194,7 @@ private fun PlayerPage(repo: Repository) {
     val fps = rememberPref(repo, Setting.MatchFrameRate)
     PageList {
         item { PickerRow(uiContext.getString(R.string.ui_aspect), aspectOptions(uiContext), aspect.value, aspect.set) }
-        item { PickerRow(uiContext.getString(R.string.ui_audio_language), audioLangOptions, audio.value, audio.set) }
+        item { PickerRow(uiContext.getString(R.string.ui_audio_language), audioLangOptions(uiContext), audio.value, audio.set) }
         item { PickerRow(uiContext.getString(R.string.ui_subtitle_language), subtitleLangOptions(uiContext), sub.value, sub.set) }
         item { PickerRow(uiContext.getString(R.string.sub_style_title), dev.iptv.player.player.SubtitleStyle.entries.map { it.key to uiContext.getString(it.labelRes) }, subStyle.value, subStyle.set) }
         item { dev.iptv.player.player.SubtitlePreview(dev.iptv.player.player.SubtitleStyle.fromKey(subStyle.value), subScale.value) }

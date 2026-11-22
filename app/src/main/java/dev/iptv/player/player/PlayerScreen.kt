@@ -225,6 +225,53 @@ private fun PlayerContent(repo: Repository, cfg: PlayerConfig, onBack: () -> Uni
     var panel by remember { mutableStateOf(Panel.None) }
     var tracks by remember { mutableStateOf(Tracks.EMPTY) }
     var trackParams by remember { mutableStateOf<TrackSelectionParameters>(player.trackSelectionParameters) }
+    // Default audio = the title's original language (setting "original"); a manual choice in the player wins.
+    var audioAuto by remember(current.id) { mutableStateOf(true) }
+    var originalLanguage by remember(current.id) { mutableStateOf<String?>(null) }
+    // The pick waits for the TMDB answer (bounded) so a Turkish title never starts on its English dub first.
+    var languageResolved by remember(current.id) { mutableStateOf(false) }
+    LaunchedEffect(current.id) {
+        if (live || cfg.audioLanguage != dev.iptv.player.data.ORIGINAL_AUDIO) return@LaunchedEffect
+        originalLanguage = try {
+            kotlinx.coroutines.withTimeoutOrNull(4_000) {
+                val series = current.seriesId
+                if (series != null) {
+                    val show = repo.content(playlist, ContentType.SERIES).items.firstOrNull { it.id == series }
+                    show?.let { repo.tmdb.originalLanguage(it.name, ContentType.SERIES, it.year) }
+                } else {
+                    repo.tmdb.originalLanguage(current.name, ContentType.MOVIE, current.year)
+                }
+            }
+        } catch (e: kotlinx.coroutines.CancellationException) { throw e } catch (_: Exception) { null }
+        languageResolved = true
+    }
+    LaunchedEffect(tracks, originalLanguage, languageResolved, audioAuto) {
+        if (live || !audioAuto || !languageResolved || cfg.audioLanguage != dev.iptv.player.data.ORIGINAL_AUDIO) return@LaunchedEffect
+        val audio = tracks.groups.filter { it.type == C.TRACK_TYPE_AUDIO }
+            .flatMap { g -> (0 until g.length).filter { g.isTrackSupported(it) }.map { g to it } }
+        val pick = originalAudioPick(audio.map { (g, i) -> g.getTrackFormat(i).language }, originalLanguage) ?: return@LaunchedEffect
+        val (g, i) = audio[pick]
+        if (!g.isTrackSelected(i)) {
+            player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
+                .setOverrideForType(androidx.media3.common.TrackSelectionOverride(g.mediaTrackGroup, i)).build()
+        }
+    }
+    // Default subtitle = the full track in the preferred language (not a forced one); a manual choice wins.
+    var subtitleAuto by remember(current.id) { mutableStateOf(true) }
+    LaunchedEffect(tracks, subtitleAuto) {
+        val pref = cfg.subtitleLanguage
+        if (live || !subtitleAuto || pref.isBlank() || pref.equals("off", true)) return@LaunchedEffect
+        val text = tracks.groups.filter { it.type == C.TRACK_TYPE_TEXT }
+            .flatMap { g -> (0 until g.length).filter { g.isTrackSupported(it) }.map { g to it } }
+        val pick = subtitlePick(text.map { (g, i) -> g.getTrackFormat(i).let { f -> f.language to (f.selectionFlags and C.SELECTION_FLAG_FORCED != 0) } }, pref)
+            ?: return@LaunchedEffect
+        val (g, i) = text[pick]
+        if (!g.isTrackSelected(i)) {
+            player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
+                .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
+                .setOverrideForType(androidx.media3.common.TrackSelectionOverride(g.mediaTrackGroup, i)).build()
+        }
+    }
     var aspect by rememberSaveable { mutableStateOf(cfg.aspectMode) }
     var subtitleScale by rememberSaveable { mutableIntStateOf(cfg.subtitleScale) }
     var subtitleStyleKey by rememberSaveable { mutableStateOf(cfg.subtitleStyle) }
@@ -808,9 +855,9 @@ private fun PlayerContent(repo: Repository, cfg: PlayerConfig, onBack: () -> Uni
                 speed = speed,
                 onSpeed = { speed = it; player.setPlaybackSpeed(it) },
                 audio = trackOptions(context, tracks, trackParams, C.TRACK_TYPE_AUDIO, null),
-                onAudio = { player.selectTrack(C.TRACK_TYPE_AUDIO, it) },
+                onAudio = { audioAuto = false; player.selectTrack(C.TRACK_TYPE_AUDIO, it) },
                 subtitles = trackOptions(context, tracks, trackParams, C.TRACK_TYPE_TEXT, context.getString(R.string.play_off)),
-                onSubtitle = { player.selectTrack(C.TRACK_TYPE_TEXT, it) },
+                onSubtitle = { subtitleAuto = false; player.selectTrack(C.TRACK_TYPE_TEXT, it) },
                 quality = trackOptions(context, tracks, trackParams, C.TRACK_TYPE_VIDEO, null),
                 onQuality = { player.selectTrack(C.TRACK_TYPE_VIDEO, it) },
                 subtitleStyle = SubtitleStyle.fromKey(subtitleStyleKey),

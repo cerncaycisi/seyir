@@ -37,6 +37,8 @@ data class TmdbInfo(
     val cast: String? = null,
     val director: String? = null,
     val plotLanguage: String? = null,
+    /** ISO 639-1 original language (e.g. "en"); drives the "original audio" track choice. */
+    val originalLanguage: String? = null,
 ) {
     val isEmpty get() = tmdbId == 0L
 }
@@ -94,6 +96,24 @@ class Tmdb(context: Context, private val settings: SettingsStore, private val ap
             result.getOrNull()?.let { runCatching { file.writeText(json.encodeToString(it)) }; memory[file.name] = it; return@withLock TmdbResolution(it, true) }
             if (result.isSuccess) { runCatching { file.writeText(json.encodeToString(TmdbInfo())) }; memory[file.name] = TmdbInfo() }
             TmdbResolution(null, result.isSuccess)
+        }
+    }
+
+    /**
+     * ISO 639-1 original language of a title (e.g. "tr", "en"). Computed from the details endpoint (search hits lack
+     * spoken languages) and cached once per title.
+     */
+    suspend fun originalLanguage(rawTitle: String, type: ContentType, yearHint: String? = null): String? {
+        val basic = lookup(rawTitle, type, yearHint) ?: return null
+        return withContext(Dispatchers.IO) {
+            val file = File(dir, "lang2-$type-${basic.tmdbId}.txt")
+            if (file.exists()) return@withContext runCatching { file.readText().trim().ifEmpty { null } }.getOrNull()
+            try {
+                val kind = if (type == ContentType.SERIES) "tv" else "movie"
+                val root = request("/$kind/${basic.tmdbId}")
+                val spoken = (root["spoken_languages"] as? JsonArray).orEmpty().mapNotNull { (it as? JsonObject)?.str("iso_639_1") }
+                pickOriginalLanguage(root.str("original_language"), spoken).also { runCatching { file.writeText(it.orEmpty()) } }
+            } catch (e: CancellationException) { throw e } catch (_: Exception) { null }
         }
     }
 
@@ -181,6 +201,7 @@ class Tmdb(context: Context, private val settings: SettingsStore, private val ap
             year = (str("release_date") ?: str("first_air_date"))?.take(4),
             rating = rating?.let { String.format(java.util.Locale.US, "%.1f", it) },
             genre = (hit["genre_ids"] as? JsonArray).orEmpty().mapNotNull { (it as? JsonPrimitive)?.content?.toIntOrNull()?.let(genres::get) }.joinToString(", ").ifBlank { null },
+            originalLanguage = str("original_language"),
         )
     }
 
@@ -193,3 +214,10 @@ class Tmdb(context: Context, private val settings: SettingsStore, private val ap
 }
 
 private fun JsonObject.str(key: String): String? = (get(key) as? JsonPrimitive)?.content?.takeIf { it.isNotBlank() && it != "null" }
+
+/**
+ * TMDB's `original_language` is sometimes wrong for local productions (a Turkish documentary listed as "en"
+ * while its only spoken language is Turkish). Trust it only when it is among the spoken languages.
+ */
+internal fun pickOriginalLanguage(original: String?, spoken: List<String>): String? =
+    if (spoken.isNotEmpty() && original !in spoken) spoken.first() else original ?: spoken.firstOrNull()

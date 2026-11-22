@@ -12,6 +12,7 @@ import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+/** Value of [Setting.PreferredAudioLanguage] meaning "the title's original language". */const val ORIGINAL_AUDIO = "original"
 
 private val Context.settingsDataStore: DataStore<Preferences> by preferencesDataStore(name = "settings")
 
@@ -39,8 +40,12 @@ sealed class Setting<T>(val key: Preferences.Key<T>, val default: T) {
 
     // Player
     data object AspectMode : Setting<String>(stringPreferencesKey("aspect_mode"), "FIT")
-    data object PreferredAudioLanguage : Setting<String>(stringPreferencesKey("audio_lang"), "tr")
-    data object PreferredSubtitleLanguage : Setting<String>(stringPreferencesKey("subtitle_lang"), "tr")
+    // "original" = the title's original-language track (see originalAudioPick). New key: the user asked for
+    // original audio as the default, replacing the old Turkish default (2026-11-22).
+    data object PreferredAudioLanguage : Setting<String>(stringPreferencesKey("audio_lang_v2"), ORIGINAL_AUDIO)
+    // New key with Turkish as the default: the user asked for Turkish subtitles by default (2026-11-22),
+    // the old key had been switched off on their TV.
+    data object PreferredSubtitleLanguage : Setting<String>(stringPreferencesKey("subtitle_lang_v2"), "tr")
     data object SubtitleStyle : Setting<String>(stringPreferencesKey("subtitle_style"), "clean")
     data object SubtitleScale : Setting<Int>(intPreferencesKey("subtitle_scale"), 100)
     data object BufferSeconds : Setting<Int>(intPreferencesKey("buffer_seconds"), 15)

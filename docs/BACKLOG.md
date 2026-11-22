@@ -44,11 +44,13 @@ Bu dosyada kullanıcının istekleri ve testlerde bulunan sorunlar tutulur. Bite
   - Yapılacaklar: manifest'e `profileable` ekleyip simpleperf/Perfetto ile profil almak. Gerekirse önizlemeyi ayardan kapatılabilir yapmak.
   - Cihaz: TCL Smart TV Pro, rtd6748, armeabi-v7a, 1,8 GB RAM, Android 12, 60 Hz.
 - [ ] **Varsayılan ses ve altyazı** (kullanıcı, 2026-11-22): ses varsayılan olarak içeriğin orijinal dili, altyazı varsayılan olarak Türkçe olmalı. Kullanıcı bir içerikte değiştirirse o seçim korunmalı.
+- [ ] **Ayarlar ekranı:** satırlar hâlâ "< değer >" şeklinde değer çeviriyor (Dil, Varsayılan bölüm, Ses/Altyazı dili, Altyazı stili…). Kullanıcı açılır liste istedi. "User-Agent" ve "Tampon süresi" gibi teknik ayarlar "Gelişmiş" altına taşınmalı. Rehber kaldırıldığı halde ayarlarda "EPG" sayfası duruyor; adı/yeri gözden geçirilmeli.
 - [ ] **Oynatıcı ayarları paneli:** satırların solunda boş ikon alanı var. İkon eklenmeli ya da boşluk kaldırılmalı.
 - [ ] **Canlı oynatıcıda Geri tuşu:** panel → kontroller → çıkış sırasında kaç basış gerektiği doğrulanmalı. "Geri: kontrolleri gizle" sonrasında kontroller hâlâ görünüyordu.
 
 ## P1 — Özellikler ve doğruluk
 
+- [ ] **TMDB eşleştirmesi — gerçek örnek (2026-11-22):** Panelde "Göz Açıp Kapayıncaya Kadar (2021)" adıyla duran yayın aslında "In the Blink of an Eye" (2026, İngilizce, 94 dk). Başlık ve yıl eşleştirmesi bunu Türk belgeseli (TMDB 957152) sanıyor. Sağlayıcının `tmdb_id` alanı ve süre karşılaştırması kullanılmalı.
 - [ ] **TMDB eşleştirmesi:** sağlayıcının `tmdb_id`'si (Xtream vod/series info) varsa birebir eşleşme için kullanılmalı. Listelerde eksik posterler de tamamlanmalı. (Codex'in 0.2.2/0.2.3 eşleştirme işi kontrol edilecek.)
 - [ ] Son seçilen kategori ve sıralama, uygulama yeniden açıldığında hatırlanmalı (Canlı/Film/Dizi).
 - [ ] Kategori gizleme: çoklu seçim (canlı/film/dizi). "Gruplarım": kullanıcının kendi grupları.
@@ -88,3 +90,17 @@ Bu dosyada kullanıcının istekleri ve testlerde bulunan sorunlar tutulur. Bite
   - Duraklatınca içerik bilgisi görünüyor.
   - Arka planda katalog/TMDB indeksi eklendi.
   - 5 altyazı stili eklendi.
+
+## TV e2e notları (2026-11-22, ses/altyazı)
+
+- [x] Varsayılan ses "Orijinal dil", altyazı "Türkçe" (yeni ayar anahtarları `audio_lang_v2` / `subtitle_lang_v2`). TV'de doğrulananlar:
+  - The Last of Us S1B1: TR + EN 5.1 sesten EN seçildi. Altyazıda forced yerine tam TR seçildi.
+  - The Batman (2022): ilk parça TR dublaj; orijinal EN seçildi, tam TR altyazı.
+  - Indian Police Force S1B1: 10'dan fazla ses parçasından Hintçe (orijinal) seçildi, TR altyazı.
+  - Werewolf Castle: tek EN parça, TR altyazı.
+  - "Göz Açıp Kapayıncaya Kadar (2021)": panelde başlık yanlış (bkz. TMDB maddesi).
+- [ ] Altyazı/ses paneli Geri ile kapanınca odak paneli açan düğmeye değil "Duraklat"a dönüyor.
+- [ ] Arama sonuçlarında aşağı tuşu ilk sonuca değil, geometrik olarak en yakın sonuca gidiyor.
+- [ ] Bölüm aramasını menüden açınca odak bazen arama kutusuna değil sol menüye düşüyor (Filmler → Ara).
+- [ ] Oynatıcıdan Geri: aramadan açılan dizi bölümünde dönüş arama sonuçlarına değil dizi sayfasına gidiyor (beklenen olabilir, değerlendirilecek).
+- [ ] İsteğe bağlı: gömülü TR altyazı yoksa OpenSubtitles'tan otomatik TR altyazı.

@@ -111,11 +111,14 @@ fun buildPlayer(context: Context, cfg: PlayerConfig, headers: RequestHeaders): E
             // We drive Surface.setFrameRate ourselves (see applyFrameRate) so the user setting fully controls it.
             if (cfg.matchFrameRate) videoChangeFrameRateStrategy = C.VIDEO_CHANGE_FRAME_RATE_STRATEGY_OFF
             trackSelectionParameters = trackSelectionParameters.buildUpon().apply {
-                if (cfg.audioLanguage.isNotBlank()) setPreferredAudioLanguage(cfg.audioLanguage)
+                // "original" is resolved per title once tracks are known (PlayerScreen → originalAudioPick).
+                if (cfg.audioLanguage.isNotBlank() && cfg.audioLanguage != dev.iptv.player.data.ORIGINAL_AUDIO) setPreferredAudioLanguage(cfg.audioLanguage)
                 if (cfg.subtitleLanguage.isBlank() || cfg.subtitleLanguage.equals("off", true)) {
                     setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
                 } else {
                     setPreferredTextLanguage(cfg.subtitleLanguage)
+                    // Prefer the full subtitle over a "forced" (signs-only) track of the same language.
+                    setIgnoredTextSelectionFlags(C.SELECTION_FLAG_FORCED)
                 }
             }.build()
         }

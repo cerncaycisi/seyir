@@ -230,6 +230,7 @@
     <string name="ui_clear_confirm">Temizle</string>
     <string name="ui_add_watch_later">Sonra izle</string>
     <string name="ui_remove_watch_later">Listeden çıkar</string>
+    <string name="ui_audio_original">Orijinal dil</string>
     <string name="ui_exit_title">Uygulamadan çıkılsın mı?</string>
     <string name="ui_exit_confirm">Çık</string>
     <string name="ui_remove_favorites">Favorilerden çıkar</string>
