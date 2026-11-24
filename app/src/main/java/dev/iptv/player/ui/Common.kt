@@ -93,7 +93,7 @@ suspend fun <T> loadCatching(block: suspend () -> T): Load<T> = try {
 fun IptvTheme(content: @Composable () -> Unit) {
     val density = androidx.compose.ui.platform.LocalDensity.current
     androidx.compose.runtime.CompositionLocalProvider(
-        androidx.compose.ui.platform.LocalDensity provides androidx.compose.ui.unit.Density(density.density, density.fontScale.coerceIn(0.85f, 1.3f)),
+        androidx.compose.ui.platform.LocalDensity provides phoneDensity(density),
     ) { IptvThemeInner(content) }
 }
 

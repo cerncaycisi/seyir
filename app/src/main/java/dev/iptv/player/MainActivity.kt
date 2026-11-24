@@ -4,7 +4,12 @@ import android.content.Intent
 import android.app.SearchManager
 import android.widget.Toast
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
+import android.view.WindowManager
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -89,13 +94,42 @@ class MainActivity : ComponentActivity() {
         // Compose paints the full-screen background itself; drawing the window background too doubled
         // every frame's fill on weak TV GPUs (measured with the overdraw debugger on a TCL rtd6748).
         window.setBackgroundDrawable(null)
+        // Phone: draw edge to edge and keep the status/navigation bars hidden (a swipe from the edge shows
+        // them briefly). The UI itself stays clear of the display cutout (PhoneFrame).
+        WindowCompat.setDecorFitsSystemWindows(window, false)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            window.attributes = window.attributes.apply {
+                layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
+            }
+        }
+        hideSystemBars()
+        // Phones (Android 13+) need the notification permission for EPG reminders and the recording service.
+        if (savedInstanceState == null && Build.VERSION.SDK_INT >= 33 &&
+            checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED
+        ) {
+            requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 1)
+        }
         setContent {
             DisplayPreferences(repository.settings) {
                 IptvTheme {
-                    AppNav(repository, prefs, deepLink, searchQuery)
-                    dev.iptv.player.ui.ReminderHost()
+                    dev.iptv.player.ui.PhoneFrame {
+                        AppNav(repository, prefs, deepLink, searchQuery)
+                        dev.iptv.player.ui.ReminderHost()
+                    }
                 }
             }
+        }
+    }
+
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (hasFocus) hideSystemBars()
+    }
+
+    private fun hideSystemBars() {
+        WindowCompat.getInsetsController(window, window.decorView).apply {
+            systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            hide(WindowInsetsCompat.Type.systemBars())
         }
     }
 

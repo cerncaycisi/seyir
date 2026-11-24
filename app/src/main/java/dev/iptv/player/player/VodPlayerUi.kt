@@ -4,6 +4,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -210,6 +211,7 @@ private fun ScrubBar(
 ) {
     var focused by remember { mutableStateOf(false) }
     var target by remember { mutableStateOf<Long?>(null) }
+    var dragging by remember { mutableStateOf(false) }
     fun setTarget(t: Long?) { target = t; onTargetChange(t) }
     val shown = target ?: position
     val label = stringResource(R.string.ux_seek)
@@ -217,7 +219,7 @@ private fun ScrubBar(
         Modifier
             .fillMaxWidth()
             .height(46.dp)
-            .onFocusChanged { focused = it.isFocused; if (!it.isFocused) setTarget(null) }
+            .onFocusChanged { focused = it.isFocused; if (!it.isFocused && !dragging) setTarget(null) }
             .onPreviewKeyEvent { event ->
                 when (event.key) {
                     Key.DirectionLeft, Key.DirectionRight -> {
@@ -241,6 +243,17 @@ private fun ScrubBar(
                 detectTapGestures { offset ->
                     if (duration > 0 && size.width > 0) { onSeek((offset.x / size.width * duration).toLong().coerceIn(0, duration)); onInteraction() }
                 }
+            }
+            // Touch: drag along the bar to pick a position; lifting the finger seeks there.
+            .pointerInput(duration) {
+                fun at(x: Float) = (x / size.width * duration).toLong().coerceIn(0, duration)
+                detectHorizontalDragGestures(
+                    onDragStart = { offset -> if (duration > 0 && size.width > 0) { dragging = true; setTarget(at(offset.x)); onInteraction() } },
+                    onDragEnd = { target?.let(onSeek); dragging = false; setTarget(null); onInteraction() },
+                    onDragCancel = { dragging = false; setTarget(null) },
+                ) { change, _ ->
+                    if (dragging) { change.consume(); setTarget(at(change.position.x)); onInteraction() }
+                }
             },
         contentAlignment = Alignment.BottomStart,
     ) {
@@ -248,13 +261,13 @@ private fun ScrubBar(
         val frac = if (duration > 0) (shown.toFloat() / duration).coerceIn(0f, 1f) else 0f
         val playedFrac = if (duration > 0) (position.toFloat() / duration).coerceIn(0f, 1f) else 0f
         val bufFrac = if (duration > 0) (buffered.toFloat() / duration).coerceIn(0f, 1f) else 0f
-        val track = if (focused) 8.dp else 5.dp
+        val track = if (focused || dragging) 8.dp else 5.dp
         Box(Modifier.fillMaxWidth().padding(bottom = 10.dp).height(track).clip(RoundedCornerShape(4.dp)).background(Color(0x47F5F5F7))) {
             Box(Modifier.fillMaxHeight().fillMaxWidth(bufFrac).background(Color(0x6BF5F5F7)))
             Box(Modifier.fillMaxHeight().fillMaxWidth(playedFrac).background(if (focused) Ink else Amber))
             if (target != null) Box(Modifier.fillMaxHeight().width(2.dp).offset(x = full * frac).background(Amber))
         }
-        if (focused) {
+        if (focused || dragging) {
             // Playhead (or draft position while scrubbing) and its time label.
             Box(Modifier.padding(bottom = 4.dp).offset(x = full * frac - 2.dp).width(4.dp).height(20.dp).clip(RoundedCornerShape(2.dp)).background(Ink))
             if (target != null) {

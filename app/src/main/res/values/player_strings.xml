@@ -19,10 +19,10 @@
     <string name="play_category_hide">Kategoriyi gizle</string>
     <string name="play_category_lock">Kategoriyi kilitle</string>
     <string name="play_category_unlock">Kategori kilidini kaldır</string>
-    <string name="play_channel_hint">Kanal değiştirmek için ▲ ▼</string>
+    <string name="play_channel_hint">Kanal değiştirmek için yana kaydırın</string>
     <string name="play_channel_list">Kanal listesi</string>
     <string name="play_channels">Kanallar</string>
-    <string name="play_channels_hint">%1$d kanal  ·  OK  izle  ·  Geri  kapat</string>
+    <string name="play_channels_hint">%1$d kanal  ·  Dokun: izle  ·  Dışarı dokun: kapat</string>
     <string name="play_decoder_limit">Çözücü yetersiz: bu TV aynı anda bu kadar yayını çözemiyor</string>
     <string name="play_delete">Sil</string>
     <string name="play_download_failed">İndirme başarısız</string>
@@ -39,10 +39,10 @@
     <string name="play_four_channels">4 kanal</string>
     <string name="play_hide">Gizle</string>
     <string name="play_live">CANLI</string>
-    <string name="play_live_controls">▲ ▼  kanal    ·    ◀  liste    ·    ▶  ayarlar    ·    0-9  numara    ·    OK  bilgi    ·    Geri  çıkış</string>
-    <string name="play_live_hint">   Canlıya dön: Menü ▸ Canlıya dön</string>
+    <string name="play_live_controls">Yana kaydır: kanal    ·    Dokun: kontroller    ·    Dikey kaydır: parlaklık / ses    ·    Geri: çıkış</string>
+    <string name="play_live_hint">   Canlıya dön: Daha fazla ▸ Canlıya dön</string>
     <string name="play_minutes">%1$d dk</string>
-    <string name="play_multi_controls">Yön tuşları: odak (ses)   ·   OK: kanalı değiştir   ·   Geri: çık</string>
+    <string name="play_multi_controls">Dokun: sesi seç   ·   Tekrar dokun / basılı tut: kanalı değiştir   ·   Geri: çık</string>
     <string name="play_multi_count">Çoklu izleme (%1$d kanal)</string>
     <string name="play_multi_warning">Bazı TV\'ler aynı anda yalnızca 1-2 HD yayını çözebilir; görüntü donarsa kanal sayısını azaltın.</string>
     <string name="play_multiview">Çoklu izleme</string>
@@ -101,8 +101,8 @@
     <string name="play_subtitles">Altyazı</string>
     <string name="play_two_channels">2 kanal</string>
     <string name="play_unlock">Kilidi kaldır</string>
-    <string name="play_vod_controls">◀ ▶  10 sn    ·    ▲  ayarlar    ·    OK  oynat / duraklat</string>
-    <string name="vod_scrub_hint">◀ ▶ sar · OK git · Geri vazgeç</string>
+    <string name="play_vod_controls">Çift dokun: 10 sn sar    ·    Ortaya çift dokun: oynat / duraklat    ·    Yana kaydır: sar</string>
+    <string name="vod_scrub_hint">Bırakınca o konuma gider</string>
     <string name="vod_ends_at">Bitiş %1$s</string>
     <string name="vod_previous_episode">Önceki bölüm</string>
     <string name="vod_next_episode">Sonraki bölüm</string>
@@ -116,12 +116,16 @@
     <string name="vod_sheet_look">Görünüm</string>
     <string name="vod_sheet_size">Boyut</string>
     <string name="vod_watching">İzliyorsun</string>
-    <string name="vod_paused_hint">OK devam · ▲ kontroller</string>
-    <string name="live_controls_hint">OK kontroller · ▲▼ kanal · ◀ liste</string>
-    <string name="live_controls_active_hint">◀▶ gezin · Geri gizle</string>
+    <string name="vod_paused_hint">Dokun: kontroller</string>
+    <string name="live_controls_hint">Yana kaydır: kanal · Dikey kaydır: parlaklık / ses</string>
+    <string name="live_controls_active_hint">Dokun: gizle</string>
     <string name="ui_no_programme_info">Program bilgisi yok</string>
     <string name="play_programme_guide">Rehber</string>
-    <string name="live_guide_hint">◀ ▶ kanal · OK hatırlatıcı · Geri kapat</string>
+    <string name="live_guide_hint">Yana kaydır: kanal · Dokun: hatırlatıcı</string>
     <string name="live_reminder_set">Hatırlatıcı kuruldu: %1$s</string>
     <string name="live_reminder_removed">Hatırlatıcı kaldırıldı</string>
+    <!-- Phone touch gestures -->
+    <string name="gesture_brightness">Parlaklık</string>
+    <string name="gesture_volume">Ses</string>
+    <string name="gesture_seconds">sn</string>
 </resources>

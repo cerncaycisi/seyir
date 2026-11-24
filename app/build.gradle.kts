@@ -35,7 +35,7 @@ android {
         minSdk = 24
         targetSdk = 35
         versionCode = releaseVersionCode
-        versionName = "0.2.18"
+        versionName = "0.2.18-phone"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         // OpenSubtitles (optional; empty key hides the feature). Values come from local.properties, never committed.
         buildConfigField("String", "OPENSUBTITLES_API_KEY", "\"${localProp("opensubtitles.apiKey")}\"")

@@ -8,8 +8,8 @@
     <string name="ux_back_ten">10 sn geri</string>
     <string name="ux_forward_ten">10 sn ileri</string>
     <string name="ux_more">Diğer</string>
-    <string name="ux_player_hint">OK kontroller · ↑↓ kanal değiştir · ← kanal listesi</string>
-    <string name="ux_vod_hint">OK kontroller · ←→ 10 sn sar · Menü ayarlar</string>
+    <string name="ux_player_hint">Dokun: kontroller · Yana kaydır: kanal · Sol yarı: parlaklık · Sağ yarı: ses</string>
+    <string name="ux_vod_hint">Dokun: kontroller · Çift dokun: 10 sn sar · Yana kaydır: sar</string>
     <string name="ux_remaining">%1$s kaldı</string>
     <string name="ux_retry">Tekrar dene</string>
     <string name="ux_info">Yayın bilgisi</string>
@@ -19,9 +19,9 @@
     <string name="ux_search_movies">Filmlerde ara</string>
     <string name="ux_search_series">Dizilerde ara</string>
     <string name="ux_read_more">Devamını oku</string>
-    <string name="ux_reader_hint">↑ ↓ Kaydır · Geri: kapat</string>
+    <string name="ux_reader_hint">Kaydırarak okuyun · Geri: kapat</string>
     <string name="ux_seek">Oynatma konumu</string>
-    <string name="ux_seek_hint">← → Konum seç · OK: uygula</string>
+    <string name="ux_seek_hint">Çubuğu sürükleyin · Bırakınca o konuma gider</string>
     <string name="ux_title_info">Bilgiler</string>
     <string name="ux_info_loading">Bilgiler yükleniyor…</string>
     <string name="ux_tmdb_rating">TMDB puanı</string>

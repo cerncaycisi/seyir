@@ -53,7 +53,7 @@
     <string name="ui_no_programme">No programme information</string>
     <string name="ui_now">NOW</string>
     <string name="ui_next">NEXT</string>
-    <string name="ui_remote_hint">OK  watch   ·   Hold  options</string>
+    <string name="ui_remote_hint">Tap  watch   ·   Hold  options</string>
     <string name="ui_other">Other</string>
     <string name="ui_no_movie">No movies found</string>
     <string name="ui_no_series">No series found</string>
@@ -67,7 +67,7 @@
     <string name="ui_movies">Movies</string>
     <string name="ui_series">Series</string>
     <string name="ui_no_favorites">No favorites yet</string>
-    <string name="ui_favorites_hint">Hold OK on an item to add it</string>
+    <string name="ui_favorites_hint">Long-press an item to add it</string>
     <string name="ui_search">Search</string>
     <string name="ui_search_hint">Across channels, movies and series</string>
     <string name="ui_search_prompt">What would you like to watch?</string>
@@ -100,7 +100,7 @@
     <string name="ui_refresh">Refresh</string>
     <string name="ui_delete">Delete</string>
     <string name="ui_playlist_delete_hint">The playlist and its favorites will be removed from this device. Your subscription is unaffected.</string>
-    <string name="ui_playlist_options">Hold OK on a playlist to edit, refresh or delete it.</string>
+    <string name="ui_playlist_options">Long-press a playlist to edit, refresh or delete it.</string>
     <string name="ui_active_badge">ACTIVE</string>
     <string name="ui_active">Active</string>
     <string name="ui_expired">Expired</string>
@@ -161,7 +161,7 @@
     <string name="ui_unlock_session">Unlock categories for this session</string>
     <string name="ui_hide_adult">Hide adult content</string>
     <string name="ui_hide_adult_hint">Hide channels and categories with names such as XXX, Adult, 18+ or Yetişkin</string>
-    <string name="ui_lock_category_hint">To lock a category, hold OK on it in Live TV.</string>
+    <string name="ui_lock_category_hint">To lock a category, long-press it in Live TV.</string>
     <string name="ui_pin_remove_confirm">Remove PIN?</string>
     <string name="ui_pin_remove_message">Category locks will also be removed.</string>
     <string name="ui_remove">Remove</string>
@@ -196,9 +196,9 @@
     <string name="ui_refresh_hours">Every %1$d hours</string>
     <string name="ui_seconds">%1$d s</string>
     <string name="ui_hidden_count">%1$d hidden items</string>
-    <string name="ui_hidden_channel">Hidden channel · %1$s · OK to show</string>
-    <string name="ui_hidden_category">Hidden category · %1$s · OK to show</string>
-    <string name="ui_locked_category">Locked category · %1$s · OK to unlock</string>
+    <string name="ui_hidden_channel">Hidden channel · %1$s · tap to show</string>
+    <string name="ui_hidden_category">Hidden category · %1$s · tap to show</string>
+    <string name="ui_locked_category">Locked category · %1$s · tap to unlock</string>
     <string name="ui_version">Version %1$s</string>
     <string name="ui_color">Color %1$d</string>
     <string name="ui_pin_entered">%1$d digits entered</string>
@@ -256,7 +256,7 @@
     <string name="ui_remove_favorites">Remove from favorites</string>
     <string name="ui_category_empty">Nothing in this category</string>
     <string name="ui_category_empty_hint">Pick another category</string>
-    <string name="ui_watch_later_hint">Add items from their detail page or by long-pressing OK</string>
+    <string name="ui_watch_later_hint">Add items from their detail page or by long-pressing them</string>
     <string name="ui_history_empty_hint">What you watch will show up here</string>
     <string name="ui_categories">Categories</string>
     <string name="ui_item_count">%1$d items</string>
@@ -267,7 +267,7 @@
     <string name="ui_restart_series">Watch again from the start</string>
     <string name="ui_series_badge">S%1$d B%2$d</string>
     <string name="ui_next_at">Next %1$s · %2$s</string>
-    <string name="ui_live_hint">OK preview · OK again fullscreen · long press: options</string>
+    <string name="ui_live_hint">Tap: preview · tap again: fullscreen · hold: options</string>
     <string name="ui_rename_group">Rename group</string>
     <string name="ui_move_up">Move up</string>
     <string name="ui_move_down">Move down</string>

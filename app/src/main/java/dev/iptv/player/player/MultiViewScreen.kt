@@ -37,6 +37,8 @@ import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -222,7 +224,14 @@ private fun MultiViewContent(cfg: PlayerConfig, channels: List<Stream>, start: I
                 Row(Modifier.weight(1f).fillMaxSize()) {
                     for (cIdx in 0 until cols) {
                         val i = r * cols + cIdx
-                        Box(Modifier.weight(1f).fillMaxSize().padding(3.dp)) {
+                        // Touch: tap a tile to hear it, tap it again (or long-press) to change its channel.
+                        val tileTouch = if (i < count) Modifier.pointerInput(i) {
+                            detectTapGestures(
+                                onTap = { if (picking) picking = false else if (focused == i) picking = true else focused = i },
+                                onLongPress = { if (!picking) { focused = i; picking = true } },
+                            )
+                        } else Modifier
+                        Box(Modifier.weight(1f).fillMaxSize().padding(3.dp).then(tileTouch)) {
                             if (i < count) Tile(players[i], channels[slots[i]].name, i == focused, errors[i])
                         }
                     }
@@ -253,7 +262,7 @@ private fun MultiViewContent(cfg: PlayerConfig, channels: List<Stream>, start: I
                 playlistId = PlayerQueue.playlist?.id.orEmpty(),
                 onPick = { slots[focused] = it; picking = false },
                 onClose = { picking = false },
-                modifier = Modifier.align(Alignment.CenterStart),
+                modifier = Modifier.align(Alignment.CenterStart).swallowTaps(),
             )
         }
     }

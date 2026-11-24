@@ -27,6 +27,10 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ErrorOutline
+import androidx.compose.material.icons.rounded.FastForward
+import androidx.compose.material.icons.rounded.FastRewind
+import androidx.compose.material.icons.rounded.Pause
+import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.DisposableEffect
@@ -97,7 +101,6 @@ import dev.iptv.player.ui.Pill
 import dev.iptv.player.ui.formatClock
 import dev.iptv.player.ui.RecordingDurationDialog
 import dev.iptv.player.ui.PointerButton
-import dev.iptv.player.ui.pointerClick
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
@@ -862,9 +865,46 @@ private fun PlayerContent(repo: Repository, cfg: PlayerConfig, onBack: () -> Uni
                     },
                 )
             },
-            modifier = (aspectMode.ratio?.let { Modifier.align(Alignment.Center).aspectRatio(it) } ?: Modifier.fillMaxSize())
-                .pointerClick({ controlsActive = true; showOverlay() }),
+            modifier = aspectMode.ratio?.let { Modifier.align(Alignment.Center).aspectRatio(it) } ?: Modifier.fillMaxSize(),
         )
+
+        if (!inPip) {
+            PlayerGestureLayer(
+                onTap = {
+                    when {
+                        panel != Panel.None -> { dismissPanel(); controlsActive = false; overlay = false }
+                        nextVisible || recordingTarget != null -> Unit
+                        // A paused VOD keeps its controls; a tap only brings them back from the info screen.
+                        !live && !playRequested -> showOverlay()
+                        overlay -> { controlsActive = false; overlay = false }
+                        else -> showOverlay()
+                    }
+                },
+                onDoubleTap = if (live) null else ({ zone ->
+                    when (zone) {
+                        TapZone.Start -> {
+                            player.seekBack(); showOverlay()
+                            GestureFeedback(Icons.Rounded.FastRewind, "−${player.seekBackIncrement / 1000} " + context.getString(R.string.gesture_seconds))
+                        }
+                        TapZone.End -> {
+                            player.seekForward(); showOverlay()
+                            GestureFeedback(Icons.Rounded.FastForward, "+${player.seekForwardIncrement / 1000} " + context.getString(R.string.gesture_seconds))
+                        }
+                        TapZone.Center -> {
+                            val resume = !player.playWhenReady
+                            if (resume) player.play() else player.pause()
+                            showOverlay()
+                            GestureFeedback(if (resume) Icons.Rounded.PlayArrow else Icons.Rounded.Pause)
+                        }
+                    }
+                }),
+                onSwipe = if (live && items.size > 1) ({ dir ->
+                    zapTo(if (dir > 0) (index + 1) % items.size else (index - 1 + items.size) % items.size)
+                }) else null,
+                seekPosition = if (live) null else ({ player.currentPosition to player.duration.coerceAtLeast(0L) }),
+                onSeekBy = if (live) null else ({ delta -> player.seekTo((player.currentPosition + delta).coerceAtLeast(0L)); showOverlay() }),
+            )
+        }
 
         if (error == null && reconnectAttempt > 0 && !inPip) {
             Row(
@@ -991,7 +1031,7 @@ private fun PlayerContent(repo: Repository, cfg: PlayerConfig, onBack: () -> Uni
                 seconds = nextSeconds,
                 onPlayNow = { saveProgress(); nextSeconds = 0; if (index < items.lastIndex) index++ },
                 onCancel = { nextCancelledFor = index; nextSeconds = 0 },
-                modifier = Modifier.align(Alignment.BottomEnd).padding(40.dp),
+                modifier = Modifier.align(Alignment.BottomEnd).padding(40.dp).swallowTaps(),
             )
         }
 
@@ -1002,7 +1042,7 @@ private fun PlayerContent(repo: Repository, cfg: PlayerConfig, onBack: () -> Uni
                 playlistId = playlist.id,
                 onPick = { zapTo(it); dismissPanel() },
                 onClose = ::closePanel,
-                modifier = Modifier.align(Alignment.CenterStart),
+                modifier = Modifier.align(Alignment.CenterStart).swallowTaps(),
             )
             Panel.LiveInfo -> LiveInfoPanel(
                 playlist = playlist,
@@ -1014,7 +1054,7 @@ private fun PlayerContent(repo: Repository, cfg: PlayerConfig, onBack: () -> Uni
                 onNextChannel = { zapTo((index + 1) % items.size) },
                 onToast = ::toast,
                 onClose = ::closePanel,
-                modifier = Modifier.align(Alignment.CenterEnd),
+                modifier = Modifier.align(Alignment.CenterEnd).swallowTaps(),
             )
             Panel.Settings -> PlayerSettingsPanel(
                 initialPage = settingsPage,
@@ -1058,7 +1098,7 @@ private fun PlayerContent(repo: Repository, cfg: PlayerConfig, onBack: () -> Uni
                 onMultiView = if (live) ({ n -> saveProgress(); panel = Panel.None; onMultiView(n) }) else null,
                 onPip = if (PipState.supported(context)) ({ panel = Panel.None; activity?.let { PipState.enter(it) } }) else null,
                 onClose = ::closePanel,
-                modifier = Modifier.align(Alignment.CenterEnd),
+                modifier = Modifier.align(Alignment.CenterEnd).swallowTaps(),
             )
             Panel.Tracks -> AudioSubtitleSheet(
                 audio = trackOptions(context, tracks, trackParams, C.TRACK_TYPE_AUDIO, null),
@@ -1077,7 +1117,7 @@ private fun PlayerContent(repo: Repository, cfg: PlayerConfig, onBack: () -> Uni
                 },
                 onOnlineSearch = if (subtitleSearch != null) ({ openSettings(PlayerPage.Online) }) else null,
                 onClose = ::closePanel,
-                modifier = Modifier.align(Alignment.BottomCenter),
+                modifier = Modifier.align(Alignment.BottomCenter).swallowTaps(),
             )
             Panel.Episodes -> {
                 val history by repo.history.entries.collectAsState(initial = emptyList())
@@ -1103,7 +1143,7 @@ private fun PlayerContent(repo: Repository, cfg: PlayerConfig, onBack: () -> Uni
                         }
                     },
                     onClose = ::closePanel,
-                    modifier = Modifier.align(Alignment.CenterEnd),
+                    modifier = Modifier.align(Alignment.CenterEnd).swallowTaps(),
                 )
             }
             Panel.None -> Unit

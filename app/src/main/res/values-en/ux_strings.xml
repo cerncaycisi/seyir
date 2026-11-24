@@ -8,8 +8,8 @@
     <string name="ux_back_ten">Back 10 sec</string>
     <string name="ux_forward_ten">Forward 10 sec</string>
     <string name="ux_more">More</string>
-    <string name="ux_player_hint">OK controls · ↑↓ change channel · ← channel list</string>
-    <string name="ux_vod_hint">OK controls · ←→ seek 10 sec · Menu settings</string>
+    <string name="ux_player_hint">Tap: controls · Swipe sideways: channel · Left half: brightness · Right half: volume</string>
+    <string name="ux_vod_hint">Tap: controls · Double-tap: seek 10 sec · Swipe sideways: scrub</string>
     <string name="ux_remaining">%1$s remaining</string>
     <string name="ux_retry">Retry</string>
     <string name="ux_info">Stream info</string>
@@ -19,9 +19,9 @@
     <string name="ux_search_movies">Search movies</string>
     <string name="ux_search_series">Search series</string>
     <string name="ux_read_more">Read more</string>
-    <string name="ux_reader_hint">↑ ↓ Scroll · Back: close</string>
+    <string name="ux_reader_hint">Scroll to read · Back: close</string>
     <string name="ux_seek">Playback position</string>
-    <string name="ux_seek_hint">← → Choose position · OK: seek</string>
+    <string name="ux_seek_hint">Drag the bar · Release to jump there</string>
     <string name="ux_title_info">About this title</string>
     <string name="ux_info_loading">Loading information…</string>
     <string name="ux_tmdb_rating">TMDB rating</string>

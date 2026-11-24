@@ -19,10 +19,10 @@
     <string name="play_category_hide">Hide category</string>
     <string name="play_category_lock">Lock category</string>
     <string name="play_category_unlock">Unlock category</string>
-    <string name="play_channel_hint">Press ▲ ▼ to change channel</string>
+    <string name="play_channel_hint">Swipe sideways to change channel</string>
     <string name="play_channel_list">Channel list</string>
     <string name="play_channels">Channels</string>
-    <string name="play_channels_hint">%1$d channels  ·  OK  watch  ·  Back  close</string>
+    <string name="play_channels_hint">%1$d channels  ·  Tap: watch  ·  Tap outside: close</string>
     <string name="play_decoder_limit">Decoder limit: this TV cannot decode this many streams at once</string>
     <string name="play_delete">Delete</string>
     <string name="play_download_failed">Download failed</string>
@@ -39,10 +39,10 @@
     <string name="play_four_channels">4 channels</string>
     <string name="play_hide">Hide</string>
     <string name="play_live">LIVE</string>
-    <string name="play_live_controls">▲ ▼  channel    ·    ◀  list    ·    ▶  settings    ·    0-9  number    ·    OK  info    ·    Back  exit</string>
-    <string name="play_live_hint">Back to live: Menu ▸ Back to live</string>
+    <string name="play_live_controls">Swipe sideways: channel    ·    Tap: controls    ·    Swipe up/down: brightness / volume    ·    Back: exit</string>
+    <string name="play_live_hint">Back to live: More ▸ Back to live</string>
     <string name="play_minutes">%1$d min</string>
-    <string name="play_multi_controls">Arrow keys: focus (audio)   ·   OK: change channel   ·   Back: exit</string>
+    <string name="play_multi_controls">Tap: pick audio   ·   Tap again / hold: change channel   ·   Back: exit</string>
     <string name="play_multi_count">Multi-view (%1$d channels)</string>
     <string name="play_multi_warning">Some TVs can only decode 1–2 HD streams at once. Reduce the channel count if video freezes.</string>
     <string name="play_multiview">Multi-view</string>
@@ -101,8 +101,8 @@
     <string name="play_subtitles">Subtitles</string>
     <string name="play_two_channels">2 channels</string>
     <string name="play_unlock">Unlock</string>
-    <string name="play_vod_controls">◀ ▶  10 sec    ·    ▲  settings    ·    OK  play / pause</string>
-    <string name="vod_scrub_hint">◀ ▶ scrub · OK jump · Back cancel</string>
+    <string name="play_vod_controls">Double-tap: seek 10 sec    ·    Double-tap centre: play / pause    ·    Swipe sideways: scrub</string>
+    <string name="vod_scrub_hint">Release to jump there</string>
     <string name="vod_ends_at">Ends %1$s</string>
     <string name="vod_previous_episode">Previous episode</string>
     <string name="vod_next_episode">Next episode</string>
@@ -116,12 +116,16 @@
     <string name="vod_sheet_look">Appearance</string>
     <string name="vod_sheet_size">Size</string>
     <string name="vod_watching">You are watching</string>
-    <string name="vod_paused_hint">OK resume · ▲ controls</string>
-    <string name="live_controls_hint">OK controls · ▲▼ channel · ◀ list</string>
-    <string name="live_controls_active_hint">◀▶ navigate · Back hide</string>
+    <string name="vod_paused_hint">Tap: controls</string>
+    <string name="live_controls_hint">Swipe sideways: channel · Swipe up/down: brightness / volume</string>
+    <string name="live_controls_active_hint">Tap: hide</string>
     <string name="ui_no_programme_info">No programme info</string>
     <string name="play_programme_guide">Guide</string>
-    <string name="live_guide_hint">◀ ▶ channel · OK reminder · Back close</string>
+    <string name="live_guide_hint">Swipe sideways: channel · Tap: reminder</string>
     <string name="live_reminder_set">Reminder set: %1$s</string>
     <string name="live_reminder_removed">Reminder removed</string>
+    <!-- Phone touch gestures -->
+    <string name="gesture_brightness">Brightness</string>
+    <string name="gesture_volume">Volume</string>
+    <string name="gesture_seconds">sec</string>
 </resources>

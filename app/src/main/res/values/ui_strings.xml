@@ -53,7 +53,7 @@
     <string name="ui_no_programme">Program bilgisi yok</string>
     <string name="ui_now">ŞİMDİ</string>
     <string name="ui_next">SONRA</string>
-    <string name="ui_remote_hint">OK  izle   ·   Basılı tut  seçenekler</string>
+    <string name="ui_remote_hint">Dokun  izle   ·   Basılı tut  seçenekler</string>
     <string name="ui_other">Diğer</string>
     <string name="ui_no_movie">Film bulunamadı</string>
     <string name="ui_no_series">Dizi bulunamadı</string>
@@ -67,7 +67,7 @@
     <string name="ui_movies">Filmler</string>
     <string name="ui_series">Diziler</string>
     <string name="ui_no_favorites">Henüz favori yok</string>
-    <string name="ui_favorites_hint">Bir içeriğin üzerinde OK tuşunu basılı tutarak ekleyin</string>
+    <string name="ui_favorites_hint">Bir içeriğe basılı tutarak ekleyin</string>
     <string name="ui_search">Ara</string>
     <string name="ui_search_hint">Kanallar, filmler ve diziler arasında</string>
     <string name="ui_search_prompt">Ne izlemek istersiniz?</string>
@@ -100,7 +100,7 @@
     <string name="ui_refresh">Yenile</string>
     <string name="ui_delete">Sil</string>
     <string name="ui_playlist_delete_hint">Playlist ve bu playlist\'e ait favoriler bu cihazdan kaldırılır. Aboneliğiniz etkilenmez.</string>
-    <string name="ui_playlist_options">Düzenle, yenile veya silmek için bir playlist\'in üzerinde OK tuşunu basılı tutun.</string>
+    <string name="ui_playlist_options">Düzenlemek, yenilemek veya silmek için bir playlist\'e basılı tutun.</string>
     <string name="ui_active_badge">AKTİF</string>
     <string name="ui_active">Aktif</string>
     <string name="ui_expired">Süresi dolmuş</string>
@@ -161,7 +161,7 @@
     <string name="ui_unlock_session">Kilitli kategorileri bu oturumda aç</string>
     <string name="ui_hide_adult">Yetişkin içeriği gizle</string>
     <string name="ui_hide_adult_hint">XXX, Adult, 18+, Yetişkin gibi adlara sahip kanallar ve kategoriler listelenmez</string>
-    <string name="ui_lock_category_hint">Bir kategoriyi kilitlemek için Canlı TV\'de kategorinin üzerinde OK tuşunu basılı tutun.</string>
+    <string name="ui_lock_category_hint">Bir kategoriyi kilitlemek için Canlı TV\'de kategoriye basılı tutun.</string>
     <string name="ui_pin_remove_confirm">PIN kaldırılsın mı?</string>
     <string name="ui_pin_remove_message">Kategori kilitleri de kaldırılır.</string>
     <string name="ui_remove">Kaldır</string>
@@ -196,9 +196,9 @@
     <string name="ui_refresh_hours">%1$d saatte bir</string>
     <string name="ui_seconds">%1$d sn</string>
     <string name="ui_hidden_count">%1$d gizli öğe</string>
-    <string name="ui_hidden_channel">Gizli kanal · %1$s · göstermek için OK</string>
-    <string name="ui_hidden_category">Gizli kategori · %1$s · göstermek için OK</string>
-    <string name="ui_locked_category">Kilitli kategori · %1$s · kilidi kaldırmak için OK</string>
+    <string name="ui_hidden_channel">Gizli kanal · %1$s · göstermek için dokunun</string>
+    <string name="ui_hidden_category">Gizli kategori · %1$s · göstermek için dokunun</string>
+    <string name="ui_locked_category">Kilitli kategori · %1$s · kilidi kaldırmak için dokunun</string>
     <string name="ui_version">Sürüm %1$s</string>
     <string name="ui_color">Renk %1$d</string>
     <string name="ui_pin_entered">%1$d hane girildi</string>
@@ -256,7 +256,7 @@
     <string name="ui_remove_favorites">Favorilerden çıkar</string>
     <string name="ui_category_empty">Bu kategoride içerik yok</string>
     <string name="ui_category_empty_hint">Başka bir kategori seçin</string>
-    <string name="ui_watch_later_hint">Bir içeriğin detay sayfasından veya OK tuşunu basılı tutarak ekleyin</string>
+    <string name="ui_watch_later_hint">Bir içeriğin detay sayfasından veya basılı tutarak ekleyin</string>
     <string name="ui_history_empty_hint">İzledikleriniz burada görünür</string>
     <string name="ui_categories">Kategoriler</string>
     <string name="ui_item_count">%1$d öğe</string>
@@ -267,7 +267,7 @@
     <string name="ui_restart_series">Baştan izle</string>
     <string name="ui_series_badge">S%1$d B%2$d</string>
     <string name="ui_next_at">Sonra %1$s · %2$s</string>
-    <string name="ui_live_hint">OK önizle · tekrar OK tam ekran · uzun bas: seçenekler</string>
+    <string name="ui_live_hint">Dokun: önizle · tekrar dokun: tam ekran · basılı tut: seçenekler</string>
     <string name="ui_rename_group">Adı değiştir</string>
     <string name="ui_move_up">Yukarı taşı</string>
     <string name="ui_move_down">Aşağı taşı</string>

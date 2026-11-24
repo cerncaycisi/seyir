@@ -43,6 +43,9 @@ import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -136,6 +139,8 @@ internal fun LiveInfoPanel(
         }
     }
 
+    val prevChannel by rememberUpdatedState(onPrevChannel)
+    val nextChannel by rememberUpdatedState(onNextChannel)
     val panelBg = remember { Brush.horizontalGradient(listOf(Color(0xE607080A), Color(0xF807080A))) }
     Column(
         modifier
@@ -150,6 +155,17 @@ internal fun LiveInfoPanel(
                     Key.DirectionRight -> { onNextChannel(); true }
                     else -> false
                 }
+            }
+            // Touch: swipe the guide sideways to move to the previous / next channel.
+            .pointerInput(Unit) {
+                val distance = 64.dp.toPx()
+                var dx = 0f
+                detectHorizontalDragGestures(
+                    onDragStart = { dx = 0f },
+                    onDragEnd = {
+                        if (dx <= -distance) nextChannel() else if (dx >= distance) prevChannel()
+                    },
+                ) { change, amount -> dx += amount; change.consume() }
             },
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
