@@ -20,3 +20,21 @@ jobs:
         with:
           name: debug-apk
           path: app/build/outputs/apk/debug/*.apk
+      # Phone release build, signed with the phone key from the repository secrets.
+      - name: Signed release APK (phone)
+        if: github.ref == 'refs/heads/phone-port'
+        env:
+          KEYSTORE_B64: ${{ secrets.PHONE_KEYSTORE_B64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.PHONE_KEYSTORE_PASSWORD }}
+        run: |
+          test -n "$KEYSTORE_B64" || { echo "PHONE_KEYSTORE_B64 secret missing"; exit 1; }
+          echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/seyir-phone.p12"
+          printf 'storeFile=%s\nstorePassword=%s\nkeyAlias=upload\nkeyPassword=%s\n' \
+            "$RUNNER_TEMP/seyir-phone.p12" "$KEYSTORE_PASSWORD" "$KEYSTORE_PASSWORD" > keystore.properties
+          ./gradlew assembleRelease
+          rm -f keystore.properties "$RUNNER_TEMP/seyir-phone.p12"
+      - uses: actions/upload-artifact@v7
+        if: github.ref == 'refs/heads/phone-port'
+        with:
+          name: release-apk
+          path: app/build/outputs/apk/release/*.apk
